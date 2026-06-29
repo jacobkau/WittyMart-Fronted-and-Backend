@@ -6,4 +6,3 @@ node_modules/
 *.log
 .env
 *.md
-docker-compose.yml
