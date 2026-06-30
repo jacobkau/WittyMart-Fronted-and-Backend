@@ -1,7 +1,4 @@
-<?php
-// admin/footer.php - Admin Panel Footer
-?>
-    <!-- Footer -->
+  <!-- Footer -->
     <footer class="admin-footer">
         <div class="footer-content">
             <div class="footer-left">
