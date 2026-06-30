@@ -1,105 +1,49 @@
-/* ===== ADMIN FOOTER ===== */
-.admin-footer {
-    background: var(--white);
-    border-top: 1px solid var(--border);
-    padding: 15px 25px;
-    margin-top: 30px;
-    box-shadow: 0 -2px 10px var(--shadow-color);
-    position: sticky;
-    bottom: 0;
-    z-index: 99;
-    backdrop-filter: blur(10px);
-    background: rgba(255, 255, 255, 0.95);
-}
+<?php
+// admin/footer.php - Admin Panel Footer
+?>
+    <!-- Footer -->
+    <footer class="admin-footer">
+        <div class="footer-content">
+            <div class="footer-left">
+                <p>&copy; <?php echo date('Y'); ?> <strong>WittyMart</strong> - Admin Panel</p>
+            </div>
+            <div class="footer-center">
+                <p>
+                    <i class="fas fa-code"></i> Built with <i class="fas fa-heart" style="color: #ff6b6b;"></i> by 
+                    <a href="https://github.com/yourusername" target="_blank">Witty Highbrow Technologies</a>
+                </p>
+            </div>
+            <div class="footer-right">
+                <p>
+                    <i class="fas fa-clock"></i> 
+                    <span id="server-time"><?php echo date('H:i:s'); ?></span>
+                    <span class="footer-divider">|</span>
+                    <span id="server-date"><?php echo date('d M Y'); ?></span>
+                </p>
+            </div>
+        </div>
+    </footer>
 
-body.dark-mode .admin-footer {
-    background: var(--card-bg);
-    border-top-color: var(--border-color);
-}
-
-.footer-content {
-    max-width: 1400px;
-    margin: 0 auto;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
-.footer-left p,
-.footer-center p,
-.footer-right p {
-    margin: 0;
-    font-size: 0.85rem;
-    color: var(--text-muted);
-}
-
-.footer-left strong {
-    color: var(--primary-color);
-}
-
-.footer-center a {
-    color: var(--primary-color);
-    text-decoration: none;
-    transition: all 0.3s ease;
-}
-
-.footer-center a:hover {
-    text-decoration: underline;
-}
-
-.footer-center i.fa-heart {
-    animation: heartBeat 1.5s ease-in-out infinite;
-}
-
-@keyframes heartBeat {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.2); }
-}
-
-.footer-divider {
-    margin: 0 10px;
-    color: var(--border-color);
-}
-
-.footer-right i.fa-clock {
-    color: var(--primary-color);
-    margin-right: 5px;
-}
-
-/* Footer Responsive */
-@media (max-width: 768px) {
-    .footer-content {
-        flex-direction: column;
-        text-align: center;
-        gap: 5px;
-    }
-    
-    .footer-left p,
-    .footer-center p,
-    .footer-right p {
-        font-size: 0.75rem;
-    }
-    
-    .footer-divider {
-        display: none;
-    }
-    
-    .admin-footer {
-        padding: 12px 15px;
-        position: relative;
-    }
-}
-
-@media (max-width: 480px) {
-    .admin-footer {
-        padding: 10px 12px;
-    }
-    
-    .footer-left p,
-    .footer-center p,
-    .footer-right p {
-        font-size: 0.7rem;
-    }
-}
+    <!-- Dynamic Clock Script -->
+    <script>
+        function updateClock() {
+            const now = new Date();
+            const time = now.toLocaleTimeString('en-US', { hour12: false });
+            const date = now.toLocaleDateString('en-US', { 
+                day: '2-digit', 
+                month: 'short', 
+                year: 'numeric' 
+            });
+            
+            document.getElementById('server-time').textContent = time;
+            document.getElementById('server-date').textContent = date;
+        }
+        
+        // Update clock every second
+        setInterval(updateClock, 1000);
+        
+        // Initial call to set clock immediately
+        updateClock();
+    </script>
+</body>
+</html>
