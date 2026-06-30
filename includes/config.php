@@ -1,23 +1,22 @@
 <?php
 
-
+// ===== DATABASE SETTINGS =====
 $database_url = getenv('DATABASE_URL');
 
 if ($database_url) {
-    // Parse DATABASE_URL from environment
     $db_parts = parse_url($database_url);
     
     define('DB_HOST', $db_parts['host']);
-    define('DB_PORT', $db_parts['port'] ?? 3306);
+    define('DB_PORT', $db_parts['port'] ?? 5432);
     define('DB_NAME', ltrim($db_parts['path'], '/'));
     define('DB_USER', $db_parts['user']);
     define('DB_PASS', $db_parts['pass']);
 } else {
     // Fallback for local development
     define('DB_HOST', 'localhost');
-    define('DB_PORT', 3306);
+    define('DB_PORT', 5432);
     define('DB_NAME', 'wittymart');
-    define('DB_USER', 'root');
+    define('DB_USER', 'postgres');
     define('DB_PASS', '');
 }
 
@@ -35,7 +34,6 @@ define('IS_PRODUCTION', $environment === 'production');
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
 
-// Set secure cookie flag only in production
 if (IS_PRODUCTION) {
     ini_set('session.cookie_secure', 1);
     ini_set('session.cookie_samesite', 'Strict');
@@ -64,15 +62,15 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// ===== DATABASE CONNECTION FUNCTION =====
+// ===== DATABASE CONNECTION FUNCTION (PostgreSQL) =====
 function getDB() {
     static $pdo = null;
     
     if ($pdo === null) {
         try {
-            // Build DSN
+            // Build DSN for PostgreSQL
             $dsn = sprintf(
-                "mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4",
+                "pgsql:host=%s;port=%s;dbname=%s;",
                 DB_HOST,
                 DB_PORT,
                 DB_NAME
@@ -84,20 +82,18 @@ function getDB() {
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_EMULATE_PREPARES => false,
                 PDO::ATTR_TIMEOUT => 30,
-                PDO::MYSQL_ATTR_SSL_CA => getenv('MYSQL_ATTR_SSL_CA') ?: null,
-                PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false
             ];
             
-            // Enable SSL for Aiven in production
+            // Simple SSL - NO CA file needed (disable verification)
             if (IS_PRODUCTION) {
-                $options[PDO::MYSQL_ATTR_SSL_CA] = getenv('MYSQL_ATTR_SSL_CA') ?: true;
-                $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = true;
+                $dsn .= "sslmode=require";
+                // OR use this if you have issues:
+                // $dsn .= "sslmode=require&sslverify=false";
             }
             
             $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
             
         } catch (PDOException $e) {
-            // Log error instead of dying in production
             if (IS_PRODUCTION) {
                 error_log("Database connection failed: " . $e->getMessage());
                 die("Unable to connect to database. Please try again later.");
@@ -110,7 +106,7 @@ function getDB() {
     return $pdo;
 }
 
-// ===== DATABASE CONNECTION TEST FUNCTION =====
+// ===== DATABASE CONNECTION TEST =====
 function testDatabaseConnection() {
     try {
         $db = getDB();
@@ -122,27 +118,19 @@ function testDatabaseConnection() {
 }
 
 // ===== HELPER FUNCTIONS =====
-
-// Get environment variable with fallback
 function env($key, $default = null) {
     $value = getenv($key);
-    if ($value === false) {
-        return $default;
-    }
-    return $value;
+    return ($value === false) ? $default : $value;
 }
 
-// Check if we're in production
 function isProduction() {
     return IS_PRODUCTION;
 }
 
-// Get current environment name
 function getEnvironment() {
     return APP_ENV;
 }
 
-// Debug function (only shows in development)
 function debug($data) {
     if (!IS_PRODUCTION) {
         echo '<pre>';
