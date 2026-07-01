@@ -4,7 +4,7 @@ require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/functions.php';
 
 $page_title = "WittyMart - Smart Shopping for Witty Minds";
-include_once __DIR__ .  'header.php';
+include 'header.php';
 ?>
 
 
@@ -39,6 +39,6 @@ include_once __DIR__ .  'header.php';
             </div>
         </section>
     </main>
-    <?php include_once __DIR__ .  'footer.php';?>
+    <?php include_once 'footer.php';?>
 </body>
 </html>
