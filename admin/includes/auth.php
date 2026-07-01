@@ -283,4 +283,162 @@ function hasPermission($permission) {
     return isset($permissions[$role]) && 
            (in_array('all', $permissions[$role]) || in_array($permission, $permissions[$role]));
 }
-?>
+/**
+ * Get badge class for activity type
+ */
+function getActivityBadge($action) {
+    $badges = [
+        'login' => 'login',
+        'logout' => 'logout',
+        'create' => 'create',
+        'update' => 'update',
+        'delete' => 'delete',
+        'view' => 'view',
+        'system' => 'system',
+        'add' => 'create',
+        'edit' => 'update',
+        'remove' => 'delete'
+    ];
+    
+    foreach ($badges as $key => $badge) {
+        if (stripos($action, $key) !== false) {
+            return $badge;
+        }
+    }
+    return 'system';
+}
+
+/**
+ * Log admin actions automatically
+ */
+function logAdminAction($action, $description = '') {
+    if (isset($_SESSION['user_id'])) {
+        logActivity(
+            $action,
+            $description,
+            $_SESSION['user_id'],
+            $_SESSION['user_name'] ?? null
+        );
+    }
+}
+
+/**
+ * Log an activity
+ */
+function logActivity($action, $description = '', $user_id = null, $user_name = null) {
+    global $pdo;
+    
+    // Get current user if not provided
+    if ($user_id === null && isset($_SESSION['user_id'])) {
+        $user_id = $_SESSION['user_id'];
+        $user_name = $_SESSION['user_name'] ?? null;
+    }
+    
+    // Get IP address
+    $ip_address = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+    
+    // Get user agent
+    $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO activity_logs (user_id, user_name, action, description, ip_address, user_agent) 
+            VALUES (?, ?, ?, ?, ?, ?)
+        ");
+        return $stmt->execute([$user_id, $user_name, $action, $description, $ip_address, $user_agent]);
+    } catch (PDOException $e) {
+        error_log('Log activity error: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Get recent activities
+ */
+function getRecentActivities($limit = 10) {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("
+            SELECT * FROM activity_logs 
+            ORDER BY created_at DESC 
+            LIMIT ?
+        ");
+        $stmt->execute([$limit]);
+        return $stmt->fetchAll();
+    } catch (PDOException $e) {
+        error_log('Get activities error: ' . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Get activity logs with pagination
+ */
+function getActivityLogs($page = 1, $perPage = 20) {
+    global $pdo;
+    
+    $offset = ($page - 1) * $perPage;
+    
+    try {
+        // Get total count
+        $stmt = $pdo->query("SELECT COUNT(*) as count FROM activity_logs");
+        $total = $stmt->fetch()['count'];
+        
+        // Get logs
+        $stmt = $pdo->prepare("
+            SELECT * FROM activity_logs 
+            ORDER BY created_at DESC 
+            LIMIT ? OFFSET ?
+        ");
+        $stmt->execute([$perPage, $offset]);
+        $logs = $stmt->fetchAll();
+        
+        return [
+            'logs' => $logs,
+            'total' => $total,
+            'page' => $page,
+            'perPage' => $perPage,
+            'totalPages' => ceil($total / $perPage)
+        ];
+    } catch (PDOException $e) {
+        error_log('Get activity logs error: ' . $e->getMessage());
+        return ['logs' => [], 'total' => 0, 'totalPages' => 0];
+    }
+}
+
+/**
+ * Clear old activity logs
+ */
+function clearActivityLogs($days = 30) {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("DELETE FROM activity_logs WHERE created_at < NOW() - INTERVAL ? DAY");
+        return $stmt->execute([$days]);
+    } catch (PDOException $e) {
+        error_log('Clear activity logs error: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Get user activities
+ */
+function getUserActivities($user_id, $limit = 10) {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("
+            SELECT * FROM activity_logs 
+            WHERE user_id = ? 
+            ORDER BY created_at DESC 
+            LIMIT ?
+        ");
+        $stmt->execute([$user_id, $limit]);
+        return $stmt->fetchAll();
+    } catch (PDOException $e) {
+        error_log('Get user activities error: ' . $e->getMessage());
+        return [];
+    }
+}
