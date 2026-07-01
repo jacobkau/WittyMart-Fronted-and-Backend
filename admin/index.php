@@ -1,7 +1,6 @@
 <?php
 include 'includes/config.php';
 include 'includes/auth.php';
-include 'includes/functions.php';
 
 $page_title = "WittyMart - Smart Shopping for Witty Minds";
 include 'header.php';
