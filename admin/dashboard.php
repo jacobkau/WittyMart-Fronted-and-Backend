@@ -32,7 +32,7 @@ $page_title = 'Dashboard';
 
         <!-- Main Content -->
         <main class="admin-main">
-            <header class="admin-header">
+            <header class="admin-header" style="margin-bottom:25px;">
                 <h1>Dashboard</h1>
                 <div class="admin-user">
                     <span><i class="fas fa-user"></i> <?php echo htmlspecialchars($_SESSION['user_name'] ?? 'Admin'); ?></span>
