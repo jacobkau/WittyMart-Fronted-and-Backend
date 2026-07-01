@@ -1,7 +1,6 @@
 <?php
-
-require_once 'includes/config.php';
-require_once 'includes/auth.php';
+require_once '../includes/config.php';
+require_once '../includes/auth.php';
 
 requireAdmin();
 
@@ -17,8 +16,8 @@ $page_title = 'Dashboard';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - WittyMart Admin</title>
-    <link rel="shortcut icon" href="images/logo.png" type="image/x-icon">
-    <link rel="stylesheet" href="/admin.css">
+    <link rel="shortcut icon" href="../images/logo.png" type="image/x-icon">
+    <link rel="stylesheet" href="admin.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
@@ -26,7 +25,7 @@ $page_title = 'Dashboard';
         <!-- Sidebar -->
         <aside class="admin-sidebar">
             <div class="sidebar-header">
-                <img src="images/logo.png" alt="WittyMart">
+                <img src="../images/logo.png" alt="WittyMart">
                 <h2>WittyMart</h2>
             </div>
             <nav class="sidebar-nav">
@@ -45,7 +44,7 @@ $page_title = 'Dashboard';
             <header class="admin-header">
                 <h1>Dashboard</h1>
                 <div class="admin-user">
-                    <span><i class="fas fa-user"></i> <?php echo $_SESSION['user_name']; ?></span>
+                    <span><i class="fas fa-user"></i> <?php echo htmlspecialchars($_SESSION['user_name'] ?? 'Admin'); ?></span>
                 </div>
             </header>
 
@@ -54,28 +53,28 @@ $page_title = 'Dashboard';
                 <div class="stat-card">
                     <div class="stat-icon"><i class="fas fa-box"></i></div>
                     <div class="stat-info">
-                        <h3><?php echo $stats['products']; ?></h3>
+                        <h3><?php echo $stats['products'] ?? 0; ?></h3>
                         <p>Products</p>
                     </div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-icon"><i class="fas fa-shopping-cart"></i></div>
                     <div class="stat-info">
-                        <h3><?php echo $stats['orders']; ?></h3>
+                        <h3><?php echo $stats['orders'] ?? 0; ?></h3>
                         <p>Orders</p>
                     </div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-icon"><i class="fas fa-users"></i></div>
                     <div class="stat-info">
-                        <h3><?php echo $stats['customers']; ?></h3>
+                        <h3><?php echo $stats['customers'] ?? 0; ?></h3>
                         <p>Customers</p>
                     </div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-icon"><i class="fas fa-money-bill-wave"></i></div>
                     <div class="stat-info">
-                        <h3><?php echo formatPrice($stats['revenue']); ?></h3>
+                        <h3><?php echo formatPrice($stats['revenue'] ?? 0); ?></h3>
                         <p>Revenue</p>
                     </div>
                 </div>
@@ -88,7 +87,7 @@ $page_title = 'Dashboard';
                     <a href="orders.php" class="btn-link">View All</a>
                 </div>
                 <div class="card-body">
-                    <?php if (count($recent_orders) > 0): ?>
+                    <?php if (!empty($recent_orders)): ?>
                         <table class="admin-table">
                             <thead>
                                 <tr>
@@ -102,12 +101,12 @@ $page_title = 'Dashboard';
                             <tbody>
                                 <?php foreach ($recent_orders as $order): ?>
                                     <tr>
-                                        <td>#<?php echo $order['id']; ?></td>
-                                        <td><?php echo $order['customer_name'] ?? 'Guest'; ?></td>
+                                        <td>#<?php echo htmlspecialchars($order['id']); ?></td>
+                                        <td><?php echo htmlspecialchars($order['customer_name'] ?? 'Guest'); ?></td>
                                         <td><?php echo formatPrice($order['total']); ?></td>
                                         <td>
                                             <span class="badge <?php echo getStatusBadge($order['status']); ?>">
-                                                <?php echo ucfirst($order['status']); ?>
+                                                <?php echo ucfirst(htmlspecialchars($order['status'])); ?>
                                             </span>
                                         </td>
                                         <td><?php echo date('M d, Y', strtotime($order['created_at'])); ?></td>
