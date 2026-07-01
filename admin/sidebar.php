@@ -1,6 +1,6 @@
  <aside class="admin-sidebar">
             <div class="sidebar-header">
-                <img src="../images/Witty Mart.png" alt="WittyMart">
+                <img src="images/logo.png" alt="WittyMart">
                 <h2>WittyMart</h2>
             </div>
             <nav class="sidebar-nav">
