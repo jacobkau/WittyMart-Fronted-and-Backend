@@ -349,6 +349,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
     <div class="login-wrapper">
         <!-- Left Side - Login Form -->
+<div class="login-right">
+    <div class="login-right-content">
+        <div class="graphic-icon">
+            <i class="fas fa-store-alt"></i>
+        </div>
+        <h2>Welcome Back!</h2>
+        <p>Manage your store with ease</p>
+        <div class="features">
+            <span class="feature-item"><i class="fas fa-box"></i> Products</span>
+            <span class="feature-item"><i class="fas fa-shopping-cart"></i> Orders</span>
+            <span class="feature-item"><i class="fas fa-users"></i> Customers</span>
+        </div>
+        <div style="margin-top: 20px; font-size: 0.85rem; opacity: 0.7;">
+            <i class="fas fa-shield-alt"></i> Secure Admin Access
+        </div>
+    </div>
+</div>
+        
+        <!-- Right Side  -->
         <div class="login-left">
             <div class="login-logo">
                 <img src="images/logo.png" alt="WittyMart">
@@ -403,24 +422,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php if (!isset($_GET['debug'])): ?>
                     <br><small><a href="?debug=1" class="debug-link">Enable Debug</a></small>
                 <?php endif; ?>
-            </div>
-        </div>
-        
-        <!-- Right Side - Image/Content -->
-        <div class="login-right">
-            <div class="login-right-content">
-                <img src="images/shopping-cart.svg" alt="Shopping" 
-                     onerror="this.src='https://via.placeholder.com/400x300/05573c/ffffff?text=🛒+WittyMart'">
-                <h2>Welcome Back!</h2>
-                <p>Manage your store with ease</p>
-                <div class="features">
-                    <span class="feature-item"><i class="fas fa-box"></i> Products</span>
-                    <span class="feature-item"><i class="fas fa-shopping-cart"></i> Orders</span>
-                    <span class="feature-item"><i class="fas fa-users"></i> Customers</span>
-                </div>
-                <div style="margin-top: 20px; font-size: 0.85rem; opacity: 0.7;">
-                    <i class="fas fa-shield-alt"></i> Secure Admin Access
-                </div>
             </div>
         </div>
     </div>
