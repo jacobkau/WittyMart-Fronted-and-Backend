@@ -167,7 +167,7 @@ $page_title = 'Profile Settings';
             <?php endif; ?>
 
             <!-- Profile Grid -->
-            <div class="profile-grid">
+            <div class="profile-grid" style="margin-bottom:25px:">
                 <!-- Profile Information -->
                 <div class="admin-card">
                     <div class="card-header">
