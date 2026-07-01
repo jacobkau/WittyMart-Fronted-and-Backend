@@ -3,8 +3,6 @@
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
-
-// ===== CORRECT PATHS =====
 require_once 'includes/config.php';
 require_once 'includes/auth.php';
 
@@ -242,7 +240,7 @@ $page_title = 'Orders';
             document.getElementById('orderDetails').innerHTML = '<p class="text-muted"><i class="fas fa-spinner fa-spin"></i> Loading order details...</p>';
             
             // Fetch order details via AJAX
-            fetch('../includes/ajax.php?action=get_order&id=' + id)
+            fetch('includes/ajax.php?action=get_order&id=' + id)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
