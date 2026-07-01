@@ -82,6 +82,7 @@ function isAdmin() {
 function requireAdmin() {
     if (!isAdmin()) {
         redirect('login.php');
+        exit;
     }
 }
 
@@ -91,6 +92,7 @@ function requireAdmin() {
 function requireLogin() {
     if (!isLoggedIn()) {
         redirect('login.php');
+        exit;
     }
 }
 
