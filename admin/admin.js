@@ -81,22 +81,6 @@ function filterTable(inputId, tableId) {
         row.style.display = text.includes(filter) ? '' : 'none';
     });
 }
-
-  
-       document.getElementById('loginForm').addEventListener('submit', function(e) {
-            const email = document.getElementById('email').value.trim();
-            const password = document.getElementById('password').value.trim();
-            
-            if (!email || !password) {
-                e.preventDefault();
-                return;
-            }
-            
-            document.getElementById('loadingOverlay').classList.add('active');
-            document.getElementById('loginBtn').classList.add('loading');
-            document.getElementById('email').disabled = true;
-            document.getElementById('password').disabled = true;
-        });
         
         // Auto-hide errors after 5 seconds
         document.addEventListener('DOMContentLoaded', function() {
