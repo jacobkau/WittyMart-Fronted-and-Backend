@@ -30,37 +30,9 @@ $environment = getenv('APP_ENV') ?: 'development';
 define('APP_ENV', $environment);
 define('IS_PRODUCTION', $environment === 'production');
 
-// ===== SESSION SETTINGS =====
-ini_set('session.cookie_httponly', 1);
-ini_set('session.use_only_cookies', 1);
-
-if (IS_PRODUCTION) {
-    ini_set('session.cookie_secure', 1);
-    ini_set('session.cookie_samesite', 'Strict');
-}
-
-// ===== ERROR REPORTING =====
-if (IS_PRODUCTION) {
-    error_reporting(0);
-    ini_set('display_errors', 0);
-} else {
-    error_reporting(E_ALL);
-    ini_set('display_errors', 1);
-}
 
 // ===== TIMEZONE =====
 date_default_timezone_set(getenv('APP_TIMEZONE') ?: 'Africa/Nairobi');
-
-// ===== PHP SETTINGS =====
-ini_set('memory_limit', getenv('PHP_MEMORY_LIMIT') ?: '256M');
-ini_set('upload_max_filesize', getenv('PHP_UPLOAD_MAX_FILESIZE') ?: '20M');
-ini_set('post_max_size', getenv('PHP_POST_MAX_SIZE') ?: '20M');
-ini_set('max_execution_time', getenv('PHP_MAX_EXECUTION_TIME') ?: '300');
-
-// ===== START SESSION =====
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 
 // ===== DATABASE CONNECTION FUNCTION (PostgreSQL) =====
 function getDB() {
