@@ -101,6 +101,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </p>
         </div>
     </div>
-
+<script src="admin.js" defer></script>
 </body>
 </html>
