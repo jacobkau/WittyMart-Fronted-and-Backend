@@ -1,8 +1,4 @@
 <?php
-// ===== START SESSION =====
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 // ===== SESSION SETTINGS =====
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
@@ -10,6 +6,11 @@ ini_set('session.use_only_cookies', 1);
 if (IS_PRODUCTION) {
     ini_set('session.cookie_secure', 1);
     ini_set('session.cookie_samesite', 'Strict');
+}
+
+// ===== START SESSION =====
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
 
 // ===== DATABASE SETTINGS =====
