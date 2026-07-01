@@ -1,28 +1,40 @@
 <?php
-// install.php - Database Installation Script
+// admin/test.php - Test PHP
 
-require_once 'includes/config.php';
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
-echo "<h1>WittyMart Database Installation</h1>";
-echo "<pre>";
+echo "<h1>PHP is working!</h1>";
+echo "<p>PHP Version: " . phpversion() . "</p>";
 
-try {
-    $db = getDB();
-    
-    // Read SQL file
-    $sql = file_get_contents('schema.sql');
-    
-    // Execute SQL
-    $db->exec($sql);
-    
-    echo "✅ Database tables created successfully!<br>";
-    echo "✅ Admin user created (admin@wittymart.com / admin123)<br>";
-    echo "✅ Sample data inserted<br>";
-    
-} catch (PDOException $e) {
-    echo "❌ Error: " . $e->getMessage() . "<br>";
+// Test includes
+echo "<h2>Testing includes...</h2>";
+
+if (file_exists('../includes/config.php')) {
+    echo "✅ config.php found<br>";
+    require_once '../includes/config.php';
+    echo "✅ config.php loaded<br>";
+} else {
+    echo "❌ config.php NOT found<br>";
 }
 
-echo "</pre>";
-echo "<a href='login.php'>Go to Admin Login</a>";
+if (file_exists('../includes/auth.php')) {
+    echo "✅ auth.php found<br>";
+    require_once '../includes/auth.php';
+    echo "✅ auth.php loaded<br>";
+} else {
+    echo "❌ auth.php NOT found<br>";
+}
+
+// Test database
+echo "<h2>Testing database...</h2>";
+try {
+    $db = getDB();
+    $stmt = $db->query("SELECT 1");
+    echo "✅ Database connected successfully!<br>";
+} catch (Exception $e) {
+    echo "❌ Database error: " . $e->getMessage() . "<br>";
+}
+
+phpinfo();
 ?>
