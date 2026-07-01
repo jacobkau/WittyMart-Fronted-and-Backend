@@ -12,10 +12,13 @@ function login($email, $password) {
     global $pdo;
     
     try {
-        // Get user by email
-        $stmt = $pdo->prepare("SELECT id, name, email, password, role FROM users WHERE email = ?");
+        // Get user by email - case insensitive
+        $stmt = $pdo->prepare("SELECT id, name, email, password, role FROM users WHERE LOWER(email) = LOWER(?)");
         $stmt->execute([$email]);
         $user = $stmt->fetch();
+        
+        // Log the attempt for debugging
+        error_log('Login attempt for email: ' . $email . ' - User found: ' . ($user ? 'Yes' : 'No'));
         
         // Verify password
         if ($user && password_verify($password, $user['password'])) {
@@ -34,9 +37,11 @@ function login($email, $password) {
             $updateStmt = $pdo->prepare("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?");
             $updateStmt->execute([$user['id']]);
             
+            error_log('Login successful for: ' . $email);
             return true;
         }
         
+        error_log('Login failed for: ' . $email . ' - Invalid credentials');
         return false;
         
     } catch (PDOException $e) {
@@ -141,7 +146,7 @@ function emailExists($email, $excludeId = null) {
     global $pdo;
     
     try {
-        $sql = "SELECT id FROM users WHERE email = ?";
+        $sql = "SELECT id FROM users WHERE LOWER(email) = LOWER(?)";
         $params = [$email];
         
         if ($excludeId) {
@@ -221,7 +226,6 @@ function updatePassword($userId, $newPassword) {
  * Log login attempt (for security monitoring)
  */
 function logLoginAttempt($email, $success) {
-    // You can implement logging to a table if needed
     error_log(sprintf(
         'Login attempt - Email: %s, Success: %s, IP: %s, Time: %s',
         $email,
