@@ -33,8 +33,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="admin.css">
     <link rel="shortcut icon" href="images/logo.png" type="image/x-icon">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+   
 </head>
 <body class="login-page">
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Logging in<span class="loading-dots"></span></div>
+    </div>
+    
     <div class="login-container">
         <div class="login-box">
             <div class="login-logo">
@@ -44,22 +51,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             
             <?php if ($error): ?>
-                <div class="alert alert-danger"><?php echo $error; ?></div>
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <?php echo $error; ?>
+                </div>
             <?php endif; ?>
             
-            <form method="POST" action="">
+            <form method="POST" action="" id="loginForm">
                 <div class="form-group">
                     <label><i class="fas fa-envelope"></i> Email</label>
-                    <input type="email" name="email" placeholder="Enter your email" required>
+                    <input type="email" name="email" id="email" placeholder="Enter your email" required autofocus>
                 </div>
                 
                 <div class="form-group">
                     <label><i class="fas fa-lock"></i> Password</label>
-                    <input type="password" name="password" placeholder="Enter your password" required>
+                    <input type="password" name="password" id="password" placeholder="Enter your password" required>
                 </div>
                 
-                <button type="submit" class="btn-login">
-                    <i class="fas fa-sign-in-alt"></i> Login
+                <button type="submit" class="btn-login" id="loginBtn">
+                    <span class="btn-spinner"></span>
+                    <span class="btn-text"><i class="fas fa-sign-in-alt"></i> Login</span>
+                    <span class="btn-loading-text"><i class="fas fa-spinner fa-spin"></i> Logging in...</span>
                 </button>
             </form>
             
@@ -68,5 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </p>
         </div>
     </div>
+<script src="script.js" defer></script> 
+
 </body>
 </html>
