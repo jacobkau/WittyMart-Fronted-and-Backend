@@ -10,7 +10,7 @@ function isActive($page) {
 ?>
 <aside class="admin-sidebar">
     <div class="sidebar-header">
-        <img src="../images/logo.png" alt="WittyMart">
+        <img src="images/logo.png" alt="WittyMart">
         <h2>WittyMart</h2>
         <span class="admin-role">Admin Panel</span>
     </div>
