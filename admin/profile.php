@@ -147,7 +147,7 @@ $page_title = 'Profile Settings';
         <!-- Main Content -->
         <main class="admin-main">
             <header class="admin-header" style="margin-bottom:20px:">
-                <h1 style="margin-bottom:20px:"><i class="fas fa-user-cog"></i> Profile Settings</h1>
+                <h1 style="margin-bottom:30px:"><i class="fas fa-user-cog"></i> Profile Settings</h1>
                 <div class="admin-user" style="margin-bottom:10px:">
                    <span class="user-info">
     <i class="fas fa-user-circle"></i> 
