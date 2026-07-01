@@ -1,8 +1,8 @@
 <?php
 // admin/login.php - Admin Login
 
-require_once '../includes/config.php';
-require_once '../includes/auth.php';
+require_once 'includes/config.php';
+require_once 'includes/auth.php';
 
 // Redirect if already logged in
 if (isLoggedIn()) {
@@ -30,14 +30,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Login - WittyMart</title>
-    <link rel="stylesheet" href="../assets/css/admin.css">
+    <link rel="stylesheet" href="admin.css">
+    <link rel="shortcut icon" href="images/logo.png" type="image/x-icon">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="login-page">
     <div class="login-container">
         <div class="login-box">
             <div class="login-logo">
-                <img src="../images/Witty Mart.png" alt="WittyMart">
+                <img src="images/logo.png" alt="WittyMart">
                 <h1>WittyMart</h1>
                 <p>Admin Panel</p>
             </div>
