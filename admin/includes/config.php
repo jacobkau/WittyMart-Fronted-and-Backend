@@ -1,4 +1,8 @@
 <?php
+// ===== START SESSION =====
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 // ===== DATABASE SETTINGS =====
 $database_url = getenv('DATABASE_URL');
@@ -57,10 +61,6 @@ ini_set('upload_max_filesize', getenv('PHP_UPLOAD_MAX_FILESIZE') ?: '20M');
 ini_set('post_max_size', getenv('PHP_POST_MAX_SIZE') ?: '20M');
 ini_set('max_execution_time', getenv('PHP_MAX_EXECUTION_TIME') ?: '300');
 
-// ===== START SESSION =====
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 
 // ===== DATABASE CONNECTION FUNCTION (PostgreSQL) =====
 function getDB() {
