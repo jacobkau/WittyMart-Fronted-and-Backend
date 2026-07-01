@@ -81,3 +81,51 @@ function filterTable(inputId, tableId) {
         row.style.display = text.includes(filter) ? '' : 'none';
     });
 }
+
+  
+        // ===== FORM SUBMISSION WITH LOADING =====
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value.trim();
+            
+            if (!email || !password) {
+                e.preventDefault();
+                return;
+            }
+            
+            // Show loading overlay
+            document.getElementById('loadingOverlay').classList.add('active');
+            
+            // Add loading state to button
+            const btn = document.getElementById('loginBtn');
+            btn.classList.add('loading');
+            
+            // Disable inputs
+            document.getElementById('email').disabled = true;
+            document.getElementById('password').disabled = true;
+        });
+        
+        // ===== AUTO-HIDE ERRORS AFTER 5 SECONDS =====
+        document.addEventListener('DOMContentLoaded', function() {
+            const alert = document.querySelector('.alert');
+            if (alert) {
+                setTimeout(() => {
+                    alert.style.transition = 'opacity 0.5s ease';
+                    alert.style.opacity = '0';
+                    setTimeout(() => {
+                        alert.style.display = 'none';
+                    }, 500);
+                }, 5000);
+            }
+        });
+        
+        // ===== KEYBOARD SHORTCUT: Enter to submit =====
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const form = document.getElementById('loginForm');
+                if (form) {
+                    form.dispatchEvent(new Event('submit'));
+                }
+            }
+        });
+    
