@@ -139,7 +139,7 @@ $page_title = 'Products';
         <!-- Main Content -->
         <main class="admin-main">
             <header class="admin-header">
-                <h1><i class="fas fa-box"></i> Products</h1>
+                <h1 style="margin-bottom:10px:"><i class="fas fa-box"></i> Products</h1>
                 <button class="btn-primary" onclick="openModal('addProductModal')">
                     <i class="fas fa-plus"></i> Add Product
                 </button>
