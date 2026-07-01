@@ -1,9 +1,22 @@
 <?php
 
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
 
-// ============================================
-// DATABASE CONFIGURATION
-// ============================================
+// ===== SESSION CONFIGURATION =====
+// Only set session ini settings if session is not already active
+if (session_status() === PHP_SESSION_NONE) {
+    // Set session cookie parameters
+    ini_set('session.cookie_httponly', 1);
+    ini_set('session.use_only_cookies', 1);
+    
+    if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
+        ini_set('session.cookie_secure', 1);
+    }
+    
+    // Start session
+    session_start();
+}
 
 // Get database URL from environment variable (Render)
 $database_url = getenv('DATABASE_URL');
