@@ -1,30 +1,50 @@
 <?php
+
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
+// ===== CORRECT PATHS =====
 require_once 'includes/config.php';
 require_once 'includes/auth.php';
 
 requireAdmin();
 
-$db = Database::getInstance();
+// ===== GET DATABASE CONNECTION =====
+global $pdo;
+
+$message = '';
+$messageType = '';
 
 // Handle actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action']) && $_POST['action'] === 'delete') {
         $id = intval($_POST['id']);
-        $stmt = $db->getPDO()->prepare("DELETE FROM users WHERE id = ? AND role = 'user'");
-        if ($stmt->execute([$id])) {
-            $message = 'Customer deleted successfully!';
-            $messageType = 'success';
-        } else {
-            $message = 'Failed to delete customer.';
+        try {
+            $stmt = $pdo->prepare("DELETE FROM users WHERE id = ? AND role = 'user'");
+            if ($stmt->execute([$id]) && $stmt->rowCount() > 0) {
+                $message = 'Customer deleted successfully!';
+                $messageType = 'success';
+            } else {
+                $message = 'Customer not found or cannot be deleted.';
+                $messageType = 'error';
+            }
+        } catch (PDOException $e) {
+            error_log('Delete customer error: ' . $e->getMessage());
+            $message = 'Database error: ' . $e->getMessage();
             $messageType = 'error';
         }
     }
 }
 
-$users = $db->getUsers();
-$customers = array_filter($users, function($user) {
-    return $user['role'] === 'user';
-});
+// ===== GET CUSTOMERS =====
+try {
+    $stmt = $pdo->query("SELECT * FROM users WHERE role = 'user' ORDER BY created_at DESC");
+    $customers = $stmt->fetchAll();
+} catch (PDOException $e) {
+    error_log('Get customers error: ' . $e->getMessage());
+    $customers = [];
+}
 
 $page_title = 'Customers';
 ?>
@@ -49,10 +69,10 @@ $page_title = 'Customers';
                 <span class="badge badge-info">Total: <?php echo count($customers); ?></span>
             </header>
 
-            <?php if (isset($message)): ?>
+            <?php if ($message): ?>
                 <div class="alert alert-<?php echo $messageType; ?> alert-persistent">
                     <i class="fas fa-<?php echo $messageType === 'success' ? 'check-circle' : 'exclamation-circle'; ?>"></i>
-                    <?php echo $message; ?>
+                    <?php echo htmlspecialchars($message); ?>
                 </div>
             <?php endif; ?>
 
@@ -66,33 +86,37 @@ $page_title = 'Customers';
                         </div>
                     </div>
 
-                    <table class="admin-table" id="customersTable">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Name</th>
-                                <th>Email</th>
-                                <th>Phone</th>
-                                <th>Joined</th>
-                                <th>Orders</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (count($customers) > 0): ?>
+                    <?php if (count($customers) > 0): ?>
+                        <table class="admin-table" id="customersTable">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Phone</th>
+                                    <th>Joined</th>
+                                    <th>Orders</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
                                 <?php foreach ($customers as $customer): ?>
                                     <tr>
-                                        <td>#<?php echo $customer['id']; ?></td>
-                                        <td><?php echo $customer['name']; ?></td>
-                                        <td><?php echo $customer['email']; ?></td>
-                                        <td><?php echo $customer['phone'] ?? 'N/A'; ?></td>
+                                        <td>#<?php echo htmlspecialchars($customer['id']); ?></td>
+                                        <td><?php echo htmlspecialchars($customer['name']); ?></td>
+                                        <td><?php echo htmlspecialchars($customer['email']); ?></td>
+                                        <td><?php echo htmlspecialchars($customer['phone'] ?? 'N/A'); ?></td>
                                         <td><?php echo date('M d, Y', strtotime($customer['created_at'])); ?></td>
                                         <td>
                                             <?php
-                                            $stmt = $db->getPDO()->prepare("SELECT COUNT(*) as count FROM orders WHERE user_id = ?");
-                                            $stmt->execute([$customer['id']]);
-                                            $orderCount = $stmt->fetch()['count'];
-                                            echo $orderCount;
+                                            try {
+                                                $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM orders WHERE user_id = ?");
+                                                $stmt->execute([$customer['id']]);
+                                                $orderCount = $stmt->fetch()['count'];
+                                                echo $orderCount;
+                                            } catch (PDOException $e) {
+                                                echo '0';
+                                            }
                                             ?>
                                         </td>
                                         <td>
@@ -109,16 +133,14 @@ $page_title = 'Customers';
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
-                            <?php else: ?>
-                                <tr>
-                                    <td colspan="7" class="text-center text-muted">
-                                        <i class="fas fa-users" style="font-size: 48px; display: block; margin: 20px 0;"></i>
-                                        No customers registered yet
-                                    </td>
-                                </tr>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
+                            </tbody>
+                        </table>
+                    <?php else: ?>
+                        <p class="text-muted text-center" style="padding: 40px 0;">
+                            <i class="fas fa-users" style="font-size: 48px; display: block; margin-bottom: 10px; opacity: 0.5;"></i>
+                            No customers registered yet
+                        </p>
+                    <?php endif; ?>
                 </div>
             </div>
         </main>
@@ -128,32 +150,76 @@ $page_title = 'Customers';
     <div id="viewCustomerModal" class="modal">
         <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
-                <h2>Customer Details</h2>
+                <h2><i class="fas fa-user-circle"></i> Customer Details</h2>
                 <span class="close" onclick="closeModal('viewCustomerModal')">&times;</span>
             </div>
             <div id="customerDetails">
-                <p class="text-muted">Loading customer details...</p>
+                <p class="text-muted"><i class="fas fa-spinner fa-spin"></i> Loading customer details...</p>
             </div>
         </div>
     </div>
 
     <script>
+        // ===== MODAL FUNCTIONS =====
+        function openModal(id) {
+            document.getElementById(id).style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+        
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+        
+        // Close modal on outside click
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }
+        }
+        
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.modal').forEach(modal => {
+                    modal.style.display = 'none';
+                });
+                document.body.style.overflow = 'auto';
+            }
+        });
+
+        // ===== VIEW CUSTOMER =====
         function viewCustomer(id) {
             openModal('viewCustomerModal');
-            document.getElementById('customerDetails').innerHTML = '<p class="text-muted">Loading customer details...</p>';
+            document.getElementById('customerDetails').innerHTML = '<p class="text-muted"><i class="fas fa-spinner fa-spin"></i> Loading customer details...</p>';
             
-            fetch('../includes/ajax.php?action=get_customer&id=' + id)
+            fetch('includes/ajax.php?action=get_customer&id=' + id)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
                         let html = `
                             <div class="customer-details">
-                                <p><strong>Name:</strong> ${data.customer.name}</p>
-                                <p><strong>Email:</strong> ${data.customer.email}</p>
-                                <p><strong>Phone:</strong> ${data.customer.phone || 'N/A'}</p>
-                                <p><strong>Joined:</strong> ${data.customer.created_at}</p>
-                                <p><strong>Total Orders:</strong> ${data.order_count}</p>
-                                <p><strong>Total Spent:</strong> ${data.total_spent}</p>
+                                <div style="text-align: center; margin-bottom: 20px;">
+                                    <i class="fas fa-user-circle" style="font-size: 64px; color: #05573c;"></i>
+                                </div>
+                                <p><strong><i class="fas fa-user"></i> Name:</strong> ${data.customer.name}</p>
+                                <p><strong><i class="fas fa-envelope"></i> Email:</strong> ${data.customer.email}</p>
+                                <p><strong><i class="fas fa-phone"></i> Phone:</strong> ${data.customer.phone || 'N/A'}</p>
+                                <p><strong><i class="fas fa-calendar"></i> Joined:</strong> ${data.customer.created_at}</p>
+                                <p><strong><i class="fas fa-shopping-cart"></i> Total Orders:</strong> ${data.order_count}</p>
+                                <p><strong><i class="fas fa-money-bill-wave"></i> Total Spent:</strong> ${data.total_spent}</p>
+                                ${data.recent_orders && data.recent_orders.length > 0 ? `
+                                    <hr>
+                                    <h4>Recent Orders</h4>
+                                    <ul style="list-style: none; padding: 0;">
+                                        ${data.recent_orders.map(order => `
+                                            <li style="padding: 5px 0; border-bottom: 1px solid #eee;">
+                                                #${order.id} - ${order.total} - ${order.status}
+                                            </li>
+                                        `).join('')}
+                                    </ul>
+                                ` : ''}
                             </div>
                         `;
                         document.getElementById('customerDetails').innerHTML = html;
@@ -162,8 +228,24 @@ $page_title = 'Customers';
                     }
                 })
                 .catch(error => {
+                    console.error('Error:', error);
                     document.getElementById('customerDetails').innerHTML = '<p class="text-danger">Error loading customer details.</p>';
                 });
+        }
+
+        // ===== FILTER TABLE =====
+        function filterTable(inputId, tableId) {
+            const input = document.getElementById(inputId);
+            const table = document.getElementById(tableId);
+            if (!input || !table) return;
+
+            const filter = input.value.toLowerCase();
+            const rows = table.querySelectorAll('tbody tr');
+
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(filter) ? '' : 'none';
+            });
         }
     </script>
 </body>
