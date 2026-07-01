@@ -146,11 +146,16 @@ $page_title = 'Profile Settings';
 
         <!-- Main Content -->
         <main class="admin-main">
-            <header class="admin-header">
-                <h1 style="margin-bottom:10px:"><i class="fas fa-user-cog"></i> Profile Settings</h1>
+            <header class="admin-header" style="margin-bottom:20px:">
+                <h1 style="margin-bottom:20px:"><i class="fas fa-user-cog"></i> Profile Settings</h1>
                 <div class="admin-user" style="margin-bottom:10px:">
-                    <span><i class="fas fa-user"></i> <?php echo htmlspecialchars($_SESSION['user_name'] ?? 'Admin'); ?></span>
-                    <span class="badge badge-primary"><?php echo htmlspecialchars($_SESSION['user_role'] ?? 'Admin'); ?></span>
+                   <span class="user-info">
+    <i class="fas fa-user-circle"></i> 
+    <?php echo htmlspecialchars($_SESSION['user_name'] ?? 'Admin'); ?>
+</span>
+<span class="role-badge <?php echo $_SESSION['user_role'] ?? 'admin'; ?>">
+    <?php echo ucfirst(str_replace('_', ' ', htmlspecialchars($_SESSION['user_role'] ?? 'Admin'))); ?>
+</span>
                 </div>
             </header>
 
@@ -513,6 +518,62 @@ $page_title = 'Profile Settings';
         .switch input:checked + .slider:before {
             transform: translateX(22px);
         }
+        .user-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    color: var(--text);
+}
+
+.user-info i {
+    color: var(--primary);
+    font-size: 18px;
+}
+
+.role-badge {
+    display: inline-block;
+    padding: 4px 16px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.role-badge.admin {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
+}
+
+.role-badge.super_admin {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(245, 87, 108, 0.3);
+}
+
+.role-badge.user {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(79, 172, 254, 0.3);
+}
+
+.role-badge.manager {
+    background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    color: #1a1a2e;
+    box-shadow: 0 2px 10px rgba(67, 233, 123, 0.3);
+}
+
+
+.role-badge.super_admin {
+    animation: pulseGlow 2s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
         
         /* Responsive */
         @media (max-width: 992px) {
