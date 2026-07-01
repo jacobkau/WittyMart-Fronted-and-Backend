@@ -250,7 +250,22 @@ function getCustomers() {
         return [];
     }
 }
-
+/**
+ * Generate URL-friendly slug
+ */
+function generateSlug($string) {
+    // Convert to lowercase
+    $string = strtolower($string);
+    
+    // Replace spaces with hyphens
+    $string = preg_replace('/[^a-z0-9-]/', '-', $string);
+    
+    // Remove multiple hyphens
+    $string = preg_replace('/-+/', '-', $string);
+    
+    // Trim hyphens from ends
+    return trim($string, '-');
+}
 /**
  * Get all categories
  */
