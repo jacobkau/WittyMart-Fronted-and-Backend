@@ -96,8 +96,8 @@ $page_title = 'Orders';
         <!-- Main Content -->
         <main class="admin-main">
             <header class="admin-header">
-                <h1><i class="fas fa-shopping-cart"></i> Orders</h1>
-                <span class="badge badge-info">Total: <?php echo count($orders); ?></span>
+                <h1 style="margin-bottom:10px:"><i class="fas fa-shopping-cart"></i> Orders</h1>
+                <span style="margin-bottom:10px:" class="badge badge-info">Total: <?php echo count($orders); ?></span>
             </header>
 
             <?php if ($message): ?>
