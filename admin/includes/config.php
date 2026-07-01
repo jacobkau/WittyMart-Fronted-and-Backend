@@ -1,8 +1,5 @@
 <?php
-// ===== START SESSION =====
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+
 
 // ===== DATABASE SETTINGS =====
 $database_url = getenv('DATABASE_URL');
