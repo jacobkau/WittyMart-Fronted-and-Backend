@@ -1,11 +1,39 @@
 <?php
-// Start output buffering and error logging
+// ===== EXTREME DEBUG MODE =====
+// Log everything at the very start
+error_log('========================================');
+error_log('LOGIN.PHP - Request received at ' . date('Y-m-d H:i:s'));
+error_log('REQUEST_METHOD: ' . $_SERVER['REQUEST_METHOD']);
+error_log('CONTENT_TYPE: ' . ($_SERVER['CONTENT_TYPE'] ?? 'Not set'));
+error_log('CONTENT_LENGTH: ' . ($_SERVER['CONTENT_LENGTH'] ?? 'Not set'));
+
+// Log raw input
+$raw_input = file_get_contents('php://input');
+if ($raw_input) {
+    error_log('RAW INPUT: ' . $raw_input);
+}
+
+// Log POST data
+error_log('POST data: ' . print_r($_POST, true));
+
+// Log GET data
+error_log('GET data: ' . print_r($_GET, true));
+
+// Log SERVER data (relevant parts)
+error_log('SERVER[REQUEST_URI]: ' . ($_SERVER['REQUEST_URI'] ?? 'Not set'));
+error_log('SERVER[HTTP_REFERER]: ' . ($_SERVER['HTTP_REFERER'] ?? 'Not set'));
+error_log('SERVER[HTTP_USER_AGENT]: ' . ($_SERVER['HTTP_USER_AGENT'] ?? 'Not set'));
+
+// Check if it's an AJAX request
+error_log('HTTP_X_REQUESTED_WITH: ' . ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? 'Not set'));
+
+// Start session and output buffering
 ob_start();
-error_log('=== LOGIN.PHP STARTED ===');
 
 // Include files
 require_once 'includes/config.php';
 require_once 'includes/auth.php';
+
 
 // Debug: Log the request
 error_log('REQUEST_METHOD: ' . $_SERVER['REQUEST_METHOD']);
