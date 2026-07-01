@@ -147,8 +147,8 @@ $page_title = 'Profile Settings';
         <!-- Main Content -->
         <main class="admin-main">
             <header class="admin-header">
-                <h1><i class="fas fa-user-cog"></i> Profile Settings</h1>
-                <div class="admin-user">
+                <h1 style="margin-bottom:10px:"><i class="fas fa-user-cog"></i> Profile Settings</h1>
+                <div class="admin-user" style="margin-bottom:10px:">
                     <span><i class="fas fa-user"></i> <?php echo htmlspecialchars($_SESSION['user_name'] ?? 'Admin'); ?></span>
                     <span class="badge badge-primary"><?php echo htmlspecialchars($_SESSION['user_role'] ?? 'Admin'); ?></span>
                 </div>
