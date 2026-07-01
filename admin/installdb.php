@@ -1,54 +1,45 @@
 <?php
 require_once 'includes/config.php';
 
-echo "<h1>Database Test</h1>";
+$name = 'Admin';
+$email = 'admin@wittymart.com';
+$password = 'admin123';
+$hashed_password = password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
 
 try {
-    // Test connection
-    $stmt = $pdo->query("SELECT version()");
-    $version = $stmt->fetchColumn();
-    echo "<p>✅ Connected to PostgreSQL: $version</p>";
+    // Check if user exists
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE email = ?");
+    $stmt->execute([$email]);
+    $exists = $stmt->fetch();
     
-    // Check if users table exists
-    $stmt = $pdo->query("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'users')");
-    $tableExists = $stmt->fetchColumn();
-    
-    if ($tableExists) {
-        echo "<p>✅ Users table exists</p>";
-        
-        // Count users
-        $stmt = $pdo->query("SELECT COUNT(*) FROM users");
-        $count = $stmt->fetchColumn();
-        echo "<p>Total users: $count</p>";
-        
-        // List users
-        $stmt = $pdo->query("SELECT id, name, email, role FROM users");
-        $users = $stmt->fetchAll();
-        
-        echo "<h2>Users:</h2>";
-        echo "<ul>";
-        foreach ($users as $user) {
-            echo "<li>ID: {$user['id']}, Name: {$user['name']}, Email: {$user['email']}, Role: {$user['role']}</li>";
-        }
-        echo "</ul>";
-        
-        // Test password verification
-        $stmt = $pdo->prepare("SELECT password FROM users WHERE email = ?");
-        $stmt->execute(['admin@wittymart.com']);
-        $hash = $stmt->fetchColumn();
-        
-        if ($hash) {
-            echo "<p>Admin password hash: " . substr($hash, 0, 30) . "...</p>";
-            echo "<p>Password 'admin123' verification: " . (password_verify('admin123', $hash) ? '✅ Valid' : '❌ Invalid') . "</p>";
-        } else {
-            echo "<p>❌ Admin user not found!</p>";
-        }
+    if ($exists) {
+        // Update existing user
+        $stmt = $pdo->prepare("UPDATE users SET password = ?, name = ? WHERE email = ?");
+        $stmt->execute([$hashed_password, $name, $email]);
+        echo "✅ Updated existing admin user\n";
     } else {
-        echo "<p>❌ Users table does not exist!</p>";
-        echo "<p>Please run the schema.sql file to create tables.</p>";
+        // Insert new user
+        $stmt = $pdo->prepare("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, 'admin')");
+        $stmt->execute([$name, $email, $hashed_password]);
+        echo "✅ Created new admin user\n";
+    }
+    
+    echo "Email: $email\n";
+    echo "Password: $password\n";
+    echo "Hash: $hashed_password\n";
+    
+    // Verify
+    $stmt = $pdo->prepare("SELECT password FROM users WHERE email = ?");
+    $stmt->execute([$email]);
+    $hash = $stmt->fetchColumn();
+    
+    if (password_verify($password, $hash)) {
+        echo "✅ Verification successful! You can now login.\n";
+    } else {
+        echo "❌ Verification failed!\n";
     }
     
 } catch (PDOException $e) {
-    echo "<p style='color: red;'>❌ Database error: " . htmlspecialchars($e->getMessage()) . "</p>";
+    echo "❌ Error: " . $e->getMessage() . "\n";
 }
 ?>
