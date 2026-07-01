@@ -133,4 +133,149 @@ function verifyCSRFToken($token) {
 
 // Generate CSRF token for forms
 $csrf_token = generateCSRFToken();
+
+// ============================================
+// DATABASE FUNCTIONS FOR DASHBOARD
+// ============================================
+
+/**
+ * Get statistics for dashboard
+ */
+function getStats() {
+    global $pdo;
+    
+    try {
+        $stats = [];
+        
+        // Total products
+        $stmt = $pdo->query("SELECT COUNT(*) as count FROM products");
+        $stats['products'] = $stmt->fetch()['count'] ?? 0;
+        
+        // Total orders
+        $stmt = $pdo->query("SELECT COUNT(*) as count FROM orders");
+        $stats['orders'] = $stmt->fetch()['count'] ?? 0;
+        
+        // Total revenue
+        $stmt = $pdo->query("SELECT COALESCE(SUM(total), 0) as total FROM orders WHERE status != 'cancelled'");
+        $stats['revenue'] = $stmt->fetch()['total'] ?? 0;
+        
+        // Total customers
+        $stmt = $pdo->query("SELECT COUNT(*) as count FROM users WHERE role = 'user'");
+        $stats['customers'] = $stmt->fetch()['count'] ?? 0;
+        
+        return $stats;
+        
+    } catch (PDOException $e) {
+        error_log('Get stats error: ' . $e->getMessage());
+        return [
+            'products' => 0,
+            'orders' => 0,
+            'revenue' => 0,
+            'customers' => 0
+        ];
+    }
+}
+
+/**
+ * Get all orders
+ */
+function getOrders() {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->query("
+            SELECT o.*, u.name as customer_name 
+            FROM orders o 
+            LEFT JOIN users u ON o.user_id = u.id 
+            ORDER BY o.created_at DESC
+        ");
+        return $stmt->fetchAll();
+        
+    } catch (PDOException $e) {
+        error_log('Get orders error: ' . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Get recent orders (limited)
+ */
+function getRecentOrders($limit = 5) {
+    $orders = getOrders();
+    return array_slice($orders, 0, $limit);
+}
+
+/**
+ * Format price
+ */
+function formatPrice($price) {
+    return 'Ksh ' . number_format($price, 2);
+}
+
+/**
+ * Get status badge class
+ */
+function getStatusBadge($status) {
+    $badges = [
+        'pending' => 'badge-warning',
+        'processing' => 'badge-info',
+        'shipped' => 'badge-primary',
+        'delivered' => 'badge-success',
+        'cancelled' => 'badge-danger'
+    ];
+    return $badges[$status] ?? 'badge-secondary';
+}
+
+/**
+ * Get all products
+ */
+function getProducts() {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->query("
+            SELECT p.*, c.name as category_name 
+            FROM products p 
+            LEFT JOIN categories c ON p.category_id = c.id 
+            ORDER BY p.created_at DESC
+        ");
+        return $stmt->fetchAll();
+        
+    } catch (PDOException $e) {
+        error_log('Get products error: ' . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Get all customers
+ */
+function getCustomers() {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->query("SELECT * FROM users WHERE role = 'user' ORDER BY created_at DESC");
+        return $stmt->fetchAll();
+        
+    } catch (PDOException $e) {
+        error_log('Get customers error: ' . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Get all categories
+ */
+function getCategories() {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->query("SELECT * FROM categories ORDER BY name");
+        return $stmt->fetchAll();
+        
+    } catch (PDOException $e) {
+        error_log('Get categories error: ' . $e->getMessage());
+        return [];
+    }
+}
 ?>
