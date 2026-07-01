@@ -83,8 +83,7 @@ function filterTable(inputId, tableId) {
 }
 
   
-        // ===== FORM SUBMISSION WITH LOADING =====
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
+       document.getElementById('loginForm').addEventListener('submit', function(e) {
             const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value.trim();
             
@@ -93,19 +92,13 @@ function filterTable(inputId, tableId) {
                 return;
             }
             
-            // Show loading overlay
             document.getElementById('loadingOverlay').classList.add('active');
-            
-            // Add loading state to button
-            const btn = document.getElementById('loginBtn');
-            btn.classList.add('loading');
-            
-            // Disable inputs
+            document.getElementById('loginBtn').classList.add('loading');
             document.getElementById('email').disabled = true;
             document.getElementById('password').disabled = true;
         });
         
-        // ===== AUTO-HIDE ERRORS AFTER 5 SECONDS =====
+        // Auto-hide errors after 5 seconds
         document.addEventListener('DOMContentLoaded', function() {
             const alert = document.querySelector('.alert');
             if (alert) {
@@ -118,6 +111,8 @@ function filterTable(inputId, tableId) {
                 }, 5000);
             }
         });
+        
+       
         
         // ===== KEYBOARD SHORTCUT: Enter to submit =====
         document.addEventListener('keydown', function(e) {
