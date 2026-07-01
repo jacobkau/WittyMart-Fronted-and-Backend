@@ -9,14 +9,7 @@ error_reporting(E_ALL);
 require_once 'includes/config.php';
 require_once 'includes/auth.php';
 
-// Check if database connection works
-try {
-    $test = $pdo->query("SELECT 1");
-    echo "✅ Database connection OK<br>";
-} catch (Exception $e) {
-    echo "❌ Database connection failed: " . $e->getMessage() . "<br>";
-    exit;
-}
+
 
 requireAdmin();
 
