@@ -186,7 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             <?php endif; ?>
             
-            <form method="POST" action="login.php">
+            <form method="POST" action="test_login.php">
                 <div class="form-group">
                     <label><i class="fas fa-envelope"></i> Email</label>
                     <input type="email" name="email" id="email" placeholder="Enter your email" 
