@@ -1,7 +1,79 @@
 <?php
+
 require_once 'config.php';
 
-// ===== LOGIN FUNCTION =====
+// ===== DATABASE FUNCTIONS =====
+function getFeaturedProducts($limit = 8) {
+    $db = getDB();
+    $stmt = $db->prepare("SELECT * FROM products ORDER BY created_at DESC LIMIT ?");
+    $stmt->execute([$limit]);
+    return $stmt->fetchAll();
+}
+
+function getProduct($id) {
+    $db = getDB();
+    $stmt = $db->prepare("SELECT * FROM products WHERE id = ?");
+    $stmt->execute([$id]);
+    return $stmt->fetch();
+}
+
+function getCategories() {
+    $db = getDB();
+    $stmt = $db->query("SELECT * FROM categories ORDER BY name");
+    return $stmt->fetchAll();
+}
+
+function getOrders() {
+    $db = getDB();
+    $stmt = $db->query("SELECT o.*, u.name as customer_name 
+                         FROM orders o 
+                         LEFT JOIN users u ON o.user_id = u.id 
+                         ORDER BY o.created_at DESC");
+    return $stmt->fetchAll();
+}
+
+function getOrder($id) {
+    $db = getDB();
+    $stmt = $db->prepare("SELECT o.*, u.name as customer_name 
+                           FROM orders o 
+                           LEFT JOIN users u ON o.user_id = u.id 
+                           WHERE o.id = ?");
+    $stmt->execute([$id]);
+    return $stmt->fetch();
+}
+
+function updateOrderStatus($id, $status) {
+    $db = getDB();
+    $stmt = $db->prepare("UPDATE orders SET status = ? WHERE id = ?");
+    return $stmt->execute([$status, $id]);
+}
+
+function getUsers() {
+    $db = getDB();
+    $stmt = $db->query("SELECT * FROM users ORDER BY created_at DESC");
+    return $stmt->fetchAll();
+}
+
+function getStats() {
+    $db = getDB();
+    $stats = [];
+    
+    $stmt = $db->query("SELECT COUNT(*) as count FROM products");
+    $stats['products'] = $stmt->fetch()['count'];
+    
+    $stmt = $db->query("SELECT COUNT(*) as count FROM orders");
+    $stats['orders'] = $stmt->fetch()['count'];
+    
+    $stmt = $db->query("SELECT COALESCE(SUM(total), 0) as total FROM orders WHERE status != 'cancelled'");
+    $stats['revenue'] = $stmt->fetch()['total'];
+    
+    $stmt = $db->query("SELECT COUNT(*) as count FROM users WHERE role = 'user'");
+    $stats['customers'] = $stmt->fetch()['count'];
+    
+    return $stats;
+}
+
+// ===== AUTHENTICATION FUNCTIONS =====
 function login($email, $password) {
     try {
         $db = getDB();
@@ -23,7 +95,6 @@ function login($email, $password) {
     }
 }
 
-// ===== LOGOUT FUNCTION =====
 function logout() {
     $_SESSION = [];
     if (ini_get("session.use_cookies")) {
@@ -37,17 +108,14 @@ function logout() {
     return true;
 }
 
-// ===== CHECK IF USER IS LOGGED IN =====
 function isLoggedIn() {
     return isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
 }
 
-// ===== CHECK IF USER IS ADMIN =====
 function isAdmin() {
     return isLoggedIn() && isset($_SESSION['role']) && $_SESSION['role'] === 'admin';
 }
 
-// ===== REQUIRE LOGIN =====
 function requireLogin() {
     if (!isLoggedIn()) {
         redirect('login.php');
@@ -55,7 +123,6 @@ function requireLogin() {
     }
 }
 
-// ===== REQUIRE ADMIN =====
 function requireAdmin() {
     requireLogin();
     if (!isAdmin()) {
@@ -64,7 +131,6 @@ function requireAdmin() {
     }
 }
 
-// ===== GET CURRENT USER =====
 function getCurrentUser() {
     if (isLoggedIn()) {
         return [
@@ -77,50 +143,6 @@ function getCurrentUser() {
     return null;
 }
 
-// ===== REDIRECT FUNCTION =====
-function redirect($url) {
-    header("Location: " . $url);
-    exit;
-}
-
-// ===== SANITIZE INPUT =====
-function sanitize($input) {
-    if (is_array($input)) {
-        return array_map('sanitize', $input);
-    }
-    return htmlspecialchars(strip_tags(trim($input)), ENT_QUOTES, 'UTF-8');
-}
-
-// ===== GENERATE CSRF TOKEN =====
-function generateCSRFToken() {
-    if (empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-    }
-    return $_SESSION['csrf_token'];
-}
-
-// ===== VERIFY CSRF TOKEN =====
-function verifyCSRFToken($token) {
-    return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
-}
-
-// ===== CHECK USER PERMISSION =====
-function hasPermission($permission) {
-    if (!isLoggedIn()) {
-        return false;
-    }
-    
-    // Admin has all permissions
-    if (isAdmin()) {
-        return true;
-    }
-    
-    // Check specific permissions (for future use)
-    $permissions = $_SESSION['permissions'] ?? [];
-    return in_array($permission, $permissions);
-}
-
-// ===== GET USER BY ID =====
 function getUserById($id) {
     try {
         $db = getDB();
@@ -133,7 +155,6 @@ function getUserById($id) {
     }
 }
 
-// ===== UPDATE USER LAST LOGIN =====
 function updateLastLogin($userId) {
     try {
         $db = getDB();
@@ -145,32 +166,87 @@ function updateLastLogin($userId) {
     }
 }
 
-// ===== REGISTER NEW USER =====
 function registerUser($name, $email, $password, $phone = null) {
     try {
         $db = getDB();
         
-        // Check if email already exists
         $stmt = $db->prepare("SELECT id FROM users WHERE email = ?");
         $stmt->execute([$email]);
         if ($stmt->fetch()) {
             return ['success' => false, 'message' => 'Email already registered'];
         }
         
-        // Hash password
         $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-        
-        // Insert user
         $stmt = $db->prepare("INSERT INTO users (name, email, password, phone, role) VALUES (?, ?, ?, ?, 'user')");
         $success = $stmt->execute([$name, $email, $hashedPassword, $phone]);
         
         if ($success) {
             return ['success' => true, 'message' => 'Registration successful', 'id' => $db->lastInsertId()];
         }
-        
         return ['success' => false, 'message' => 'Registration failed'];
     } catch (PDOException $e) {
         error_log("Register error: " . $e->getMessage());
         return ['success' => false, 'message' => 'Registration failed: ' . $e->getMessage()];
+    }
+}
+
+// ===== HELPER FUNCTIONS =====
+function formatPrice($price) {
+    return 'Ksh ' . number_format($price, 2);
+}
+
+function redirect($url) {
+    header("Location: " . $url);
+    exit;
+}
+
+function sanitize($input) {
+    if (is_array($input)) {
+        return array_map('sanitize', $input);
+    }
+    return htmlspecialchars(strip_tags(trim($input)), ENT_QUOTES, 'UTF-8');
+}
+
+function generateSlug($string) {
+    $string = strtolower($string);
+    $string = preg_replace('/[^a-z0-9-]/', '-', $string);
+    $string = preg_replace('/-+/', '-', $string);
+    return trim($string, '-');
+}
+
+function getStatusBadge($status) {
+    $badges = [
+        'pending' => 'badge-warning',
+        'processing' => 'badge-info',
+        'shipped' => 'badge-primary',
+        'delivered' => 'badge-success',
+        'cancelled' => 'badge-danger'
+    ];
+    return $badges[$status] ?? 'badge-secondary';
+}
+
+function generateCSRFToken() {
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+function verifyCSRFToken($token) {
+    return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
+}
+
+function hasPermission($permission) {
+    if (!isLoggedIn()) return false;
+    if (isAdmin()) return true;
+    $permissions = $_SESSION['permissions'] ?? [];
+    return in_array($permission, $permissions);
+}
+
+function debug($data) {
+    if (!IS_PRODUCTION) {
+        echo '<pre>';
+        print_r($data);
+        echo '</pre>';
     }
 }
