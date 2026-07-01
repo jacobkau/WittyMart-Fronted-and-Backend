@@ -1,173 +1,253 @@
 <?php
+// ============================================
+// AUTHENTICATION FUNCTIONS
+// ============================================
+
 require_once 'config.php';
 
-// ===== LOGIN FUNCTION =====
+/**
+ * Login user
+ */
 function login($email, $password) {
+    global $pdo;
+    
     try {
-        $db = getDB();
-        $stmt = $db->prepare("SELECT * FROM users WHERE email = ?");
+        // Get user by email
+        $stmt = $pdo->prepare("SELECT id, name, email, password, role FROM users WHERE email = ?");
         $stmt->execute([$email]);
         $user = $stmt->fetch();
         
+        // Verify password
         if ($user && password_verify($password, $user['password'])) {
+            // Regenerate session ID to prevent session fixation
+            session_regenerate_id(true);
+            
+            // Set session variables
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['user_name'] = $user['name'];
             $_SESSION['user_email'] = $user['email'];
-            $_SESSION['role'] = $user['role'];
+            $_SESSION['user_role'] = $user['role'];
+            $_SESSION['logged_in'] = true;
+            $_SESSION['login_time'] = time();
+            
+            // Update last login timestamp
+            $updateStmt = $pdo->prepare("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?");
+            $updateStmt->execute([$user['id']]);
+            
             return true;
         }
+        
         return false;
+        
     } catch (PDOException $e) {
-        error_log("Login error: " . $e->getMessage());
+        error_log('Login error: ' . $e->getMessage());
         return false;
     }
 }
 
-// ===== LOGOUT FUNCTION =====
-function logout() {
-    $_SESSION = [];
-    if (ini_get("session.use_cookies")) {
-        $params = session_get_cookie_params();
-        setcookie(session_name(), '', time() - 42000,
-            $params["path"], $params["domain"],
-            $params["secure"], $params["httponly"]
-        );
+/**
+ * Check if user is logged in
+ */
+function isLoggedIn() {
+    if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
+        return false;
     }
-    session_destroy();
+    
+    // Check session timeout
+    if (isset($_SESSION['login_time'])) {
+        if (time() - $_SESSION['login_time'] > SESSION_TIMEOUT) {
+            logout();
+            return false;
+        }
+    }
+    
     return true;
 }
 
-
-
-// ===== CHECK IF USER IS ADMIN =====
+/**
+ * Check if user is admin
+ */
 function isAdmin() {
-    return isLoggedIn() && isset($_SESSION['role']) && $_SESSION['role'] === 'admin';
+    return isLoggedIn() && isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
 }
 
-// ===== REQUIRE LOGIN =====
+/**
+ * Require admin access
+ */
+function requireAdmin() {
+    if (!isAdmin()) {
+        redirect('login.php');
+    }
+}
+
+/**
+ * Require login
+ */
 function requireLogin() {
     if (!isLoggedIn()) {
         redirect('login.php');
-        exit;
     }
 }
 
-// ===== REQUIRE ADMIN =====
-function requireAdmin() {
-    requireLogin();
-    if (!isAdmin()) {
-        redirect('../index.php');
-        exit;
+/**
+ * Logout user
+ */
+function logout() {
+    // Unset all session variables
+    $_SESSION = [];
+    
+    // Delete session cookie
+    if (ini_get("session.use_cookies")) {
+        $params = session_get_cookie_params();
+        setcookie(
+            session_name(),
+            '',
+            time() - 42000,
+            $params["path"],
+            $params["domain"],
+            $params["secure"],
+            $params["httponly"]
+        );
     }
+    
+    // Destroy session
+    session_destroy();
 }
 
-// ===== GET CURRENT USER =====
+/**
+ * Get current user data
+ */
 function getCurrentUser() {
-    if (isLoggedIn()) {
-        return [
-            'id' => $_SESSION['user_id'],
-            'name' => $_SESSION['user_name'],
-            'email' => $_SESSION['user_email'],
-            'role' => $_SESSION['role']
-        ];
+    if (!isLoggedIn()) {
+        return null;
     }
-    return null;
-}
-
-// ===== REDIRECT FUNCTION =====
-function redirect($url) {
-    header("Location: " . $url);
-    exit;
-}
-
-// ===== SANITIZE INPUT =====
-function sanitize($input) {
-    if (is_array($input)) {
-        return array_map('sanitize', $input);
+    
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("SELECT id, name, email, role, phone, created_at, last_login FROM users WHERE id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        return $stmt->fetch();
+    } catch (PDOException $e) {
+        error_log('Get user error: ' . $e->getMessage());
+        return null;
     }
-    return htmlspecialchars(strip_tags(trim($input)), ENT_QUOTES, 'UTF-8');
 }
 
-// ===== GENERATE CSRF TOKEN =====
-function generateCSRFToken() {
-    if (empty($_SESSION['csrf_token'])) {
-        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+/**
+ * Check if email already exists
+ */
+function emailExists($email, $excludeId = null) {
+    global $pdo;
+    
+    try {
+        $sql = "SELECT id FROM users WHERE email = ?";
+        $params = [$email];
+        
+        if ($excludeId) {
+            $sql .= " AND id != ?";
+            $params[] = $excludeId;
+        }
+        
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        
+        return $stmt->fetch() !== false;
+        
+    } catch (PDOException $e) {
+        error_log('Email check error: ' . $e->getMessage());
+        return false;
     }
-    return $_SESSION['csrf_token'];
 }
 
-// ===== VERIFY CSRF TOKEN =====
-function verifyCSRFToken($token) {
-    return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
+/**
+ * Hash password
+ */
+function hashPassword($password) {
+    return password_hash($password, PASSWORD_BCRYPT, ['cost' => PASSWORD_BCRYPT_COST]);
 }
 
-// ===== CHECK USER PERMISSION =====
+/**
+ * Verify password
+ */
+function verifyPassword($password, $hash) {
+    return password_verify($password, $hash);
+}
+
+/**
+ * Check if password needs rehash
+ */
+function needsRehash($hash) {
+    return password_needs_rehash($hash, PASSWORD_BCRYPT, ['cost' => PASSWORD_BCRYPT_COST]);
+}
+
+/**
+ * Create user (for registration)
+ */
+function createUser($name, $email, $password, $role = 'user') {
+    global $pdo;
+    
+    if (emailExists($email)) {
+        return false;
+    }
+    
+    try {
+        $hashedPassword = hashPassword($password);
+        $stmt = $pdo->prepare("INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)");
+        return $stmt->execute([$name, $email, $hashedPassword, $role]);
+    } catch (PDOException $e) {
+        error_log('Create user error: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Update user password
+ */
+function updatePassword($userId, $newPassword) {
+    global $pdo;
+    
+    try {
+        $hashedPassword = hashPassword($newPassword);
+        $stmt = $pdo->prepare("UPDATE users SET password = ? WHERE id = ?");
+        return $stmt->execute([$hashedPassword, $userId]);
+    } catch (PDOException $e) {
+        error_log('Update password error: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Log login attempt (for security monitoring)
+ */
+function logLoginAttempt($email, $success) {
+    // You can implement logging to a table if needed
+    error_log(sprintf(
+        'Login attempt - Email: %s, Success: %s, IP: %s, Time: %s',
+        $email,
+        $success ? 'Yes' : 'No',
+        $_SERVER['REMOTE_ADDR'] ?? 'Unknown',
+        date('Y-m-d H:i:s')
+    ));
+}
+
+/**
+ * Check if user has permission
+ */
 function hasPermission($permission) {
     if (!isLoggedIn()) {
         return false;
     }
     
-    // Admin has all permissions
-    if (isAdmin()) {
-        return true;
-    }
+    // Define role permissions
+    $permissions = [
+        'admin' => ['all'],
+        'user' => ['view_products', 'view_orders', 'create_orders'],
+    ];
     
-    // Check specific permissions (for future use)
-    $permissions = $_SESSION['permissions'] ?? [];
-    return in_array($permission, $permissions);
+    $role = $_SESSION['user_role'] ?? 'user';
+    
+    return isset($permissions[$role]) && 
+           (in_array('all', $permissions[$role]) || in_array($permission, $permissions[$role]));
 }
-
-// ===== GET USER BY ID =====
-function getUserById($id) {
-    try {
-        $db = getDB();
-        $stmt = $db->prepare("SELECT id, name, email, phone, role, created_at FROM users WHERE id = ?");
-        $stmt->execute([$id]);
-        return $stmt->fetch();
-    } catch (PDOException $e) {
-        error_log("Get user error: " . $e->getMessage());
-        return null;
-    }
-}
-
-// ===== UPDATE USER LAST LOGIN =====
-function updateLastLogin($userId) {
-    try {
-        $db = getDB();
-        $stmt = $db->prepare("UPDATE users SET last_login = NOW() WHERE id = ?");
-        return $stmt->execute([$userId]);
-    } catch (PDOException $e) {
-        error_log("Update last login error: " . $e->getMessage());
-        return false;
-    }
-}
-
-// ===== REGISTER NEW USER =====
-function registerUser($name, $email, $password, $phone = null) {
-    try {
-        $db = getDB();
-        
-        // Check if email already exists
-        $stmt = $db->prepare("SELECT id FROM users WHERE email = ?");
-        $stmt->execute([$email]);
-        if ($stmt->fetch()) {
-            return ['success' => false, 'message' => 'Email already registered'];
-        }
-        
-        // Hash password
-        $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-        
-        // Insert user
-        $stmt = $db->prepare("INSERT INTO users (name, email, password, phone, role) VALUES (?, ?, ?, ?, 'user')");
-        $success = $stmt->execute([$name, $email, $hashedPassword, $phone]);
-        
-        if ($success) {
-            return ['success' => true, 'message' => 'Registration successful', 'id' => $db->lastInsertId()];
-        }
-        
-        return ['success' => false, 'message' => 'Registration failed'];
-    } catch (PDOException $e) {
-        error_log("Register error: " . $e->getMessage());
-        return ['success' => false, 'message' => 'Registration failed: ' . $e->getMessage()];
-    }
-}
+?>
