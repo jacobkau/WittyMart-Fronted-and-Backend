@@ -1,8 +1,6 @@
 <?php
-
-require_once '../includes/config.php';
-require_once '../includes/auth.php';
-require_once '../includes/functions.php';
+require_once 'includes/config.php';
+require_once 'includes/auth.php';
 
 requireAdmin();
 
@@ -28,27 +26,13 @@ $page_title = 'Settings';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings - WittyMart Admin</title>
-    <link rel="stylesheet" href="../assets/css/admin.css">
+    <link rel="stylesheet" href="admin.css">
+    <link rel="shortcut icon" href="images/logo.png" type="image/x-icon">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <div class="admin-wrapper">
-        <!-- Sidebar -->
-        <aside class="admin-sidebar">
-            <div class="sidebar-header">
-                <img src="../images/Witty Mart.png" alt="WittyMart">
-                <h2>WittyMart</h2>
-            </div>
-            <nav class="sidebar-nav">
-                <a href="dashboard.php"><i class="fas fa-home"></i> Dashboard</a>
-                <a href="products.php"><i class="fas fa-box"></i> Products</a>
-                <a href="orders.php"><i class="fas fa-shopping-cart"></i> Orders</a>
-                <a href="customers.php"><i class="fas fa-users"></i> Customers</a>
-                <a href="categories.php"><i class="fas fa-tags"></i> Categories</a>
-                <a href="settings.php" class="active"><i class="fas fa-cog"></i> Settings</a>
-                <a href="../logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
-            </nav>
-        </aside>
+        <?php include "sidebar.php" ?>
 
         <!-- Main Content -->
         <main class="admin-main">
