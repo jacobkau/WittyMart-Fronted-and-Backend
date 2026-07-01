@@ -57,6 +57,36 @@ switch ($action) {
             $response = ['success' => false, 'message' => 'Database error'];
         }
         break;
+    case 'get_admin':
+    if (!isAdmin()) {
+        $response = ['success' => false, 'message' => 'Unauthorized'];
+        break;
+    }
+    
+    $id = intval($_GET['id'] ?? 0);
+    if (!$id) {
+        $response = ['success' => false, 'message' => 'Invalid admin ID'];
+        break;
+    }
+    
+    try {
+        $stmt = $pdo->prepare("SELECT id, name, email, phone, role, status, created_at FROM users WHERE id = ?");
+        $stmt->execute([$id]);
+        $admin = $stmt->fetch();
+        
+        if ($admin) {
+            $response = [
+                'success' => true,
+                'admin' => $admin
+            ];
+        } else {
+            $response = ['success' => false, 'message' => 'Admin not found'];
+        }
+    } catch (PDOException $e) {
+        error_log('Get admin error: ' . $e->getMessage());
+        $response = ['success' => false, 'message' => 'Database error'];
+    }
+    break;
         
     case 'add_product':
         if (!isAdmin()) {
