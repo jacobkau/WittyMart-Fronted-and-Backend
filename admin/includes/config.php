@@ -88,13 +88,6 @@ function sanitize($data) {
     return htmlspecialchars(trim($data), ENT_QUOTES, 'UTF-8');
 }
 
-/**
- * Redirect to a URL
- */
-function redirect($url) {
-    header('Location: ' . $url);
-    exit();
-}
 
 /**
  * Generate CSRF token
