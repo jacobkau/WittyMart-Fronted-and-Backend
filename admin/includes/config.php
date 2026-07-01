@@ -1,13 +1,8 @@
 <?php
-// ===== SESSION SETTINGS =====
-ini_set('session.cookie_httponly', 1);
-ini_set('session.use_only_cookies', 1);
-
 // ===== START SESSION =====
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-
 
 // ===== DATABASE SETTINGS =====
 $database_url = getenv('DATABASE_URL');
@@ -34,6 +29,21 @@ define('SITE_NAME', getenv('SITE_NAME') ?: 'WittyMart');
 define('SITE_URL', getenv('SITE_URL') ?: 'https://wittymart.onrender.com/');
 define('ADMIN_EMAIL', getenv('ADMIN_EMAIL') ?: 'admin@wittymart.com');
 
+// ===== ENVIRONMENT SETTINGS =====
+$environment = getenv('APP_ENV') ?: 'development';
+define('APP_ENV', $environment);
+define('IS_PRODUCTION', $environment === 'production');
+
+
+
+// ===== ERROR REPORTING =====
+if (IS_PRODUCTION) {
+    error_reporting(0);
+    ini_set('display_errors', 0);
+} else {
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+}
 
 // ===== TIMEZONE =====
 date_default_timezone_set(getenv('APP_TIMEZONE') ?: 'Africa/Nairobi');
