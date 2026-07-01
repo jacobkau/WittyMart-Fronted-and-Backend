@@ -1,10 +1,8 @@
 <?php
-// admin/sidebar.php - Fixed Version
 
-// Get current page name
 $current_page = basename($_SERVER['PHP_SELF']);
 
-// Helper function to check active page
+
 function isActive($page) {
     $current_page = basename($_SERVER['PHP_SELF']);
     return $current_page === $page ? 'active' : '';
@@ -17,12 +15,12 @@ function isActive($page) {
         <span class="admin-role">Admin Panel</span>
     </div>
     <nav class="sidebar-nav">
-        <!-- Dashboard -->
+        
         <a href="dashboard.php" class="<?php echo isActive('dashboard.php'); ?>">
             <i class="fas fa-home"></i> Dashboard
         </a>
         
-        <!-- Store Management -->
+        
         <div class="sidebar-label">Store</div>
         <a href="products.php" class="<?php echo isActive('products.php'); ?>">
             <i class="fas fa-box"></i> Products
@@ -38,8 +36,7 @@ function isActive($page) {
         </a>
         
         <hr class="sidebar-divider">
-        
-        <!-- Account Management -->
+     
         <div class="sidebar-label">Account</div>
         <a href="admin_management.php" class="<?php echo isActive('admin_management.php'); ?>">
             <i class="fas fa-user-shield"></i> Admin Management
@@ -55,16 +52,15 @@ function isActive($page) {
         </a>
         
         <hr class="sidebar-divider">
-        
-        <!-- Logout -->
-        <a href="../logout.php" class="logout-link">
+    
+        <a href="logout.php" class="logout-link">
             <i class="fas fa-sign-out-alt"></i> Logout
         </a>
     </nav>
 </aside>
 
 <style>
-/* Sidebar Styles */
+
 .admin-sidebar {
     width: 260px;
     background: #05573c;
@@ -162,7 +158,7 @@ function isActive($page) {
     margin: 10px 20px;
 }
 
-/* Scrollbar */
+
 .admin-sidebar::-webkit-scrollbar {
     width: 4px;
 }
@@ -172,7 +168,7 @@ function isActive($page) {
     border-radius: 10px;
 }
 
-/* Responsive */
+
 @media (max-width: 768px) {
     .admin-sidebar {
         width: 220px;
