@@ -1,23 +1,5 @@
 <?php
-// ============================================
-// CONFIGURATION FILE
-// ============================================
 
-// Error reporting (disable in production)
-error_reporting(E_ALL);
-ini_set('display_errors', 0);
-
-// Session configuration
-ini_set('session.cookie_httponly', 1);
-ini_set('session.use_only_cookies', 1);
-if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
-    ini_set('session.cookie_secure', 1);
-}
-
-// Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 
 // ============================================
 // DATABASE CONFIGURATION
