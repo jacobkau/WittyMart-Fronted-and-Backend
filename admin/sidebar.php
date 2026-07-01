@@ -22,6 +22,9 @@ $current_page = basename($_SERVER['PHP_SELF']);
         <a href="categories.php" class="<?php echo $current_page === 'categories.php' ? 'active' : ''; ?>">
             <i class="fas fa-tags"></i> Categories
         </a>
+        <a href="admins.php" class="<?php echo isActive('admin_management.php'); ?>">
+    <i class="fas fa-user-shield"></i> Admin Management
+</a>
         <a href="profile.php" class="<?php echo $current_page === 'profile.php' ? 'active' : ''; ?>">
             <i class="fas fa-user-cog"></i> Profile
         </a>
