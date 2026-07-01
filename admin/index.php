@@ -1,7 +1,7 @@
 <?php
-require_once __DIR__ . '/../includes/config.php';
-require_once __DIR__ . '/../includes/auth.php';
-require_once __DIR__ . '/../includes/functions.php';
+include 'includes/config.php';
+include 'includes/auth.php';
+include 'includes/functions.php';
 
 $page_title = "WittyMart - Smart Shopping for Witty Minds";
 include 'header.php';
@@ -39,6 +39,6 @@ include 'header.php';
             </div>
         </section>
     </main>
-    <?php include_once 'footer.php';?>
+    <?php include 'footer.php';?>
 </body>
 </html>
