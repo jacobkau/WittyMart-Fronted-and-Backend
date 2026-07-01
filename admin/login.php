@@ -75,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             <?php endif; ?>
             
-            <form method="POST" action="" id="loginForm">
+            <form method="POST" action="" id="loginForm" novalidate>
                 <div class="form-group">
                     <label><i class="fas fa-envelope"></i> Email</label>
                     <input type="email" name="email" id="email" placeholder="Enter your email" value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>" required autofocus>
@@ -102,6 +102,94 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
     
-    <script src="admin.js" defer></script>
+    <script>
+        // ===== LOGIN FORM HANDLING =====
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('loginForm');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const loginBtn = document.getElementById('loginBtn');
+            const emailInput = document.getElementById('email');
+            const passwordInput = document.getElementById('password');
+            
+            // Auto-hide errors after 5 seconds
+            const alert = document.querySelector('.alert');
+            if (alert) {
+                setTimeout(() => {
+                    alert.style.transition = 'opacity 0.5s ease';
+                    alert.style.opacity = '0';
+                    setTimeout(() => {
+                        alert.style.display = 'none';
+                    }, 500);
+                }, 5000);
+            }
+            
+            // Handle form submission
+            form.addEventListener('submit', function(e) {
+                // Get values and trim
+                const email = emailInput.value.trim();
+                const password = passwordInput.value.trim();
+                
+                // Validate
+                if (!email || !password) {
+                    e.preventDefault();
+                    
+                    // Show error message
+                    let errorAlert = document.querySelector('.alert');
+                    if (!errorAlert) {
+                        errorAlert = document.createElement('div');
+                        errorAlert.className = 'alert alert-danger';
+                        errorAlert.innerHTML = '<i class="fas fa-exclamation-circle"></i> Please fill in all fields';
+                        const loginBox = document.querySelector('.login-box');
+                        const formElement = document.getElementById('loginForm');
+                        loginBox.insertBefore(errorAlert, formElement);
+                    } else {
+                        errorAlert.innerHTML = '<i class="fas fa-exclamation-circle"></i> Please fill in all fields';
+                        errorAlert.style.display = 'block';
+                        errorAlert.style.opacity = '1';
+                    }
+                    
+                    // Highlight empty fields
+                    if (!email) {
+                        emailInput.style.borderColor = '#dc3545';
+                    }
+                    if (!password) {
+                        passwordInput.style.borderColor = '#dc3545';
+                    }
+                    
+                    return false;
+                }
+                
+                // Reset border colors
+                emailInput.style.borderColor = '';
+                passwordInput.style.borderColor = '';
+                
+                // Show loading state
+                loadingOverlay.classList.add('active');
+                loginBtn.classList.add('loading');
+                emailInput.disabled = true;
+                passwordInput.disabled = true;
+                
+                // Allow form to submit
+                return true;
+            });
+            
+            // Clear error styling on input
+            emailInput.addEventListener('input', function() {
+                this.style.borderColor = '';
+                const alert = document.querySelector('.alert');
+                if (alert) {
+                    alert.style.display = 'none';
+                }
+            });
+            
+            passwordInput.addEventListener('input', function() {
+                this.style.borderColor = '';
+                const alert = document.querySelector('.alert');
+                if (alert) {
+                    alert.style.display = 'none';
+                }
+            });
+        });
+    </script>
 </body>
 </html>
