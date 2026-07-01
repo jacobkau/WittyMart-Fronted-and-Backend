@@ -1,19 +1,28 @@
 <?php
-// ============================================
-// AUTHENTICATION FUNCTIONS
-// ============================================
+
+
+// ===== IMPORTANT: No output before this point =====
 
 require_once 'config.php';
 
+// ===== REDIRECT FUNCTION =====
 function redirect($url) {
     header('Location: ' . $url);
     exit;
 }
 
 /**
+ * Start session if not already started
+ */
+function startSession() {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+}
+
+/**
  * Login user
  */
-
 function login($email, $password) {
     global $pdo;
     
@@ -28,8 +37,14 @@ function login($email, $password) {
         
         // Verify password
         if ($user && password_verify($password, $user['password'])) {
+            // Start session if not already started
+            startSession();
+            
             // Regenerate session ID to prevent session fixation
-            session_regenerate_id(true);
+            // Check if session is active before regenerating
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                session_regenerate_id(true);
+            }
             
             // Set session variables
             $_SESSION['user_id'] = $user['id'];
@@ -60,6 +75,9 @@ function login($email, $password) {
  * Check if user is logged in
  */
 function isLoggedIn() {
+    // Start session if not already started
+    startSession();
+    
     if (!isset($_SESSION['logged_in']) || $_SESSION['logged_in'] !== true) {
         return false;
     }
@@ -106,6 +124,9 @@ function requireLogin() {
  * Logout user
  */
 function logout() {
+    // Start session if not already started
+    startSession();
+    
     // Unset all session variables
     $_SESSION = [];
     
