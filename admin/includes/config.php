@@ -3,6 +3,14 @@
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+// ===== SESSION SETTINGS =====
+ini_set('session.cookie_httponly', 1);
+ini_set('session.use_only_cookies', 1);
+
+if (IS_PRODUCTION) {
+    ini_set('session.cookie_secure', 1);
+    ini_set('session.cookie_samesite', 'Strict');
+}
 
 // ===== DATABASE SETTINGS =====
 $database_url = getenv('DATABASE_URL');
@@ -34,14 +42,7 @@ $environment = getenv('APP_ENV') ?: 'development';
 define('APP_ENV', $environment);
 define('IS_PRODUCTION', $environment === 'production');
 
-// ===== SESSION SETTINGS =====
-ini_set('session.cookie_httponly', 1);
-ini_set('session.use_only_cookies', 1);
 
-if (IS_PRODUCTION) {
-    ini_set('session.cookie_secure', 1);
-    ini_set('session.cookie_samesite', 'Strict');
-}
 
 // ===== ERROR REPORTING =====
 if (IS_PRODUCTION) {
