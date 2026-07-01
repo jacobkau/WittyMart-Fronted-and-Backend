@@ -1,5 +1,4 @@
 <?php
-
 require_once 'includes/config.php';
 require_once 'includes/auth.php';
 
@@ -9,17 +8,30 @@ if (isLoggedIn()) {
 }
 
 $error = '';
+$debug = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Debug: Log all POST data
+    error_log('POST data: ' . print_r($_POST, true));
+    
     $email = sanitize($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
     
+    // Debug
+    $debug .= "Email: '$email', Password length: " . strlen($password) . "\n";
+    
     if (empty($email) || empty($password)) {
         $error = 'Please fill in all fields';
-    } elseif (login($email, $password)) {
-        redirect('dashboard.php');
+        $debug .= "Empty fields detected\n";
     } else {
-        $error = 'Invalid email or password';
+        $debug .= "Attempting login...\n";
+        if (login($email, $password)) {
+            $debug .= "Login successful, redirecting...\n";
+            redirect('dashboard.php');
+        } else {
+            $error = 'Invalid email or password';
+            $debug .= "Login failed\n";
+        }
     }
 }
 ?>
@@ -32,7 +44,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="admin.css">
     <link rel="shortcut icon" href="images/logo.png" type="image/x-icon">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-   
 </head>
 <body class="login-page">
     <!-- Loading Overlay -->
@@ -56,10 +67,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             <?php endif; ?>
             
+            <!-- Debug info (remove in production) -->
+            <?php if ($debug && isset($_GET['debug'])): ?>
+                <div class="alert alert-info" style="background: #e3f2fd; color: #0d47a1; padding: 10px; margin-bottom: 15px; border-radius: 5px; font-size: 12px; white-space: pre-wrap;">
+                    <strong>Debug Info:</strong>
+                    <?php echo htmlspecialchars($debug); ?>
+                </div>
+            <?php endif; ?>
+            
             <form method="POST" action="" id="loginForm">
                 <div class="form-group">
                     <label><i class="fas fa-envelope"></i> Email</label>
-                    <input type="email" name="email" id="email" placeholder="Enter your email" required autofocus>
+                    <input type="email" name="email" id="email" placeholder="Enter your email" value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>" required autofocus>
                 </div>
                 
                 <div class="form-group">
@@ -76,10 +95,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             <p class="login-footer">
                 <a href="../index.php"><i class="fas fa-arrow-left"></i> Back to Site</a>
+                <?php if (isset($_GET['debug'])): ?>
+                    <br><small style="color: #999;">Debug mode enabled</small>
+                <?php endif; ?>
             </p>
         </div>
     </div>
-<script src="admin.js" defer></script> 
-
+    
+    <script src="admin.js" defer></script>
 </body>
 </html>
