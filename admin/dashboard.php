@@ -35,7 +35,7 @@ $page_title = 'Dashboard';
             <header class="admin-header" style="margin-bottom:25px;">
                 <h1>Dashboard</h1>
                 <div class="admin-user">
-                    <span><i class="fas fa-user"></i><a href="profile.php" style="text-decoration:none"><?php echo htmlspecialchars($_SESSION['user_name'] ?? 'Admin'); ?></a></span>
+                    <span><i class="fas fa-user"></i>&nbsp;<a href="profile.php" style="text-decoration:none"><?php echo htmlspecialchars($_SESSION['user_name'] ?? 'Admin'); ?></a></span>
                 </div>
             </header>
 
