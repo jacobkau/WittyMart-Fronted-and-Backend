@@ -3,7 +3,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
 ?>
 <aside class="admin-sidebar">
     <div class="sidebar-header">
-        <img src="../images/logo.png" alt="WittyMart">
+        <img src="images/logo.png" alt="WittyMart">
         <h2>WittyMart</h2>
     </div>
     <nav class="sidebar-nav">
