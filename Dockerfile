@@ -3,22 +3,33 @@ FROM php:8.2-apache
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
     libonig-dev \
-    libpq-dev \          # ← PostgreSQL development library
+    libxml2-dev \
+    libpq-dev \
     zip \
     unzip \
+    git \
+    curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PHP extensions including PostgreSQL
-RUN docker-php-ext-install \
+# Install PHP extensions
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install \
     pdo_mysql \
-    pdo_pgsql \          # ← PostgreSQL PDO driver
+    pdo_pgsql \
     mbstring \
+    exif \
+    pcntl \
+    bcmath \
     gd
 
-# Enable Apache mod_rewrite
-RUN a2enmod rewrite
+# Enable Apache modules
+RUN a2enmod rewrite \
+    && a2enmod headers \
+    && a2enmod expires
 
 # Copy application files
 COPY . /var/www/html/
