@@ -38,7 +38,7 @@ function isActive($page) {
         <hr class="sidebar-divider">
      
         <div class="sidebar-label">Account</div>
-        <a href="admin_management.php" class="<?php echo isActive('admin_management.php'); ?>">
+        <a href="admins.php" class="<?php echo isActive('admins.php'); ?>">
             <i class="fas fa-user-shield"></i> Admin Management
         </a>
         <a href="profile.php" class="<?php echo isActive('profile.php'); ?>">
