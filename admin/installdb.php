@@ -1,152 +1,28 @@
 <?php
-// install.php - Database Installation Script
-// Run this file once to set up the database tables
 
-// Enable error reporting
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-// ============================================
-// NO ADMIN CHECK - Allow installation without login
-// ============================================
 
 require_once 'includes/config.php';
 
-// ============================================
-// DATABASE TABLES
-// ============================================
-
 global $pdo;
 
-// ============================================
-// SETTINGS TABLE
-// ============================================
 
 $sql_settings = "
-CREATE TABLE IF NOT EXISTS settings (
-    id SERIAL PRIMARY KEY,
-    setting_key VARCHAR(100) UNIQUE NOT NULL,
-    setting_value TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';
 ";
-
-// ============================================
-// ACTIVITY LOGS TABLE
-// ============================================
 
 $sql_activity_logs = "
-CREATE TABLE IF NOT EXISTS activity_logs (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER,
-    user_name VARCHAR(100),
-    action VARCHAR(100) NOT NULL,
-    description TEXT,
-    ip_address VARCHAR(45),
-    user_agent TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+UPDATE users SET status = 'active' WHERE status IS NULL;
+
 ";
-
-// ============================================
-// INDEXES FOR PERFORMANCE
-// ============================================
-
-$sql_indexes = "
-CREATE INDEX IF NOT EXISTS idx_activity_logs_user_id ON activity_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON activity_logs(created_at);
-CREATE INDEX IF NOT EXISTS idx_activity_logs_action ON activity_logs(action);
-";
-
-// ============================================
-// DEFAULT SETTINGS
-// ============================================
-
 $sql_settings_insert = "
-INSERT INTO settings (setting_key, setting_value) VALUES 
-('site_name', 'WittyMart'),
-('site_url', 'https://wittymart.onrender.com'),
-('admin_email', 'kaujacob4@gmail.com'),
-('contact_phone', '+254 768 374 497'),
-('address', 'Nairobi, Kenya'),
-('currency', 'KES'),
-('theme_color', '#05573c'),
-('timezone', 'Africa/Nairobi'),
-('maintenance_mode', '0'),
-('allow_registration', '1'),
-('site_description', 'Smart Shopping for Witty Minds!'),
-('facebook_url', ''),
-('twitter_url', ''),
-('instagram_url', ''),
-('youtube_url', ''),
-('mailchimp_api_key', ''),
-('mailchimp_list_id', ''),
-('smtp_host', 'smtp.gmail.com'),
-('smtp_port', '587'),
-('smtp_username', ''),
-('smtp_password', ''),
-('smtp_encryption', 'tls'),
-('order_prefix', 'ORD-'),
-('invoice_prefix', 'INV-'),
-('tax_rate', '16.00'),
-('shipping_rate', '200.00'),
-('free_shipping_threshold', '5000.00'),
-('enable_notifications', '1'),
-('maintenance_message', 'We are currently performing maintenance. Please check back soon.')
-ON CONFLICT (setting_key) DO NOTHING;
+UPDATE users SET role = 'super_admin' WHERE email = 'admin@wittymart.com';
 ";
 
-// ============================================
-// TRIGGER FOR UPDATED_AT
-// ============================================
 
-$sql_trigger = "
-DROP TRIGGER IF EXISTS update_settings_updated_at ON settings;
-CREATE TRIGGER update_settings_updated_at
-    BEFORE UPDATE ON settings
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
-";
-
-// ============================================
-// FUNCTION FOR ACTIVITY LOG
-// ============================================
-
-$sql_activity_function = "
-CREATE OR REPLACE FUNCTION log_activity(
-    p_user_id INTEGER,
-    p_user_name VARCHAR,
-    p_action VARCHAR,
-    p_description TEXT,
-    p_ip_address VARCHAR,
-    p_user_agent TEXT
-) RETURNS VOID AS $$
-BEGIN
-    INSERT INTO activity_logs (user_id, user_name, action, description, ip_address, user_agent)
-    VALUES (p_user_id, p_user_name, p_action, p_description, p_ip_address, p_user_agent);
-END;
-$$ LANGUAGE plpgsql;
-";
-
-// ============================================
-// UPDATE_UPDATED_AT FUNCTION (if not exists)
-// ============================================
-
-$sql_update_function = "
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-";
-
-// ============================================
-// EXECUTE SQL
-// ============================================
 
 echo "<!DOCTYPE html>
 <html lang='en'>
@@ -315,12 +191,7 @@ try {
         $warnings[] = '⚠️ Activity logs table already exists or creation failed';
     }
     
-    // Create indexes
-    if ($pdo->exec($sql_indexes) !== false) {
-        $results[] = ['type' => 'success', 'msg' => '✅ Indexes created successfully'];
-    } else {
-        $warnings[] = '⚠️ Indexes already exist or creation failed';
-    }
+   
     
     // Insert default settings
     if ($pdo->exec($sql_settings_insert) !== false) {
@@ -329,19 +200,7 @@ try {
         $warnings[] = '⚠️ Default settings already exist or insertion failed';
     }
     
-    // Create trigger
-    if ($pdo->exec($sql_trigger) !== false) {
-        $results[] = ['type' => 'success', 'msg' => '✅ Trigger created successfully'];
-    } else {
-        $warnings[] = '⚠️ Trigger already exists or creation failed';
-    }
-    
-    // Create activity log function
-    if ($pdo->exec($sql_activity_function) !== false) {
-        $results[] = ['type' => 'success', 'msg' => '✅ Activity log function created successfully'];
-    } else {
-        $warnings[] = '⚠️ Activity log function already exists or creation failed';
-    }
+  
     
     // If no errors, show success
     if (empty($errors)) {
