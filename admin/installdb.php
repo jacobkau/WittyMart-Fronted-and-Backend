@@ -66,7 +66,7 @@ $sql_settings_insert = "
 INSERT INTO settings (setting_key, setting_value) VALUES 
 ('site_name', 'WittyMart'),
 ('site_url', 'https://wittymart.onrender.com'),
-('admin_email', 'admin@wittymart.com'),
+('admin_email', 'kaujacob4@gmail.com'),
 ('contact_phone', '+254 768 374 497'),
 ('address', 'Nairobi, Kenya'),
 ('currency', 'KES'),
