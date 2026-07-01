@@ -22,7 +22,7 @@ $page_title = 'Dashboard';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - WittyMart Admin</title>
-    <link rel="shortcut icon" href="../images/logo.png" type="image/x-icon">
+    <link rel="shortcut icon" href="images/logo.png" type="image/x-icon">
     <link rel="stylesheet" href="admin.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -31,7 +31,7 @@ $page_title = 'Dashboard';
         <!-- Sidebar -->
         <aside class="admin-sidebar">
             <div class="sidebar-header">
-                <img src="../images/logo.png" alt="WittyMart">
+                <img src="images/logo.png" alt="WittyMart">
                 <h2>WittyMart</h2>
             </div>
             <nav class="sidebar-nav">
@@ -41,7 +41,7 @@ $page_title = 'Dashboard';
                 <a href="customers.php"><i class="fas fa-users"></i> Customers</a>
                 <a href="categories.php"><i class="fas fa-tags"></i> Categories</a>
                 <a href="settings.php"><i class="fas fa-cog"></i> Settings</a>
-                <a href="../logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
             </nav>
         </aside>
 
