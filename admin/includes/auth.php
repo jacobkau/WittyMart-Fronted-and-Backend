@@ -5,9 +5,15 @@
 
 require_once 'config.php';
 
+function redirect($url) {
+    header('Location: ' . $url);
+    exit;
+}
+
 /**
  * Login user
  */
+
 function login($email, $password) {
     global $pdo;
     
