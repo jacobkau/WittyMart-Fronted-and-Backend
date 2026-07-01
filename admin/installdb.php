@@ -1,40 +1,10 @@
+
 <?php
-// admin/test.php - Test PHP
+require_once 'includes/config.php';
 
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
-echo "<h1>PHP is working!</h1>";
-echo "<p>PHP Version: " . phpversion() . "</p>";
-
-// Test includes
-echo "<h2>Testing includes...</h2>";
-
-if (file_exists('../includes/config.php')) {
-    echo "✅ config.php found<br>";
-    require_once '../includes/config.php';
-    echo "✅ config.php loaded<br>";
-} else {
-    echo "❌ config.php NOT found<br>";
-}
-
-if (file_exists('../includes/auth.php')) {
-    echo "✅ auth.php found<br>";
-    require_once '../includes/auth.php';
-    echo "✅ auth.php loaded<br>";
-} else {
-    echo "❌ auth.php NOT found<br>";
-}
-
-// Test database
-echo "<h2>Testing database...</h2>";
-try {
-    $db = getDB();
-    $stmt = $db->query("SELECT 1");
-    echo "✅ Database connected successfully!<br>";
-} catch (Exception $e) {
-    echo "❌ Database error: " . $e->getMessage() . "<br>";
-}
-
-phpinfo();
+echo "Session status: " . session_status() . "\n";
+echo "Session ID: " . session_id() . "\n";
+echo "Environment: " . APP_ENV . "\n";
+echo "Production: " . (IS_PRODUCTION ? 'Yes' : 'No') . "\n";
+echo "DB connected: " . (testDatabaseConnection() ? 'Yes' : 'No') . "\n";
 ?>
