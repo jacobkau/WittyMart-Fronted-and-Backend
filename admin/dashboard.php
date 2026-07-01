@@ -1,9 +1,7 @@
 <?php
-// admin/dashboard.php - Admin Dashboard
 
-require_once '../includes/config.php';
-require_once '../includes/auth.php';
-require_once '../includes/functions.php';
+require_once 'includes/config.php';
+require_once 'includes/auth.php';
 
 requireAdmin();
 
@@ -19,7 +17,8 @@ $page_title = 'Dashboard';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - WittyMart Admin</title>
-    <link rel="stylesheet" href="../assets/css/admin.css">
+    <link rel="shortcut icon" href="images/logo.png" type="image/x-icon">
+    <link rel="stylesheet" href="/admin.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
@@ -27,7 +26,7 @@ $page_title = 'Dashboard';
         <!-- Sidebar -->
         <aside class="admin-sidebar">
             <div class="sidebar-header">
-                <img src="../images/Witty Mart.png" alt="WittyMart">
+                <img src="images/logo.png" alt="WittyMart">
                 <h2>WittyMart</h2>
             </div>
             <nav class="sidebar-nav">
@@ -124,6 +123,6 @@ $page_title = 'Dashboard';
         </main>
     </div>
 
-    <script src="../assets/js/admin.js"></script>
+    <script src="admin.js"></script>
 </body>
 </html>
