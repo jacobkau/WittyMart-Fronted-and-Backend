@@ -1,4 +1,5 @@
 <?php
+ob_start();
 // ===== ENVIRONMENT =====
 $environment = getenv('APP_ENV') ?: 'development';
 define('APP_ENV', $environment);
