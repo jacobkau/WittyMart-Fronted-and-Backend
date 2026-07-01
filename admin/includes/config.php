@@ -1,6 +1,4 @@
 <?php
-// includes/config.php - Simplified
-
 // ===== ENVIRONMENT =====
 $environment = getenv('APP_ENV') ?: 'development';
 define('APP_ENV', $environment);
@@ -94,3 +92,4 @@ function testDatabaseConnection() {
         return false;
     }
 }
+// NO EXTRA WHITESPACE OR NEWLINES AFTER ?>
