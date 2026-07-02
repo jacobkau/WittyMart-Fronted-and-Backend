@@ -1,8 +1,6 @@
 <?php
-// full_install.php
-// Creates tables and inserts sample data for testing
 
-require_once 'config/database.php';
+require_once 'includes/config.php';
 
 echo "<h2>Complete Database Setup</h2>";
 
