@@ -1,16 +1,21 @@
 <?php
+// config.php - Your database connection file
+// Make sure you have this file with your database credentials
 
+// create_tables.php
 require_once 'includes/config.php';
 
-echo "<h2>Complete Database Setup</h2>";
-
-// Start transaction
-pg_query($conn, "BEGIN");
-
 try {
-    // Create tables
-    $tables = [
-        "contact_us" => "CREATE TABLE IF NOT EXISTS contact_us (
+    // Enable error reporting for debugging
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+
+    echo "<h2>Creating Database Tables...</h2>";
+
+    // SQL statements to create tables
+    $sqls = [
+        // 1. Contact Us table
+        "CREATE TABLE IF NOT EXISTS contact_us (
             id SERIAL PRIMARY KEY,
             name VARCHAR(100) NOT NULL,
             email VARCHAR(100) NOT NULL,
@@ -19,14 +24,16 @@ try {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )",
         
-        "newsletter_subscribers" => "CREATE TABLE IF NOT EXISTS newsletter_subscribers (
+        // 2. Newsletter Subscribers table
+        "CREATE TABLE IF NOT EXISTS newsletter_subscribers (
             id SERIAL PRIMARY KEY,
             email VARCHAR(100) NOT NULL UNIQUE,
             status VARCHAR(20) DEFAULT 'pending',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )",
         
-        "agent_chat_requests" => "CREATE TABLE IF NOT EXISTS agent_chat_requests (
+        // 3. Agent Chat Requests table
+        "CREATE TABLE IF NOT EXISTS agent_chat_requests (
             id SERIAL PRIMARY KEY,
             user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
             message TEXT,
@@ -35,67 +42,38 @@ try {
         )"
     ];
 
-    foreach ($tables as $name => $sql) {
-        pg_query($conn, $sql);
-        echo "✅ Table '$name' ready<br>";
+    // Execute each SQL statement
+    foreach ($sqls as $sql) {
+        $result = pg_query($conn, $sql);
+        
+        if ($result) {
+            echo "<p style='color: green;'>✓ Table created successfully</p>";
+        } else {
+            echo "<p style='color: red;'>✗ Error: " . pg_last_error($conn) . "</p>";
+        }
     }
 
-    // Insert sample data (optional)
-    echo "<br><h3>Inserting Sample Data...</h3>";
-    
-    // Sample contact us messages
-    $sampleMessages = [
-        "John Doe" => "johndoe@email.com",
-        "Jane Smith" => "janesmith@email.com",
-        "Bob Johnson" => "bobj@email.com"
-    ];
-    
-    foreach ($sampleMessages as $name => $email) {
-        $sql = "INSERT INTO contact_us (name, email, message, status) 
-                VALUES ('$name', '$email', 'Need help with my order #12345', 'unread')";
-        pg_query($conn, $sql);
-    }
-    echo "✅ Sample contact messages inserted<br>";
-    
-    // Sample newsletter subscribers
-    $emails = ['sub1@test.com', 'sub2@test.com', 'sub3@test.com'];
-    foreach ($emails as $email) {
-        $sql = "INSERT INTO newsletter_subscribers (email, status) 
-                VALUES ('$email', 'pending') 
-                ON CONFLICT (email) DO NOTHING";
-        pg_query($conn, $sql);
-    }
-    echo "✅ Sample newsletter subscribers inserted<br>";
-    
-    // Sample agent chat requests
-    $sql = "INSERT INTO agent_chat_requests (user_id, message, status) 
-            VALUES 
-            (1, 'Need help with product return', 'pending'),
-            (2, 'Payment issue', 'pending')";
-    pg_query($conn, $sql);
-    echo "✅ Sample agent chat requests inserted<br>";
-
-    // Commit transaction
-    pg_query($conn, "COMMIT");
-    
-    echo "<br><h3 style='color: green;'>✅ Installation Complete!</h3>";
-    
-    // Show summary
-    echo "<hr>";
-    echo "<h4>Summary:</h4>";
-    echo "<ul>";
+    // Verify tables were created
+    echo "<h3>Verification:</h3>";
     $tables = ['contact_us', 'newsletter_subscribers', 'agent_chat_requests'];
+    
     foreach ($tables as $table) {
-        $result = pg_query($conn, "SELECT COUNT(*) FROM $table");
-        $count = pg_fetch_result($result, 0, 0);
-        echo "<li>$table: $count records</li>";
+        $check = pg_query($conn, "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = '$table')");
+        $exists = pg_fetch_result($check, 0, 0);
+        
+        if ($exists === 't') {
+            echo "<p style='color: green;'>✓ Table '$table' exists</p>";
+        } else {
+            echo "<p style='color: red;'>✗ Table '$table' does not exist</p>";
+        }
     }
-    echo "</ul>";
 
 } catch (Exception $e) {
-    pg_query($conn, "ROLLBACK");
-    echo "<p style='color: red;'>❌ Error: " . $e->getMessage() . "</p>";
+    echo "<p style='color: red;'>Error: " . $e->getMessage() . "</p>";
 } finally {
-    pg_close($conn);
+    // Close connection
+    if (isset($conn) && $conn) {
+        pg_close($conn);
+    }
 }
 ?>
