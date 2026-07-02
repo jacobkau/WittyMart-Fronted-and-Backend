@@ -32,39 +32,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $category_id = intval($_POST['category_id'] ?? 0);
                     $stock = intval($_POST['stock'] ?? 0);
                     $supplier = sanitize($_POST['supplier'] ?? '');
-                 
-$sku = trim($_POST['sku'] ?? '');
+                    $sku = sanitize(trim($_POST['sku'] ?? ''));
 
-// Generate SKU if left blank
-if (empty($sku)) {
-
-    // Get category name
-    $stmt = $pdo->prepare("SELECT name FROM categories WHERE id = ?");
-    $stmt->execute([$category_id]);
-    $category = $stmt->fetch();
-
-    // Default prefix
-    $prefix = 'PRD';
-
-    if ($category) {
-        // Take first 3 letters of category
-        $prefix = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $category['name']), 0, 3));
-
-        // Pad if category name is shorter than 3 letters
-        $prefix = str_pad($prefix, 3, 'X');
-    }
-
-    // Generate a unique SKU
-    do {
-        $sku = $prefix . '-' . random_int(100000, 999999);
-
-        $check = $pdo->prepare("SELECT COUNT(*) FROM products WHERE sku = ?");
-        $check->execute([$sku]);
-
-    } while ($check->fetchColumn() > 0);
-} else {
-    $sku = sanitize($sku);
-}
+                    if ($sku === '') {
+                    $stmt = $pdo->prepare("SELECT name FROM categories WHERE id = ?");
+                    $stmt->execute([$category_id]);
+                    $category = $stmt->fetch();
+                    $prefix = 'PRD';
+                    if ($category) {
+                    $prefix = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $category['name']), 0, 3));
+                    $prefix = str_pad($prefix, 3, 'X');
+                      }
+                    do {
+                       $sku = $prefix . '-' . random_int(100000, 999999);
+                       $check = $pdo->prepare("SELECT COUNT(*) FROM products WHERE sku = ?");
+                       $check->execute([$sku]);
+                        } while ($check->fetchColumn() > 0);
+                        } else {
+                         $sku = sanitize($sku);
+                        }
                     
                     // Handle image upload
                     $image_path = '';
@@ -140,7 +126,25 @@ if (empty($sku)) {
                     $category_id = intval($_POST['category_id'] ?? 0);
                     $stock = intval($_POST['stock'] ?? 0);
                     $supplier = sanitize($_POST['supplier'] ?? '');
-                    $sku = sanitize($_POST['sku'] ?? '');
+                    $sku = sanitize(trim($_POST['sku'] ?? ''));
+
+                    if ($sku === '') {
+                    $stmt = $pdo->prepare("SELECT name FROM categories WHERE id = ?");
+                    $stmt->execute([$category_id]);
+                    $category = $stmt->fetch();
+                    $prefix = 'PRD';
+                    if ($category) {
+                    $prefix = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $category['name']), 0, 3));
+                    $prefix = str_pad($prefix, 3, 'X');
+                      }
+                    do {
+                       $sku = $prefix . '-' . random_int(100000, 999999);
+                       $check = $pdo->prepare("SELECT COUNT(*) FROM products WHERE sku = ?");
+                       $check->execute([$sku]);
+                        } while ($check->fetchColumn() > 0);
+                        } else {
+                         $sku = sanitize($sku);
+                        }
                     
                     // Get current image
                     $stmt = $pdo->prepare("SELECT image FROM products WHERE id = ?");
