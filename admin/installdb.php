@@ -8,9 +8,8 @@ require_once 'includes/config.php';
 
 try {
     $sql = "
-        ALTER TABLE products
-        ADD COLUMN IF NOT EXISTS supplier VARCHAR(255),
-        ADD COLUMN IF NOT EXISTS sku VARCHAR(100);
+       ALTER TABLE products
+ADD CONSTRAINT products_sku_unique UNIQUE (sku);
     ";
 
     $pdo->exec($sql);
