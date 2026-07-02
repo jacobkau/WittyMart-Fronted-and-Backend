@@ -1,14 +1,16 @@
 <?php
-
+// update_products_table.php
 
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-require_once 'includes/config.php'; 
+require_once 'includes/config.php'; // Adjust path if necessary
 
 try {
     $sql = "
-       ALTER TABLE products
+        ALTER TABLE products
+        ADD COLUMN IF NOT EXISTS supplier VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS sku VARCHAR(100);
 ADD CONSTRAINT products_sku_unique UNIQUE (sku);
     ";
 
