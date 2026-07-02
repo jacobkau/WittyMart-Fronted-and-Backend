@@ -1,8 +1,8 @@
 <?php
+
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
-
 
 require_once 'includes/config.php';
 require_once 'includes/auth.php';
@@ -11,10 +11,16 @@ requireAdmin();
 
 global $pdo;
 
-
 $message = '';
 $messageType = '';
 
+// ===== IMAGE UPLOAD DIRECTORY =====
+$upload_dir = '../uploads/products/';
+if (!file_exists($upload_dir)) {
+    mkdir($upload_dir, 0777, true);
+}
+
+// ===== HANDLE FORM SUBMISSIONS =====
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action'])) {
         switch ($_POST['action']) {
@@ -23,16 +29,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $name = sanitize($_POST['name'] ?? '');
                     $description = sanitize($_POST['description'] ?? '');
                     $price = floatval($_POST['price'] ?? 0);
-                    $image = sanitize($_POST['image'] ?? '');
                     $category_id = intval($_POST['category_id'] ?? 0);
                     $stock = intval($_POST['stock'] ?? 0);
+                    $supplier = sanitize($_POST['supplier'] ?? '');
+                    $sku = sanitize($_POST['sku'] ?? '');
+                    
+                    // Handle image upload
+                    $image_path = '';
+                    if (isset($_FILES['product_image']) && $_FILES['product_image']['error'] === UPLOAD_ERR_OK) {
+                        $file = $_FILES['product_image'];
+                        $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', $file['name']);
+                        $target_path = $upload_dir . $filename;
+                        
+                        if (move_uploaded_file($file['tmp_name'], $target_path)) {
+                            $image_path = 'uploads/products/' . $filename;
+                        } else {
+                            $message = 'Failed to upload image.';
+                            $messageType = 'error';
+                        }
+                    }
                     
                     $stmt = $pdo->prepare("
-                        INSERT INTO products (name, description, price, image, category_id, stock) 
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        INSERT INTO products (name, description, price, image, category_id, stock, supplier, sku) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ");
                     
-                    if ($stmt->execute([$name, $description, $price, $image, $category_id, $stock])) {
+                    if ($stmt->execute([$name, $description, $price, $image_path, $category_id, $stock, $supplier, $sku])) {
                         $message = 'Product added successfully!';
                         $messageType = 'success';
                     } else {
@@ -49,6 +71,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             case 'delete':
                 try {
                     $id = intval($_POST['id'] ?? 0);
+                    
+                    // Get product image to delete
+                    $stmt = $pdo->prepare("SELECT image FROM products WHERE id = ?");
+                    $stmt->execute([$id]);
+                    $product = $stmt->fetch();
+                    
+                    if ($product && $product['image']) {
+                        $image_path = '../' . $product['image'];
+                        if (file_exists($image_path)) {
+                            unlink($image_path);
+                        }
+                    }
+                    
                     $stmt = $pdo->prepare("DELETE FROM products WHERE id = ?");
                     if ($stmt->execute([$id])) {
                         $message = 'Product deleted successfully!';
@@ -70,17 +105,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $name = sanitize($_POST['name'] ?? '');
                     $description = sanitize($_POST['description'] ?? '');
                     $price = floatval($_POST['price'] ?? 0);
-                    $image = sanitize($_POST['image'] ?? '');
                     $category_id = intval($_POST['category_id'] ?? 0);
                     $stock = intval($_POST['stock'] ?? 0);
+                    $supplier = sanitize($_POST['supplier'] ?? '');
+                    $sku = sanitize($_POST['sku'] ?? '');
+                    
+                    // Get current image
+                    $stmt = $pdo->prepare("SELECT image FROM products WHERE id = ?");
+                    $stmt->execute([$id]);
+                    $current = $stmt->fetch();
+                    $image_path = $current['image'] ?? '';
+                    
+                    // Handle image upload
+                    if (isset($_FILES['edit_product_image']) && $_FILES['edit_product_image']['error'] === UPLOAD_ERR_OK) {
+                        $file = $_FILES['edit_product_image'];
+                        $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', $file['name']);
+                        $target_path = $upload_dir . $filename;
+                        
+                        if (move_uploaded_file($file['tmp_name'], $target_path)) {
+                            // Delete old image
+                            if ($image_path && file_exists('../' . $image_path)) {
+                                unlink('../' . $image_path);
+                            }
+                            $image_path = 'uploads/products/' . $filename;
+                        }
+                    }
                     
                     $stmt = $pdo->prepare("
                         UPDATE products 
-                        SET name = ?, description = ?, price = ?, image = ?, category_id = ?, stock = ? 
+                        SET name = ?, description = ?, price = ?, image = ?, category_id = ?, stock = ?, supplier = ?, sku = ?
                         WHERE id = ?
                     ");
                     
-                    if ($stmt->execute([$name, $description, $price, $image, $category_id, $stock, $id])) {
+                    if ($stmt->execute([$name, $description, $price, $image_path, $category_id, $stock, $supplier, $sku, $id])) {
                         $message = 'Product updated successfully!';
                         $messageType = 'success';
                     } else {
@@ -134,12 +191,12 @@ $page_title = 'Products';
 </head>
 <body>
     <div class="admin-wrapper">
-        <?php include "sidebar.php"?>
+        <?php include "sidebar.php"; ?>
       
         <!-- Main Content -->
         <main class="admin-main">
             <header class="admin-header">
-                <h1 style="margin-bottom:10px:"><i class="fas fa-box"></i> Products</h1>
+                <h1><i class="fas fa-box"></i> Products</h1>
                 <button class="btn-primary" onclick="openModal('addProductModal')">
                     <i class="fas fa-plus"></i> Add Product
                 </button>
@@ -161,8 +218,10 @@ $page_title = 'Products';
                                 <tr>
                                     <th>Image</th>
                                     <th>Name</th>
+                                    <th>SKU</th>
                                     <th>Price</th>
                                     <th>Stock</th>
+                                    <th>Supplier</th>
                                     <th>Category</th>
                                     <th>Actions</th>
                                 </tr>
@@ -171,13 +230,16 @@ $page_title = 'Products';
                                 <?php foreach ($products as $product): ?>
                                     <tr>
                                         <td>
-                                            <img src="<?php echo htmlspecialchars($product['image'] ?? 'https://via.placeholder.com/50'); ?>" 
+                                            <img src="<?php echo '../' . htmlspecialchars($product['image'] ?? 'images/no-image.png'); ?>" 
                                                  alt="<?php echo htmlspecialchars($product['name']); ?>" 
-                                                 class="product-thumb">
+                                                 class="product-thumb"
+                                                 onerror="this.src='https://via.placeholder.com/50/05573c/ffffff?text=?'">
                                         </td>
                                         <td><?php echo htmlspecialchars($product['name']); ?></td>
+                                        <td><?php echo htmlspecialchars($product['sku'] ?? 'N/A'); ?></td>
                                         <td><?php echo formatPrice($product['price']); ?></td>
                                         <td><?php echo htmlspecialchars($product['stock']); ?></td>
+                                        <td><?php echo htmlspecialchars($product['supplier'] ?? 'N/A'); ?></td>
                                         <td><?php echo htmlspecialchars($product['category_name'] ?? 'Uncategorized'); ?></td>
                                         <td>
                                             <button class="btn-sm btn-edit" onclick="editProduct(<?php echo $product['id']; ?>)">
@@ -213,24 +275,44 @@ $page_title = 'Products';
                 <h2><i class="fas fa-plus-circle"></i> Add Product</h2>
                 <span class="close" onclick="closeModal('addProductModal')">&times;</span>
             </div>
-            <form method="POST">
+            <form method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="action" value="add">
+                
                 <div class="form-group">
                     <label><i class="fas fa-tag"></i> Product Name</label>
                     <input type="text" name="name" required placeholder="Enter product name">
                 </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-barcode"></i> SKU (Stock Keeping Unit)</label>
+                    <input type="text" name="sku" placeholder="e.g., PRD-001">
+                </div>
+                
                 <div class="form-group">
                     <label><i class="fas fa-align-left"></i> Description</label>
                     <textarea name="description" rows="3" placeholder="Enter product description"></textarea>
                 </div>
+                
                 <div class="form-group">
                     <label><i class="fas fa-money-bill-wave"></i> Price (Ksh)</label>
                     <input type="number" name="price" step="0.01" required placeholder="0.00">
                 </div>
+                
                 <div class="form-group">
-                    <label><i class="fas fa-image"></i> Image URL</label>
-                    <input type="text" name="image" placeholder="/images/product.jpg">
+                    <label><i class="fas fa-image"></i> Product Image</label>
+                    <div class="image-upload-wrapper">
+                        <input type="file" name="product_image" id="product_image" accept="image/*" onchange="previewImage(this, 'imagePreview')">
+                        <label for="product_image" class="upload-btn">
+                            <i class="fas fa-cloud-upload-alt"></i> Choose Image
+                        </label>
+                        <div id="imagePreview" class="image-preview">
+                            <i class="fas fa-image" style="font-size: 40px; color: #ddd;"></i>
+                            <p>No image selected</p>
+                        </div>
+                    </div>
+                    <small class="form-text text-muted">Supported formats: JPG, PNG, GIF. Max size: 5MB</small>
                 </div>
+                
                 <div class="form-group">
                     <label><i class="fas fa-folder"></i> Category</label>
                     <select name="category_id">
@@ -240,10 +322,17 @@ $page_title = 'Products';
                         <?php endforeach; ?>
                     </select>
                 </div>
+                
                 <div class="form-group">
                     <label><i class="fas fa-cubes"></i> Stock Quantity</label>
                     <input type="number" name="stock" value="0">
                 </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-truck"></i> Supplier / Seller</label>
+                    <input type="text" name="supplier" placeholder="Enter supplier name">
+                </div>
+                
                 <button type="submit" class="btn-primary">
                     <i class="fas fa-save"></i> Add Product
                 </button>
@@ -258,25 +347,45 @@ $page_title = 'Products';
                 <h2><i class="fas fa-edit"></i> Edit Product</h2>
                 <span class="close" onclick="closeModal('editProductModal')">&times;</span>
             </div>
-            <form method="POST" id="editProductForm">
+            <form method="POST" id="editProductForm" enctype="multipart/form-data">
                 <input type="hidden" name="action" value="edit">
                 <input type="hidden" name="id" id="edit_product_id">
+                
                 <div class="form-group">
                     <label><i class="fas fa-tag"></i> Product Name</label>
                     <input type="text" name="name" id="edit_product_name" required>
                 </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-barcode"></i> SKU</label>
+                    <input type="text" name="sku" id="edit_product_sku" placeholder="e.g., PRD-001">
+                </div>
+                
                 <div class="form-group">
                     <label><i class="fas fa-align-left"></i> Description</label>
                     <textarea name="description" id="edit_product_description" rows="3"></textarea>
                 </div>
+                
                 <div class="form-group">
                     <label><i class="fas fa-money-bill-wave"></i> Price (Ksh)</label>
                     <input type="number" name="price" id="edit_product_price" step="0.01" required>
                 </div>
+                
                 <div class="form-group">
-                    <label><i class="fas fa-image"></i> Image URL</label>
-                    <input type="text" name="image" id="edit_product_image">
+                    <label><i class="fas fa-image"></i> Product Image</label>
+                    <div class="image-upload-wrapper">
+                        <div id="editImagePreview" class="image-preview">
+                            <img id="edit_current_image" src="" alt="Current Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px;">
+                            <p>Current image</p>
+                        </div>
+                        <input type="file" name="edit_product_image" id="edit_product_image" accept="image/*" onchange="previewImage(this, 'editImagePreview')">
+                        <label for="edit_product_image" class="upload-btn">
+                            <i class="fas fa-cloud-upload-alt"></i> Change Image
+                        </label>
+                    </div>
+                    <small class="form-text text-muted">Leave empty to keep current image</small>
                 </div>
+                
                 <div class="form-group">
                     <label><i class="fas fa-folder"></i> Category</label>
                     <select name="category_id" id="edit_product_category">
@@ -286,10 +395,17 @@ $page_title = 'Products';
                         <?php endforeach; ?>
                     </select>
                 </div>
+                
                 <div class="form-group">
                     <label><i class="fas fa-cubes"></i> Stock Quantity</label>
                     <input type="number" name="stock" id="edit_product_stock">
                 </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-truck"></i> Supplier / Seller</label>
+                    <input type="text" name="supplier" id="edit_product_supplier" placeholder="Enter supplier name">
+                </div>
+                
                 <button type="submit" class="btn-primary">
                     <i class="fas fa-save"></i> Update Product
                 </button>
@@ -297,7 +413,90 @@ $page_title = 'Products';
         </div>
     </div>
 
+    <style>
+        /* Image Upload Styles */
+        .image-upload-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .upload-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            background: #f8f9fa;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #555;
+            font-weight: 500;
+            justify-content: center;
+        }
+        
+        .upload-btn:hover {
+            background: #e8f5f0;
+            border-color: #05573c;
+            color: #05573c;
+        }
+        
+        .upload-btn i {
+            font-size: 20px;
+        }
+        
+        .image-preview {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #eee;
+            min-height: 150px;
+        }
+        
+        .image-preview img {
+            max-width: 150px;
+            max-height: 150px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+        
+        .image-preview p {
+            margin: 10px 0 0;
+            color: #999;
+            font-size: 14px;
+        }
+        
+        input[type="file"] {
+            display: none;
+        }
+        
+        .form-text {
+            display: block;
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 4px;
+        }
+    </style>
+
     <script>
+        // ===== IMAGE PREVIEW =====
+        function previewImage(input, previewId) {
+            const preview = document.getElementById(previewId);
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.innerHTML = `<img src="${e.target.result}" alt="Product Image">`;
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        // ===== MODAL FUNCTIONS =====
         function openModal(id) {
             document.getElementById(id).style.display = 'block';
             document.body.style.overflow = 'hidden';
@@ -316,9 +515,18 @@ $page_title = 'Products';
             }
         }
         
-        // Edit product function
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.modal').forEach(modal => {
+                    modal.style.display = 'none';
+                });
+                document.body.style.overflow = 'auto';
+            }
+        });
+        
+        // ===== EDIT PRODUCT =====
         function editProduct(id) {
-            // Fetch product data via AJAX
             fetch('includes/ajax.php?action=get_product&id=' + id)
                 .then(response => response.json())
                 .then(data => {
@@ -327,9 +535,19 @@ $page_title = 'Products';
                         document.getElementById('edit_product_name').value = data.product.name;
                         document.getElementById('edit_product_description').value = data.product.description || '';
                         document.getElementById('edit_product_price').value = data.product.price;
-                        document.getElementById('edit_product_image').value = data.product.image || '';
                         document.getElementById('edit_product_category').value = data.product.category_id || '';
                         document.getElementById('edit_product_stock').value = data.product.stock || 0;
+                        document.getElementById('edit_product_sku').value = data.product.sku || '';
+                        document.getElementById('edit_product_supplier').value = data.product.supplier || '';
+                        
+                        // Show current image
+                        const imgPreview = document.getElementById('editImagePreview');
+                        if (data.product.image) {
+                            imgPreview.innerHTML = `<img src="../${data.product.image}" alt="Product Image"><p>Current image</p>`;
+                        } else {
+                            imgPreview.innerHTML = `<i class="fas fa-image" style="font-size: 40px; color: #ddd;"></i><p>No image</p>`;
+                        }
+                        
                         openModal('editProductModal');
                     } else {
                         alert('Failed to load product data');
@@ -340,16 +558,6 @@ $page_title = 'Products';
                     alert('Error loading product data');
                 });
         }
-        
-        // Close modal with Escape key
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                document.querySelectorAll('.modal').forEach(modal => {
-                    modal.style.display = 'none';
-                });
-                document.body.style.overflow = 'auto';
-            }
-        });
     </script>
 </body>
 </html>
