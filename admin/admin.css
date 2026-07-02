@@ -382,6 +382,7 @@ body.dark-mode .login-box .alert-success {
    ADMIN WRAPPER
    ============================================ */
 .admin-wrapper {
+    position:relative;
     display: flex;
     min-height: 100vh;
 }
