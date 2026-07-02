@@ -1208,10 +1208,6 @@ body.dark-mode .login-box .alert-success {
         max-width: 95%;
     }
     
-    .admin-user span:not(.user-badge) {
-        display: none;
-    }
-    
     .admin-footer {
         padding: 10px 12px;
     }
