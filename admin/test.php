@@ -1,68 +1,74 @@
 <?php
-// Include this at the top of your page
-require_once 'includes/config.php'; // Your database connection file
+// test.php - Fixed version using PDO
+require_once 'includes/config.php';
 
-// Function to get notifications
-function getNotifications($conn) {
+// Function to get notifications using PDO
+function getNotifications($pdo) {
     $notifications = [];
     
-    // 1. Orders pending delivery
-    $query = "SELECT COUNT(*) as count FROM orders WHERE status = 'pending'";
-    $result = pg_query($conn, $query);
-    $row = pg_fetch_assoc($result);
-    $notifications['orders'] = [
-        'count' => $row['count'],
-        'icon' => 'fa-truck',
-        'color' => 'primary',
-        'label' => 'Orders for Delivery'
-    ];
-    
-    // 2. Contact us messages
-    $query = "SELECT COUNT(*) as count FROM contact_us WHERE status = 'unread'";
-    $result = pg_query($conn, $query);
-    $row = pg_fetch_assoc($result);
-    $notifications['contact'] = [
-        'count' => $row['count'],
-        'icon' => 'fa-envelope',
-        'color' => 'info',
-        'label' => 'Contact Us Messages'
-    ];
-    
-    // 3. Newsletter subscriptions
-    $query = "SELECT COUNT(*) as count FROM newsletter_subscribers WHERE status = 'pending'";
-    $result = pg_query($conn, $query);
-    $row = pg_fetch_assoc($result);
-    $notifications['newsletter'] = [
-        'count' => $row['count'],
-        'icon' => 'fa-newspaper',
-        'color' => 'success',
-        'label' => 'Newsletter Subscriptions'
-    ];
-    
-    // 4. Agent chat requests
-    $query = "SELECT COUNT(*) as count FROM agent_chat_requests WHERE status = 'pending'";
-    $result = pg_query($conn, $query);
-    $row = pg_fetch_assoc($result);
-    $notifications['agents'] = [
-        'count' => $row['count'],
-        'icon' => 'fa-headset',
-        'color' => 'warning',
-        'label' => 'Agent Requests'
-    ];
-    
-    // 5. Failed admin login attempts (last 24 hours)
-    $query = "SELECT COUNT(*) as count FROM activity_logs 
-              WHERE action = 'failed_login' 
-              AND created_at > NOW() - INTERVAL '24 hours'
-              AND user_name = 'admin'";
-    $result = pg_query($conn, $query);
-    $row = pg_fetch_assoc($result);
-    $notifications['login_attempts'] = [
-        'count' => $row['count'],
-        'icon' => 'fa-shield-alt',
-        'color' => 'danger',
-        'label' => 'Failed Admin Logins (24h)'
-    ];
+    try {
+        // 1. Orders pending delivery
+        $query = "SELECT COUNT(*) as count FROM orders WHERE status = 'pending'";
+        $stmt = $pdo->query($query);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $notifications['orders'] = [
+            'count' => (int)$row['count'],
+            'icon' => 'fa-truck',
+            'color' => 'primary',
+            'label' => 'Orders for Delivery'
+        ];
+        
+        // 2. Contact us messages
+        $query = "SELECT COUNT(*) as count FROM contact_us WHERE status = 'unread'";
+        $stmt = $pdo->query($query);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $notifications['contact'] = [
+            'count' => (int)$row['count'],
+            'icon' => 'fa-envelope',
+            'color' => 'info',
+            'label' => 'Contact Us Messages'
+        ];
+        
+        // 3. Newsletter subscriptions
+        $query = "SELECT COUNT(*) as count FROM newsletter_subscribers WHERE status = 'pending'";
+        $stmt = $pdo->query($query);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $notifications['newsletter'] = [
+            'count' => (int)$row['count'],
+            'icon' => 'fa-newspaper',
+            'color' => 'success',
+            'label' => 'Newsletter Subscriptions'
+        ];
+        
+        // 4. Agent chat requests
+        $query = "SELECT COUNT(*) as count FROM agent_chat_requests WHERE status = 'pending'";
+        $stmt = $pdo->query($query);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $notifications['agents'] = [
+            'count' => (int)$row['count'],
+            'icon' => 'fa-headset',
+            'color' => 'warning',
+            'label' => 'Agent Requests'
+        ];
+        
+        // 5. Failed admin login attempts (last 24 hours)
+        $query = "SELECT COUNT(*) as count FROM activity_logs 
+                  WHERE action = 'failed_login' 
+                  AND created_at > NOW() - INTERVAL '24 hours'
+                  AND user_name = 'admin'";
+        $stmt = $pdo->query($query);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $notifications['login_attempts'] = [
+            'count' => (int)$row['count'],
+            'icon' => 'fa-shield-alt',
+            'color' => 'danger',
+            'label' => 'Failed Admin Logins (24h)'
+        ];
+        
+    } catch (PDOException $e) {
+        // Log error but continue
+        error_log("Notification error: " . $e->getMessage());
+    }
     
     // Get total unread count
     $total = array_sum(array_column($notifications, 'count'));
@@ -74,7 +80,7 @@ function getNotifications($conn) {
 }
 
 // Fetch notifications
-$notifData = getNotifications($conn);
+$notifData = getNotifications($pdo);
 ?>
 
 <header class="nh-admin-header">
