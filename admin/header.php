@@ -1,78 +1,63 @@
-<?php
+<header class="admin-top-header">
+    <div class="header-left">
+        <h1><?= htmlspecialchars($page_title) ?></h1>
+    </div>
 
-if (!isLoggedIn() || !isAdmin()) {
-    redirect('login.php');
-    exit;
+    <div class="header-right">
+        <a href="profile.php" class="admin-user">
+            <i class="fas fa-user-circle"></i>
+
+            <div class="user-details">
+                <span class="user-name">
+                    <?= htmlspecialchars($_SESSION['user_name'] ?? 'Administrator') ?>
+                </span>
+                <span class="user-badge">Administrator</span>
+            </div>
+        </a>
+    </div>
+</header>
+<style>
+    .admin-user {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    background: var(--white);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    text-decoration: none;
+    color: inherit;
+    transition: all .3s ease;
 }
 
-$page_title = $page_title ?? 'Admin Panel';
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo $page_title; ?> - WittyMart Admin</title>
-    <link rel="icon" type="image/png" href="images/logo.png">
-    <link rel="stylesheet" href="admin.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-</head>
-<body>
-    <!-- Sidebar Overlay (Mobile) -->
-    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
-    
-    <div class="admin-wrapper">
-        <!-- Sidebar -->
-        <aside class="admin-sidebar" id="adminSidebar">
-            <div class="sidebar-header">
-                <img src="images/logo.png" alt="WittyMart">
-                <h2>WittyMart</h2>
-                <p class="admin-role">Admin Panel</p>
-            </div>
-            <nav class="sidebar-nav">
-                <a href="dashboard.php" <?php echo ($page ?? '') === 'dashboard' ? 'class="active"' : ''; ?>>
-                    <i class="fas fa-home"></i> Dashboard
-                </a>
-                <a href="products.php" <?php echo ($page ?? '') === 'products' ? 'class="active"' : ''; ?>>
-                    <i class="fas fa-box"></i> Products
-                </a>
-                <a href="orders.php" <?php echo ($page ?? '') === 'orders' ? 'class="active"' : ''; ?>>
-                    <i class="fas fa-shopping-cart"></i> Orders
-                </a>
-                <a href="customers.php" <?php echo ($page ?? '') === 'customers' ? 'class="active"' : ''; ?>>
-                    <i class="fas fa-users"></i> Customers
-                </a>
-                <a href="categories.php" <?php echo ($page ?? '') === 'categories' ? 'class="active"' : ''; ?>>
-                    <i class="fas fa-tags"></i> Categories
-                </a>
-                <a href="settings.php" <?php echo ($page ?? '') === 'settings' ? 'class="active"' : ''; ?>>
-                    <i class="fas fa-cog"></i> Settings
-                </a>
-                <hr class="sidebar-divider">
-                <a href="../index.php" target="_blank">
-                    <i class="fas fa-store"></i> View Store
-                </a>
-                <a href="../logout.php">
-                    <i class="fas fa-sign-out-alt"></i> Logout
-                </a>
-            </nav>
-        </aside>
+.admin-user:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,.12);
+}
 
-        <!-- Main Content Area -->
-        <main class="admin-main">
-            <!-- Top Header -->
-            <header class="admin-top-header">
-                <div class="header-left">
-                    <button class="sidebar-toggle" onclick="toggleSidebar()">
-                        <i class="fas fa-bars"></i>
-                    </button>
-                    <h1><?php echo $page_title; ?></h1>
-                </div>
-                <div class="header-right">
-                    <div class="admin-user">
-                        <i class="fas fa-user-circle"></i>
-                        <span><?php echo $_SESSION['user_name'] ?? 'Admin'; ?></span>
-                        <span class="user-badge">Admin</span>
-                    </div>
-                </div>
-            </header>
+.admin-user i {
+    font-size: 32px;
+    color: var(--primary);
+}
+
+.user-details {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+
+.user-name {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.user-badge {
+    font-size: 11px;
+    background: var(--primary);
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 20px;
+    width: fit-content;
+    margin-top: 3px;
+}
+</style>
