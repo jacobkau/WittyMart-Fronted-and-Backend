@@ -26,6 +26,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($name) {
                     $stmt = $pdo->prepare("INSERT INTO categories (name, slug) VALUES (?, ?)");
                     if ($stmt->execute([$name, $slug])) {
+                          logActivity(
+        'add_category',
+        'Added category: ' . $name,
+        $_SESSION['user_id'],
+        $_SESSION['user_name']
+    );
                         $message = 'Category added successfully!';
                         $messageType = 'success';
                     } else {
@@ -40,6 +46,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($name && $id) {
                     $stmt = $pdo->prepare("UPDATE categories SET name = ?, slug = ? WHERE id = ?");
                     if ($stmt->execute([$name, $slug, $id])) {
+                           logActivity(
+        'update_category',
+        'Updated category: ' . $name . ' (ID: ' . $id . ')',
+        $_SESSION['user_id'],
+        $_SESSION['user_name']
+    );
                         $message = 'Category updated successfully!';
                         $messageType = 'success';
                     } else {
@@ -62,6 +74,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $stmt = $pdo->prepare("DELETE FROM categories WHERE id = ?");
                     if ($stmt->execute([$id])) {
+                           logActivity(
+        'delete_category',
+        'Deleted category: ' . $category_name . ' (ID: ' . $id . ')',
+        $_SESSION['user_id'],
+        $_SESSION['user_name']
+    );
                         $message = 'Category deleted successfully!';
                         $messageType = 'success';
                     } else {
