@@ -1,5 +1,34 @@
 <?php
 session_start();
+/**
+ * Log an activity
+ */
+function logActivity($action, $description = '', $user_id = null, $user_name = null) {
+    global $pdo;
+    
+    // Get current user if not provided
+    if ($user_id === null && isset($_SESSION['user_id'])) {
+        $user_id = $_SESSION['user_id'];
+        $user_name = $_SESSION['user_name'] ?? null;
+    }
+    
+    // Get IP address
+    $ip_address = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+    
+    // Get user agent
+    $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO activity_logs (user_id, user_name, action, description, ip_address, user_agent) 
+            VALUES (?, ?, ?, ?, ?, ?)
+        ");
+        return $stmt->execute([$user_id, $user_name, $action, $description, $ip_address, $user_agent]);
+    } catch (PDOException $e) {
+        error_log('Log activity error: ' . $e->getMessage());
+        return false;
+    }
+}
   if (isset($_SESSION['user_id'])) {
         logActivity(
             'logout',
