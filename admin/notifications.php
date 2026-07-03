@@ -274,8 +274,7 @@ $page_title = 'Notifications';
 
         <!-- Main Content -->
         <main class="admin-main">
-            <header class="admin-header" style="margin-bottom:10px;">
-                <h1 style="margin-bottom:10px;"><i class="fas fa-bell"></i> Notifications</h1>
+            <header class="admin-header" style="margin-bottom:20px;">
                 <span class="badge badge-info" style="margin-bottom:10px;">
                     <?php echo $totalNotifications; ?> unread
                 </span>
