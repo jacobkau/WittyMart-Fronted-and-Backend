@@ -22,24 +22,19 @@ if (!file_exists($upload_dir)) {
 
 // ===== HELPER FUNCTION FOR PRODUCT IMAGE URL =====
 function getProductImageUrl($image_path) {
-    // Base URL from config
     $base_url = BASE_URL;
     
-    // If no image, return placeholder
     if (empty($image_path)) {
         return $base_url . 'uploads/products/no-image.png';
     }
     
-    // Clean the path - remove leading slashes and '../'
     $image_path = ltrim($image_path, '/');
     $image_path = str_replace('../', '', $image_path);
     
-    // If it already has the full path, just return it
     if (strpos($image_path, 'http') === 0) {
         return $image_path;
     }
     
-    // Build full URL
     return $base_url . $image_path;
 }
 
@@ -75,7 +70,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $sku = sanitize($sku);
                     }
                     
-                    // Handle image upload
                     $image_path = '';
                     if (isset($_FILES['product_image']) && $_FILES['product_image']['error'] === UPLOAD_ERR_OK) {
                         $file = $_FILES['product_image'];
@@ -96,12 +90,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ");
                     
                     if ($stmt->execute([$name, $description, $price, $image_path, $category_id, $stock, $supplier, $sku])) {
-                         logActivity(
-            'add_product',
-            'Added product: ' . $name . ' (SKU: ' . $sku . ')',
-            $_SESSION['user_id'],
-            $_SESSION['user_name']
-        );
+                        logActivity(
+                            'add_product',
+                            'Added product: ' . $name . ' (SKU: ' . $sku . ')',
+                            $_SESSION['user_id'],
+                            $_SESSION['user_name']
+                        );
                         $message = 'Product added successfully!';
                         $messageType = 'success';
                     } else {
@@ -119,8 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 try {
                     $id = intval($_POST['id'] ?? 0);
                     
-                    // Get product image to delete
-                    $stmt = $pdo->prepare("SELECT image FROM products WHERE id = ?");
+                    $stmt = $pdo->prepare("SELECT image, name FROM products WHERE id = ?");
                     $stmt->execute([$id]);
                     $product = $stmt->fetch();
                     
@@ -134,11 +127,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt = $pdo->prepare("DELETE FROM products WHERE id = ?");
                     if ($stmt->execute([$id])) {
                         logActivity(
-            'delete_product',
-            'Deleted product: ' . $product_name . ' (ID: ' . $id . ')',
-            $_SESSION['user_id'],
-            $_SESSION['user_name']
-        );
+                            'delete_product',
+                            'Deleted product: ' . ($product['name'] ?? 'Unknown') . ' (ID: ' . $id . ')',
+                            $_SESSION['user_id'],
+                            $_SESSION['user_name']
+                        );
                         $message = 'Product deleted successfully!';
                         $messageType = 'success';
                     } else {
@@ -181,20 +174,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $sku = sanitize($sku);
                     }
                     
-                    // Get current image
                     $stmt = $pdo->prepare("SELECT image FROM products WHERE id = ?");
                     $stmt->execute([$id]);
                     $current = $stmt->fetch();
                     $image_path = $current['image'] ?? '';
                     
-                    // Handle image upload
                     if (isset($_FILES['edit_product_image']) && $_FILES['edit_product_image']['error'] === UPLOAD_ERR_OK) {
                         $file = $_FILES['edit_product_image'];
                         $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', $file['name']);
                         $target_path = $upload_dir . $filename;
                         
                         if (move_uploaded_file($file['tmp_name'], $target_path)) {
-                            // Delete old image
                             if ($image_path && file_exists('../' . $image_path)) {
                                 unlink('../' . $image_path);
                             }
@@ -209,12 +199,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ");
                     
                     if ($stmt->execute([$name, $description, $price, $image_path, $category_id, $stock, $supplier, $sku, $id])) {
-                         logActivity(
-            'update_product',
-            'Updated product: ' . $name . ' (ID: ' . $id . ')',
-            $_SESSION['user_id'],
-            $_SESSION['user_name']
-        );
+                        logActivity(
+                            'update_product',
+                            'Updated product: ' . $name . ' (ID: ' . $id . ')',
+                            $_SESSION['user_id'],
+                            $_SESSION['user_name']
+                        );
                         $message = 'Product updated successfully!';
                         $messageType = 'success';
                     } else {
@@ -273,14 +263,15 @@ $page_title = 'Products';
       
         <!-- Main Content -->
         <main class="admin-main">
-            <header class="admin-header" style="margin-bottom:20px">
+            <header class="admin-header" style="margin-bottom:20px; display: flex; justify-content: space-between; align-items: center;">
+                <span class="badge badge-info">Total: <?php echo count($products); ?> products</span>
                 <button class="btn-primary" onclick="openModal('addProductModal')">
                     <i class="fas fa-plus"></i> Add Product
                 </button>
             </header>
 
             <?php if ($message): ?>
-                <div class="alert alert-<?php echo $messageType; ?>">
+                <div class="alert alert-<?php echo $messageType; ?> alert-persistent">
                     <i class="fas fa-<?php echo $messageType === 'success' ? 'check-circle' : 'exclamation-circle'; ?>"></i>
                     <?php echo htmlspecialchars($message); ?>
                 </div>
@@ -289,8 +280,36 @@ $page_title = 'Products';
             <!-- Products Table -->
             <div class="admin-card">
                 <div class="card-body">
+                    <!-- ===== SEARCH TOOLBAR ===== -->
+                    <div class="table-toolbar" style="padding:14px;">
+                        <div class="search-box">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="searchProducts" placeholder="Search products by name, SKU, supplier, or category..." onkeyup="filterTable('searchProducts', 'productsTable')">
+                            <span class="result-count" style="font-size: 12px; color: var(--text-muted); margin-left: 10px;"></span>
+                            <button class="clear-search-btn" onclick="clearSearch('searchProducts', 'productsTable')" style="background: none; border: none; color: var(--text-muted); cursor: pointer; display: none;">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="filter-box" style="display: flex; gap: 10px; align-items: center;">
+                            <select id="categoryFilter" onchange="filterProducts()" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+                                <option value="">All Categories</option>
+                                <?php foreach ($categories as $cat): ?>
+                                    <option value="<?php echo htmlspecialchars($cat['name']); ?>">
+                                        <?php echo htmlspecialchars($cat['name']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <select id="stockFilter" onchange="filterProducts()" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+                                <option value="">All Stock</option>
+                                <option value="in-stock">In Stock (&gt;0)</option>
+                                <option value="low-stock">Low Stock (&lt;=5)</option>
+                                <option value="out-of-stock">Out of Stock (0)</option>
+                            </select>
+                        </div>
+                    </div>
+
                     <?php if (count($products) > 0): ?>
-                        <table class="admin-table">
+                        <table class="admin-table" id="productsTable">
                             <thead>
                                 <tr>
                                     <th>Image</th>
@@ -308,7 +327,6 @@ $page_title = 'Products';
                                     <tr>
                                         <td>
                                             <?php 
-                                            // Get the full image URL using the helper function
                                             $image_url = getProductImageUrl($product['image'] ?? '');
                                             ?>
                                             <img src="<?php echo htmlspecialchars($image_url); ?>" 
@@ -317,10 +335,14 @@ $page_title = 'Products';
                                                  style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; background: #f0f0f0;"
                                                  onerror="this.src='<?php echo BASE_URL; ?>uploads/products/no-image.png'">
                                         </td>
-                                        <td><?php echo htmlspecialchars($product['name']); ?></td>
-                                        <td><?php echo htmlspecialchars($product['sku'] ?? 'N/A'); ?></td>
+                                        <td><strong><?php echo htmlspecialchars($product['name']); ?></strong></td>
+                                        <td><code><?php echo htmlspecialchars($product['sku'] ?? 'N/A'); ?></code></td>
                                         <td><?php echo formatPrice($product['price']); ?></td>
-                                        <td><?php echo htmlspecialchars($product['stock']); ?></td>
+                                        <td>
+                                            <span class="badge <?php echo $product['stock'] > 0 ? 'badge-success' : 'badge-danger'; ?>">
+                                                <?php echo htmlspecialchars($product['stock']); ?>
+                                            </span>
+                                        </td>
                                         <td><?php echo htmlspecialchars($product['supplier'] ?? 'N/A'); ?></td>
                                         <td><?php echo htmlspecialchars($product['category_name'] ?? 'Uncategorized'); ?></td>
                                         <td>
@@ -339,6 +361,13 @@ $page_title = 'Products';
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
+                        
+                        <!-- No results message -->
+                        <div class="no-results-message" style="display: none; text-align: center; padding: 40px 20px; color: var(--text-muted);">
+                            <i class="fas fa-search" style="font-size: 48px; display: block; margin-bottom: 10px; opacity: 0.3;"></i>
+                            <h3>No products found</h3>
+                            <p>Try adjusting your search terms or filters</p>
+                        </div>
                     <?php else: ?>
                         <p class="text-muted text-center" style="padding: 40px 0;">
                             <i class="fas fa-box" style="font-size: 48px; display: block; margin-bottom: 10px; opacity: 0.5;"></i>
@@ -366,7 +395,7 @@ $page_title = 'Products';
                 </div>
                 
                 <div class="form-group">
-                    <label><i class="fas fa-barcode"></i> SKU (Stock Keeping Unit)(Optional)</label>
+                    <label><i class="fas fa-barcode"></i> SKU (Optional)</label>
                     <input type="text" name="sku" placeholder="e.g., PRD-001">
                 </div>
                 
@@ -457,16 +486,8 @@ $page_title = 'Products';
                     <label><i class="fas fa-image"></i> Product Image</label>
                     <div class="image-upload-wrapper">
                         <div id="editImagePreview" class="image-preview">
-                            <?php 
-                            // Show current image if it exists
-                            $current_image = $_GET['image'] ?? '';
-                            if (!empty($current_image)) {
-                                $img_url = getProductImageUrl($current_image);
-                                echo '<img src="' . htmlspecialchars($img_url) . '" alt="Current Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px;"><p>Current image</p>';
-                            } else {
-                                echo '<i class="fas fa-image" style="font-size: 40px; color: #ddd;"></i><p>No image</p>';
-                            }
-                            ?>
+                            <i class="fas fa-image" style="font-size: 40px; color: #ddd;"></i>
+                            <p>No image</p>
                         </div>
                         <input type="file" name="edit_product_image" id="edit_product_image" accept="image/*" onchange="previewImage(this, 'editImagePreview')">
                         <label for="edit_product_image" class="upload-btn">
@@ -572,13 +593,111 @@ $page_title = 'Products';
             margin-top: 4px;
         }
 
-        /* Product thumbnail styling */
         .product-thumb {
             width: 50px;
             height: 50px;
             object-fit: cover;
             border-radius: 4px;
             border: 1px solid #e0e0e0;
+        }
+
+        .table-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 14px;
+            background: var(--bg);
+            border-radius: 8px 8px 0 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--white);
+            padding: 6px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+            flex: 1;
+            min-width: 200px;
+            max-width: 400px;
+        }
+
+        .search-box:focus-within {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(5, 87, 60, 0.1);
+        }
+
+        .search-box i {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .search-box input {
+            border: none;
+            background: transparent;
+            padding: 8px 0;
+            outline: none;
+            color: var(--text);
+            width: 100%;
+            font-size: 14px;
+        }
+
+        .search-box input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .clear-search-btn {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .clear-search-btn:hover {
+            background: rgba(0, 0, 0, 0.05);
+            color: var(--text);
+        }
+
+        .search-box input:not(:placeholder-shown) ~ .clear-search-btn {
+            display: block;
+        }
+
+        .no-results-message {
+            display: none;
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted);
+        }
+
+        .no-results-message i {
+            font-size: 48px;
+            display: block;
+            margin-bottom: 10px;
+            opacity: 0.3;
+        }
+
+        /* Dark mode support */
+        body.dark-mode .search-box {
+            background: rgba(255,255,255,0.05);
+            border-color: rgba(255,255,255,0.1);
+        }
+
+        body.dark-mode .search-box:focus-within {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(5, 87, 60, 0.2);
+        }
+
+        body.dark-mode .clear-search-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
         }
     </style>
 
@@ -606,7 +725,6 @@ $page_title = 'Products';
             document.body.style.overflow = 'auto';
         }
         
-        // Close modal on outside click
         window.onclick = function(event) {
             if (event.target.classList.contains('modal')) {
                 event.target.style.display = 'none';
@@ -614,7 +732,6 @@ $page_title = 'Products';
             }
         }
         
-        // Close modal with Escape key
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 document.querySelectorAll('.modal').forEach(modal => {
@@ -624,6 +741,109 @@ $page_title = 'Products';
             }
         });
         
+        // ===== SEARCH FUNCTIONS =====
+        function filterTable(inputId, tableId) {
+            const input = document.getElementById(inputId);
+            const table = document.getElementById(tableId);
+            
+            if (!input || !table) return;
+
+            const filter = input.value.toLowerCase().trim();
+            const rows = table.querySelectorAll('tbody tr');
+            let visibleCount = 0;
+
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                const match = text.includes(filter);
+                row.style.display = match ? '' : 'none';
+                if (match) visibleCount++;
+            });
+
+            // Update result count
+            const counter = table.parentElement.querySelector('.result-count');
+            if (counter) {
+                counter.textContent = `Showing ${visibleCount} of ${rows.length} results`;
+            }
+
+            // Show/hide no results message
+            const noResultMsg = table.parentElement.querySelector('.no-results-message');
+            if (noResultMsg) {
+                noResultMsg.style.display = visibleCount === 0 ? 'block' : 'none';
+            }
+
+            // Show/hide clear button
+            const clearBtn = input.parentElement.querySelector('.clear-search-btn');
+            if (clearBtn) {
+                clearBtn.style.display = input.value.length > 0 ? 'block' : 'none';
+            }
+        }
+
+        function clearSearch(inputId, tableId) {
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.value = '';
+                filterTable(inputId, tableId);
+                input.focus();
+            }
+        }
+
+        // ===== PRODUCT FILTERS =====
+        function filterProducts() {
+            const categoryFilter = document.getElementById('categoryFilter').value.toLowerCase();
+            const stockFilter = document.getElementById('stockFilter').value;
+            const searchInput = document.getElementById('searchProducts');
+            const rows = document.querySelectorAll('#productsTable tbody tr');
+            let visibleCount = 0;
+
+            rows.forEach(row => {
+                let show = true;
+                const cells = row.querySelectorAll('td');
+                
+                // Category filter
+                if (categoryFilter) {
+                    const categoryCell = cells[6];
+                    if (categoryCell && !categoryCell.textContent.toLowerCase().includes(categoryFilter)) {
+                        show = false;
+                    }
+                }
+                
+                // Stock filter
+                if (stockFilter && show) {
+                    const stockCell = cells[4];
+                    if (stockCell) {
+                        const stockText = stockCell.textContent.trim();
+                        const stockValue = parseInt(stockText);
+                        if (stockFilter === 'in-stock' && stockValue <= 0) show = false;
+                        else if (stockFilter === 'low-stock' && (stockValue > 5 || stockValue <= 0)) show = false;
+                        else if (stockFilter === 'out-of-stock' && stockValue > 0) show = false;
+                    }
+                }
+                
+                // Search filter (if search input has value)
+                if (show && searchInput && searchInput.value.trim()) {
+                    const searchText = row.textContent.toLowerCase();
+                    if (!searchText.includes(searchInput.value.toLowerCase().trim())) {
+                        show = false;
+                    }
+                }
+                
+                row.style.display = show ? '' : 'none';
+                if (show) visibleCount++;
+            });
+
+            // Update result count
+            const table = document.getElementById('productsTable');
+            const counter = table.parentElement.querySelector('.result-count');
+            if (counter) {
+                counter.textContent = `Showing ${visibleCount} of ${rows.length} results`;
+            }
+
+            const noResultMsg = table.parentElement.querySelector('.no-results-message');
+            if (noResultMsg) {
+                noResultMsg.style.display = visibleCount === 0 ? 'block' : 'none';
+            }
+        }
+
         // ===== EDIT PRODUCT =====
         function editProduct(id) {
             fetch('includes/ajax.php?action=get_product&id=' + id)
@@ -639,7 +859,6 @@ $page_title = 'Products';
                         document.getElementById('edit_product_sku').value = data.product.sku || '';
                         document.getElementById('edit_product_supplier').value = data.product.supplier || '';
                         
-                        // Show current image
                         const imgPreview = document.getElementById('editImagePreview');
                         if (data.product.image) {
                             const imgUrl = '<?php echo BASE_URL; ?>' + data.product.image;
@@ -659,16 +878,16 @@ $page_title = 'Products';
                 });
         }
 
-        // ===== IMAGE ERROR HANDLING =====
-        document.addEventListener('DOMContentLoaded', function() {
-            // Handle all product images that fail to load
-            document.querySelectorAll('.product-thumb').forEach(img => {
-                img.addEventListener('error', function() {
-                    console.log('Image failed to load:', this.src);
-                    this.src = '<?php echo BASE_URL; ?>uploads/products/no-image.png';
-                });
+        // ===== AUTO-HIDE ALERTS =====
+        setTimeout(() => {
+            document.querySelectorAll('.alert-persistent').forEach(alert => {
+                alert.style.transition = 'opacity 0.5s ease';
+                setTimeout(() => {
+                    alert.style.opacity = '0';
+                    setTimeout(() => alert.remove(), 500);
+                }, 5000);
             });
-        });
+        }, 1000);
     </script>
 </body>
 </html>
