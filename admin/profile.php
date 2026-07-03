@@ -158,12 +158,9 @@ $page_title = 'Profile Settings';
             <!-- Profile Grid -->
             <div class="profile-grid" style="margin-bottom:25px:">
                 <!-- Profile Information -->
-                <div class="admin-card">
-                    <div class="card-header">
-                        <h2><i class="fas fa-user"></i> Profile Information</h2>
-                    </div>
-                    <div class="card-body">
-                        <form method="POST">
+                <div class="admin-card" style="padding:14px">
+                    <div class="card-body" style="padding:14px">
+                        <form method="POST" style="padding:14px">
                             <input type="hidden" name="action" value="update_profile">
                             
                             <div class="profile-avatar">
@@ -204,7 +201,7 @@ $page_title = 'Profile Settings';
                 </div>
 
                 <!-- Change Password -->
-                <div class="admin-card">
+                <div class="admin-card" style="padding:14px">
                     <div class="card-header">
                         <h2><i class="fas fa-lock"></i> Change Password</h2>
                     </div>
@@ -251,7 +248,7 @@ $page_title = 'Profile Settings';
                 </div>
 
                 <!-- Recent Activity -->
-                <div class="admin-card">
+                <div class="admin-card" style="padding:14px">
                     <div class="card-header">
                         <h2><i class="fas fa-clock"></i> Recent Activity</h2>
                     </div>
@@ -283,7 +280,7 @@ $page_title = 'Profile Settings';
                 </div>
 
                 <!-- Notification Preferences -->
-                <div class="admin-card">
+                <div class="admin-card" style="padding:14px">
                     <div class="card-header">
                         <h2><i class="fas fa-bell"></i> Notification Preferences</h2>
                     </div>
