@@ -57,11 +57,21 @@ function login($email, $password) {
             // Update last login timestamp
             $updateStmt = $pdo->prepare("UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?");
             $updateStmt->execute([$user['id']]);
-            
+             logActivity(
+                'login',
+                'User logged in successfully',
+                $user['id'],
+                $user['name']
+            );
             error_log('Login successful for: ' . $email);
             return true;
         }
-        
+         logActivity(
+            'failed_login',
+            'Failed login attempt for email: ' . $email,
+            null,
+            null
+        );
         error_log('Login failed for: ' . $email . ' - Invalid credentials');
         return false;
         
@@ -126,7 +136,14 @@ function requireLogin() {
 function logout() {
     // Start session if not already started
     startSession();
-    
+    if (isset($_SESSION['user_id'])) {
+        logActivity(
+            'logout',
+            'User logged out',
+            $_SESSION['user_id'],
+            $_SESSION['user_name'] ?? null
+        );
+    }
     // Unset all session variables
     $_SESSION = [];
     
