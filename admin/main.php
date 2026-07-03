@@ -1,4 +1,5 @@
 <?php
+// admin/main.php - Main Layout with Sidebar + Header
 session_start();
 require_once 'includes/config.php';
 
@@ -109,7 +110,11 @@ function isActive($page) {
     $current_page = basename($_SERVER['PHP_SELF']);
     return $current_page === $page ? 'active' : '';
 }
+
+// Start output buffering to capture page content
+ob_start();
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -310,9 +315,9 @@ function isActive($page) {
             <!-- ===== PAGE CONTENT ===== -->
             <div class="content-wrapper">
                 <?php
-         
-
-
+                // This is where the page-specific content will be rendered
+                // The content is captured from the page that included main.php
+                echo $page_content ?? '';
                 ?>
             </div>
         </main>
