@@ -131,7 +131,7 @@ $user_avatar = $_SESSION['user_avatar'] ?? 'default.jpg';
                 <?php endif; ?>
             </button>
             
-            <ul class="dropdown-menu nh-notif-menu dropdown-menu-end">
+            <ul class="dropdown-menu nh-notif-menu dropdown-menu-end" style="width:550px">
                 <!-- Header -->
                 <li class="nh-notif-header">
                     <span class="nh-notif-title">
