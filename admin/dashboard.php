@@ -33,7 +33,7 @@ $page_title = 'Dashboard';
         <main class="admin-main">
        <?php include "header.php"; ?>
             <!-- Stats Cards -->
-            <div class="stats-grid">
+            <div class="stats-grid" style="margin-top:4vh">
                 <div class="stat-card">
                     <div class="stat-icon"><i class="fas fa-box"></i></div>
                     <div class="stat-info">
@@ -65,12 +65,12 @@ $page_title = 'Dashboard';
             </div>
 
             <!-- Recent Orders -->
-            <div class="admin-card" >
-                <div class="card-header">
+            <div class="admin-card">
+                <div class="card-header" style="padding:14px">
                     <h2><i class="fas fa-clock"></i> Recent Orders</h2>
                     <a href="orders.php" class="btn-link">View All</a>
                 </div>
-                <div class="card-body">
+                <div class="card-body" style="padding:14px">
                     <?php if (!empty($recent_orders)): ?>
                         <table class="admin-table">
                             <thead>
