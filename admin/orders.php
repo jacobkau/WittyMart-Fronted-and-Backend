@@ -24,6 +24,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $stmt = $pdo->prepare("UPDATE orders SET status = ? WHERE id = ?");
                 if ($stmt->execute([$status, $id])) {
+                     logActivity(
+        'update_order',
+        'Updated order #' . $order_id . ' status to: ' . $status,
+        $_SESSION['user_id'],
+        $_SESSION['user_name']
+    );
                     $message = 'Order status updated successfully!';
                     $messageType = 'success';
                 } else {
@@ -49,6 +55,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Then delete order
             $stmt = $pdo->prepare("DELETE FROM orders WHERE id = ?");
             if ($stmt->execute([$id])) {
+                 logActivity(
+        'delete_order',
+        'Deleted order #' . $order_id,
+        $_SESSION['user_id'],
+        $_SESSION['user_name']
+    );
                 $message = 'Order deleted successfully!';
                 $messageType = 'success';
             } else {
