@@ -1809,6 +1809,7 @@ a {
     
     .sidebar-toggle {
         display: block;
+        margin-top:70px !important;
     }
     
     .admin-main {
@@ -1905,7 +1906,9 @@ a {
     .login-box {
         padding: 25px 20px;
     }
-    
+     .sidebar-toggle {
+        margin-top:70px !important;
+    }
     .login-logo img {
         width: 55px;
         height: 55px;
@@ -2020,6 +2023,9 @@ a {
     }
      .nh-header-left{
         display: none !important;
+    }
+     .sidebar-toggle {
+        margin-top:70px !important;
     }
     .login-logo h1 {
         font-size: 18px;
