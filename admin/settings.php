@@ -140,11 +140,12 @@ $page_title = 'Settings';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
+    <?php include "header.php"?>
     <div class="admin-wrapper">
         <?php include "sidebar.php" ?>
         <!-- Main Content -->
         <main class="admin-main">
-            <header class="admin-header">
+            <header class="admin-header" style="margin-bottom:10px">
                 <h1><i class="fas fa-cog"></i> System Settings</h1>
             </header>
 
