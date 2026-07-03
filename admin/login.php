@@ -72,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             <?php endif; ?>
             
-            <form method="POST" action="test.php" id="loginForm">
+            <form method="POST" action="<?php echo $_SERVER['PHP_SELF']; ?>" id="loginForm">
                 <div class="mb-3">
                     <label class="form-label"><i class="fas fa-envelope"></i> Email</label>
                     <div class="input-group">
