@@ -42,13 +42,10 @@ $page_title = 'Activity Logs';
 
         <!-- Main Content -->
         <main class="admin-main">
-            <header class="admin-header">
-                <h1><i class="fas fa-history"></i> Activity Logs</h1>
-                <div>
+            <header class="admin-header" style="margin-bottom:20px">
                     <button class="btn-sm btn-danger" onclick="clearLogs()">
                         <i class="fas fa-trash"></i> Clear Old Logs
                     </button>
-                </div>
             </header>
 
             <?php if (isset($message)): ?>
