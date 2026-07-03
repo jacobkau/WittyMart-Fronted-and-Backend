@@ -495,16 +495,16 @@ body.dark-mode .login-box .alert-success {
    =========================================== */
 .nh-admin-header {
     background: linear-gradient(135deg, #05573c 0%, #03402c 100%);
-    padding: 12px 32px;
+    padding: 8px 28px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 3px solid #02c786;
+    border-bottom: 1px solid #02c786;
     box-shadow: 0 2px 15px rgba(0, 0, 0, 0.2);
     position: sticky;
     top: 0;
     z-index: 1050;
-    min-height: 72px;
+    min-height: 50px;
 }
 
 /* Left Side */
