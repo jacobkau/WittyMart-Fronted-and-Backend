@@ -113,7 +113,7 @@ $user_avatar = $_SESSION['user_avatar'] ?? 'default.jpg';
 <body>
 <div class="nh-admin-header">
     <div class="nh-header-left">
-        <h1 class="nh-page-title" style="margin-left:260px">
+        <h1 class="nh-page-title">
             <i class="fas fa-tachometer-alt nh-title-icon"></i>
             <?= htmlspecialchars($page_title ?? 'Dashboard') ?>
         </h1>
@@ -131,7 +131,7 @@ $user_avatar = $_SESSION['user_avatar'] ?? 'default.jpg';
                 <?php endif; ?>
             </button>
             
-            <ul class="dropdown-menu nh-notif-menu dropdown-menu-end" style="width:420px">
+            <ul class="dropdown-menu nh-notif-menu dropdown-menu-end">
                 <!-- Header -->
                 <li class="nh-notif-header">
                     <span class="nh-notif-title">
