@@ -65,9 +65,8 @@ $page_title = 'Customers';
 
         <!-- Main Content -->
         <main class="admin-main">
-            <header class="admin-header" style="margin-bottom:10px:">
-                <h1 style="margin-bottom:10px:"><i class="fas fa-users"></i> Customers</h1>
-                <span style="margin-bottom:10px:" class="badge badge-info">Total: <?php echo count($customers); ?></span>
+            <header class="admin-header" style="margin-bottom:20px:">
+                <span style="margin-bottom:20px:" class="badge badge-info">Total: <?php echo count($customers); ?></span>
             </header>
 
             <?php if ($message): ?>
