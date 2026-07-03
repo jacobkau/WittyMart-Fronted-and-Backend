@@ -57,12 +57,12 @@ $page_title = 'Activity Logs';
 
             <div class="admin-card">
                 <div class="card-body">
-                    <div class="table-toolbar">
+                        <span class="badge badge-info" style="margin:14px">Total: <?php echo $logsData['total']; ?></span>
+                    <div class="table-toolbar" style="padding:14px;">
                         <div class="search-box">
                             <i class="fas fa-search"></i>
                             <input type="text" id="searchLogs" placeholder="Search logs..." onkeyup="filterTable('searchLogs', 'logsTable')">
                         </div>
-                        <span class="badge badge-info">Total: <?php echo $logsData['total']; ?></span>
                     </div>
 
                     <?php if (count($logs) > 0): ?>
