@@ -382,11 +382,10 @@ body.dark-mode .login-box .alert-success {
    ADMIN WRAPPER
    ============================================ */
 .admin-wrapper {
-    position:relative;
     display: flex;
     min-height: 100vh;
+    position: relative;
 }
-
 /* ============================================
    SIDEBAR
    ============================================ */
@@ -395,8 +394,9 @@ body.dark-mode .login-box .alert-success {
     background: var(--primary);
     color: var(--white);
     padding: 0;
-    position: sticky;
+    position: fixed;
     top: 0;
+    left: 0;
     height: 100vh;
     overflow-y: auto;
     flex-shrink: 0;
@@ -488,6 +488,9 @@ body.dark-mode .login-box .alert-success {
     min-height: 100vh;
     background: var(--bg);
     transition: background 0.3s ease;
+    margin-left: 260px; 
+    position: relative;
+    z-index: 1;
 }
 
 /* ============================================
@@ -503,8 +506,11 @@ body.dark-mode .login-box .alert-success {
     box-shadow: 0 2px 15px rgba(0, 0, 0, 0.2);
     position: sticky;
     top: 0;
-    z-index: 1050;
+    z-index: 50;
     max-height: 50px;
+    width: 100%;
+    margin: 0;
+    left: 0;
 }
 
 /* Left Side */
@@ -912,10 +918,14 @@ body.dark-mode .login-box .alert-success {
     .nh-page-title {
         font-size: 20px;
     }
+    
 }
 
 @media (max-width: 768px) {
-    .nh-admin-header {
+   .nh-admin-header {
+        position: sticky;
+        top: 0;
+        width: 100%;
         padding: 8px 16px;
         min-height: 60px;
     }
@@ -949,10 +959,13 @@ body.dark-mode .login-box .alert-success {
     .nh-notif-desc {
         display: none;
     }
+      .sidebar-toggle {
+        display: block;
+    }
 }
 
 @media (max-width: 480px) {
-    .nh-admin-header {
+     .nh-admin-header {
         padding: 6px 12px;
         min-height: 56px;
         flex-wrap: wrap;
@@ -1135,24 +1148,21 @@ body.dark-mode .login-box .alert-success {
 /* ============================================
    CARDS
    ============================================ */
-/* ============================================
-   CARDS - IMPROVED
-   ============================================ */
 .admin-card {
     background: var(--white);
     border-radius: 12px;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
     margin-bottom: 25px;
-    overflow: hidden;
+    overflow: visible;
     border: 1px solid var(--border);
     transition: all 0.3s ease;
+    position: relative;
+    z-index: 1;
 }
 
 .admin-card:hover {
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
 }
-
-/* Card Header */
 .admin-card .card-header {
     padding: 18px 25px;
     background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(248,249,250,0.5));
@@ -1162,7 +1172,9 @@ body.dark-mode .login-box .alert-success {
     align-items: center;
     flex-wrap: wrap;
     gap: 10px;
+    border-radius: 12px 12px 0 0;
 }
+
 
 .admin-card .card-header h2 {
     font-size: 16px;
@@ -1184,9 +1196,9 @@ body.dark-mode .login-box .alert-success {
     padding: 4px 14px;
 }
 
-/* Card Body */
 .admin-card .card-body {
     padding: 20px 25px;
+    border-radius: 0 0 12px 12px;
 }
 
 .admin-card .card-body:first-child {
@@ -1205,10 +1217,9 @@ body.dark-mode .login-box .alert-success {
     gap: 10px;
 }
 
-/* Table inside card - full width but with proper padding */
 .admin-card .table-responsive {
-    margin: 0;
-    padding: 0;
+    margin: 0 -25px;
+    padding: 0 25px;
     overflow-x: auto;
 }
 
@@ -1230,11 +1241,13 @@ body.dark-mode .login-box .alert-success {
     text-align: left;
 }
 
-.admin-card .admin-table thead th:first-child {
+.admin-card .admin-table thead th:first-child,
+.admin-card .admin-table tbody td:first-child {
     padding-left: 25px;
 }
 
-.admin-card .admin-table thead th:last-child {
+.admin-card .admin-table thead th:last-child,
+.admin-card .admin-table tbody td:last-child {
     padding-right: 25px;
 }
 
@@ -2028,7 +2041,7 @@ body.dark-mode .badge-suspended {
     }
     
     /* Admin Layout */
-    .admin-sidebar {
+   .admin-sidebar {
         position: fixed;
         left: -280px;
         width: 280px;
@@ -2037,7 +2050,7 @@ body.dark-mode .badge-suspended {
         transition: left 0.3s ease;
     }
     
-    .admin-sidebar.open {
+     .admin-sidebar.open {
         left: 0;
     }
     
@@ -2046,6 +2059,7 @@ body.dark-mode .badge-suspended {
     }
     
     .admin-main {
+        margin-left: 220px;
         padding: 15px;
     }
     
@@ -2099,6 +2113,16 @@ body.dark-mode .badge-suspended {
     /* Login Page */
     .login-box {
         padding: 25px 20px;
+    }
+     .admin-main {
+        padding: 10px;
+    }
+     .admin-card .card-body {
+        padding: 15px;
+    }
+    
+    .admin-card .card-header {
+        padding: 15px;
     }
     
     .login-logo img {
