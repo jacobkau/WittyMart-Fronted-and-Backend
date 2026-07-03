@@ -372,6 +372,17 @@ a {
     margin-bottom: 0;
 }
 
+.content-wrapper .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.content-wrapper .admin-card {
+    margin-bottom: 25px;
+}
+
 /* ============================================
    SIDEBAR
    ============================================ */
