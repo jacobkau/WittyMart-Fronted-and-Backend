@@ -20,6 +20,29 @@ if (!file_exists($upload_dir)) {
     mkdir($upload_dir, 0777, true);
 }
 
+// ===== HELPER FUNCTION FOR PRODUCT IMAGE URL =====
+function getProductImageUrl($image_path) {
+    // Base URL from config
+    $base_url = BASE_URL;
+    
+    // If no image, return placeholder
+    if (empty($image_path)) {
+        return $base_url . 'uploads/products/no-image.png';
+    }
+    
+    // Clean the path - remove leading slashes and '../'
+    $image_path = ltrim($image_path, '/');
+    $image_path = str_replace('../', '', $image_path);
+    
+    // If it already has the full path, just return it
+    if (strpos($image_path, 'http') === 0) {
+        return $image_path;
+    }
+    
+    // Build full URL
+    return $base_url . $image_path;
+}
+
 // ===== HANDLE FORM SUBMISSIONS =====
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action'])) {
@@ -35,22 +58,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $sku = sanitize(trim($_POST['sku'] ?? ''));
 
                     if ($sku === '') {
-                    $stmt = $pdo->prepare("SELECT name FROM categories WHERE id = ?");
-                    $stmt->execute([$category_id]);
-                    $category = $stmt->fetch();
-                    $prefix = 'PRD';
-                    if ($category) {
-                    $prefix = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $category['name']), 0, 3));
-                    $prefix = str_pad($prefix, 3, 'X');
-                      }
-                    do {
-                       $sku = $prefix . '-' . random_int(100000, 999999);
-                       $check = $pdo->prepare("SELECT COUNT(*) FROM products WHERE sku = ?");
-                       $check->execute([$sku]);
-                        } while ($check->fetchColumn() > 0);
-                        } else {
-                         $sku = sanitize($sku);
+                        $stmt = $pdo->prepare("SELECT name FROM categories WHERE id = ?");
+                        $stmt->execute([$category_id]);
+                        $category = $stmt->fetch();
+                        $prefix = 'PRD';
+                        if ($category) {
+                            $prefix = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $category['name']), 0, 3));
+                            $prefix = str_pad($prefix, 3, 'X');
                         }
+                        do {
+                            $sku = $prefix . '-' . random_int(100000, 999999);
+                            $check = $pdo->prepare("SELECT COUNT(*) FROM products WHERE sku = ?");
+                            $check->execute([$sku]);
+                        } while ($check->fetchColumn() > 0);
+                    } else {
+                        $sku = sanitize($sku);
+                    }
                     
                     // Handle image upload
                     $image_path = '';
@@ -129,22 +152,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $sku = sanitize(trim($_POST['sku'] ?? ''));
 
                     if ($sku === '') {
-                    $stmt = $pdo->prepare("SELECT name FROM categories WHERE id = ?");
-                    $stmt->execute([$category_id]);
-                    $category = $stmt->fetch();
-                    $prefix = 'PRD';
-                    if ($category) {
-                    $prefix = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $category['name']), 0, 3));
-                    $prefix = str_pad($prefix, 3, 'X');
-                      }
-                    do {
-                       $sku = $prefix . '-' . random_int(100000, 999999);
-                       $check = $pdo->prepare("SELECT COUNT(*) FROM products WHERE sku = ?");
-                       $check->execute([$sku]);
-                        } while ($check->fetchColumn() > 0);
-                        } else {
-                         $sku = sanitize($sku);
+                        $stmt = $pdo->prepare("SELECT name FROM categories WHERE id = ?");
+                        $stmt->execute([$category_id]);
+                        $category = $stmt->fetch();
+                        $prefix = 'PRD';
+                        if ($category) {
+                            $prefix = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $category['name']), 0, 3));
+                            $prefix = str_pad($prefix, 3, 'X');
                         }
+                        do {
+                            $sku = $prefix . '-' . random_int(100000, 999999);
+                            $check = $pdo->prepare("SELECT COUNT(*) FROM products WHERE sku = ?");
+                            $check->execute([$sku]);
+                        } while ($check->fetchColumn() > 0);
+                    } else {
+                        $sku = sanitize($sku);
+                    }
                     
                     // Get current image
                     $stmt = $pdo->prepare("SELECT image FROM products WHERE id = ?");
@@ -267,10 +290,15 @@ $page_title = 'Products';
                                 <?php foreach ($products as $product): ?>
                                     <tr>
                                         <td>
-                                            <img src="<?php echo '../' . htmlspecialchars($product['image'] ?? 'images/no-image.png'); ?>" 
+                                            <?php 
+                                            // Get the full image URL using the helper function
+                                            $image_url = getProductImageUrl($product['image'] ?? '');
+                                            ?>
+                                            <img src="<?php echo htmlspecialchars($image_url); ?>" 
                                                  alt="<?php echo htmlspecialchars($product['name']); ?>" 
                                                  class="product-thumb"
-                                                 onerror="this.src='https://via.placeholder.com/50/05573c/ffffff?text=?'">
+                                                 style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; background: #f0f0f0;"
+                                                 onerror="this.src='<?php echo BASE_URL; ?>uploads/products/no-image.png'">
                                         </td>
                                         <td><?php echo htmlspecialchars($product['name']); ?></td>
                                         <td><?php echo htmlspecialchars($product['sku'] ?? 'N/A'); ?></td>
@@ -412,8 +440,16 @@ $page_title = 'Products';
                     <label><i class="fas fa-image"></i> Product Image</label>
                     <div class="image-upload-wrapper">
                         <div id="editImagePreview" class="image-preview">
-                            <img id="edit_current_image" src="" alt="Current Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px;">
-                            <p>Current image</p>
+                            <?php 
+                            // Show current image if it exists
+                            $current_image = $_GET['image'] ?? '';
+                            if (!empty($current_image)) {
+                                $img_url = getProductImageUrl($current_image);
+                                echo '<img src="' . htmlspecialchars($img_url) . '" alt="Current Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px;"><p>Current image</p>';
+                            } else {
+                                echo '<i class="fas fa-image" style="font-size: 40px; color: #ddd;"></i><p>No image</p>';
+                            }
+                            ?>
                         </div>
                         <input type="file" name="edit_product_image" id="edit_product_image" accept="image/*" onchange="previewImage(this, 'editImagePreview')">
                         <label for="edit_product_image" class="upload-btn">
@@ -518,6 +554,15 @@ $page_title = 'Products';
             color: #6c757d;
             margin-top: 4px;
         }
+
+        /* Product thumbnail styling */
+        .product-thumb {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 4px;
+            border: 1px solid #e0e0e0;
+        }
     </style>
 
     <script>
@@ -527,7 +572,7 @@ $page_title = 'Products';
             if (input.files && input.files[0]) {
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    preview.innerHTML = `<img src="${e.target.result}" alt="Product Image">`;
+                    preview.innerHTML = `<img src="${e.target.result}" alt="Product Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px;"><p>New image</p>`;
                 }
                 reader.readAsDataURL(input.files[0]);
             }
@@ -580,7 +625,8 @@ $page_title = 'Products';
                         // Show current image
                         const imgPreview = document.getElementById('editImagePreview');
                         if (data.product.image) {
-                            imgPreview.innerHTML = `<img src="../${data.product.image}" alt="Product Image"><p>Current image</p>`;
+                            const imgUrl = '<?php echo BASE_URL; ?>' + data.product.image;
+                            imgPreview.innerHTML = `<img src="${imgUrl}" alt="Product Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px;"><p>Current image</p>`;
                         } else {
                             imgPreview.innerHTML = `<i class="fas fa-image" style="font-size: 40px; color: #ddd;"></i><p>No image</p>`;
                         }
@@ -595,6 +641,17 @@ $page_title = 'Products';
                     alert('Error loading product data');
                 });
         }
+
+        // ===== IMAGE ERROR HANDLING =====
+        document.addEventListener('DOMContentLoaded', function() {
+            // Handle all product images that fail to load
+            document.querySelectorAll('.product-thumb').forEach(img => {
+                img.addEventListener('error', function() {
+                    console.log('Image failed to load:', this.src);
+                    this.src = '<?php echo BASE_URL; ?>uploads/products/no-image.png';
+                });
+            });
+        });
     </script>
 </body>
 </html>
