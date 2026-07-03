@@ -90,12 +90,13 @@ $page_title = 'Orders';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
+    <?php include "header.php"?>
     <div class="admin-wrapper">
        <?php include "sidebar.php" ?>
 
         <!-- Main Content -->
         <main class="admin-main">
-            <header class="admin-header">
+            <header class="admin-header" style="margin-bottom:10px:">
                 <h1 style="margin-bottom:10px:"><i class="fas fa-shopping-cart"></i> Orders</h1>
                 <span style="margin-bottom:10px:" class="badge badge-info">Total: <?php echo count($orders); ?></span>
             </header>
