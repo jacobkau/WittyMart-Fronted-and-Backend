@@ -120,8 +120,8 @@ $page_title = 'Categories';
             <?php endif; ?>
 
             <!-- Categories Table -->
-            <div class="admin-card">
-                <div class="card-body">
+            <div class="admin-card" style="padding:14px">
+                <div class="card-body" style="padding:14px">
                     <?php if (count($categories) > 0): ?>
                         <table class="admin-table">
                             <thead>
