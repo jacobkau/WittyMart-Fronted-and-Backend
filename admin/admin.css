@@ -482,7 +482,7 @@ a {
     position: sticky;
     top: 0;
     z-index: 50;
-    max-height: 50px;
+    max-height: 30px;
     width: 100%;
     margin: 0;
     left: 0;
@@ -949,6 +949,7 @@ a {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 20px;
+    margin-top: 30px;
     margin-bottom: 30px;
 }
 
