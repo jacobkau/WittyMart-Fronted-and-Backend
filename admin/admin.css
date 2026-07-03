@@ -481,7 +481,7 @@ a {
     position: sticky;
     top: 0;
     z-index: 50;
-    max-height: 30px;
+    max-height: 50px;
     width: 100%;
     margin: 0;
     left: 0;
