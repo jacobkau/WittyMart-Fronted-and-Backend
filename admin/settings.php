@@ -154,11 +154,11 @@ $page_title = 'Settings';
             <?php endif; ?>
 
             <!-- Settings Form -->
-            <div class="admin-card">
+            <div class="admin-card" style="padding:14px">
                 <div class="card-header">
                     <h2><i class="fas fa-sliders-h"></i> General Settings</h2>
                 </div>
-                <div class="card-body">
+                <div class="card-body" style="padding:14px">
                     <form method="POST">
                         <div class="settings-grid">
                             <!-- General Section -->
