@@ -1,5 +1,13 @@
 <?php
 session_start();
+  if (isset($_SESSION['user_id'])) {
+        logActivity(
+            'logout',
+            'User logged out',
+            $_SESSION['user_id'],
+            $_SESSION['user_name'] ?? null
+        );
+    }
 session_destroy();
 ?>
 <!DOCTYPE html>
