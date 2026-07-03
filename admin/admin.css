@@ -462,7 +462,7 @@ a {
     min-height: 100vh;
     background: var(--bg);
     transition: background 0.3s ease;
-    margin-left: 260px;
+    margin-left:5px;
     position: relative;
     z-index: 1;
 }
