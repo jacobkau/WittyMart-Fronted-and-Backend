@@ -226,12 +226,13 @@ $page_title = 'Products';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
+    <?php include "header.php"?>
     <div class="admin-wrapper">
         <?php include "sidebar.php"; ?>
       
         <!-- Main Content -->
         <main class="admin-main">
-            <header class="admin-header">
+            <header class="admin-header" style="margin-bottom:10px">
                 <h1><i class="fas fa-box"></i> Products</h1>
                 <button class="btn-primary" onclick="openModal('addProductModal')">
                     <i class="fas fa-plus"></i> Add Product
