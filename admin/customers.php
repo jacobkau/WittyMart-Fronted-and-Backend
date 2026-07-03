@@ -77,8 +77,8 @@ $page_title = 'Customers';
             <?php endif; ?>
 
             <!-- Customers Table -->
-            <div class="admin-card">
-                <div class="card-body">
+            <div class="admin-card" style="padding:14px">
+                <div class="card-body" style="padding:14px">
                     <div class="table-toolbar">
                         <div class="search-box">
                             <i class="fas fa-search"></i>
