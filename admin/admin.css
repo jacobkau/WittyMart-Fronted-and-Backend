@@ -504,7 +504,7 @@ body.dark-mode .login-box .alert-success {
     position: sticky;
     top: 0;
     z-index: 1050;
-    min-height: 50px;
+    max-height: 50px;
 }
 
 /* Left Side */
