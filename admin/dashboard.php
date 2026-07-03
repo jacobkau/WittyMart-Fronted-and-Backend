@@ -33,7 +33,7 @@ $page_title = 'Dashboard';
         <main class="admin-main">
        <?php include "header.php"; ?>
             <!-- Stats Cards -->
-            <div class="stats-grid" style="margin-top:30vh">
+            <div class="stats-grid" style="margin-top:5vh">
                 <div class="stat-card">
                     <div class="stat-icon"><i class="fas fa-box"></i></div>
                     <div class="stat-info">
