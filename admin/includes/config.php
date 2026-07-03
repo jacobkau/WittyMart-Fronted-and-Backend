@@ -90,6 +90,24 @@ define('PASSWORD_BCRYPT_COST', 12);
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
+// ===== SITE CONFIGURATION =====
+define('BASE_URL', 'https://wittymart.onrender.com/'); 
+define('BASE_PATH', $_SERVER['DOCUMENT_ROOT'] . '/');
+
+
+function getBaseUrl() {
+    $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
+    $host = $_SERVER['HTTP_HOST'];
+    $script_dir = dirname($_SERVER['SCRIPT_NAME']);
+    
+    $base_dir = str_replace('/admin', '', $script_dir);
+    
+    return $protocol . $host . $base_dir . '/';
+}
+
+define('BASE_URL', getBaseUrl());
+define('UPLOADS_URL', BASE_URL . 'uploads/products/');
+
 
 /**
  * Sanitize input data
