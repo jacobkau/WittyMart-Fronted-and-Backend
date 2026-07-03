@@ -141,25 +141,17 @@ $page_title = 'Profile Settings';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
+    <?php include "header.php"?>
     <div class="admin-wrapper">
         <?php include "sidebar.php" ?>
 
         <!-- Main Content -->
         <main class="admin-main">
-          <header class="admin-header" style="margin-bottom: 20px;">
-    <h1 style="margin-bottom: 15px;">
-        <i class="fas fa-user-cog"></i> Profile Settings
-    </h1>
-    <div class="admin-user" style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px;">
-        <span class="user-info">
-            <i class="fas fa-user-circle"></i> 
-            <?php echo htmlspecialchars($_SESSION['user_name'] ?? 'Admin'); ?>
-        </span>
-        <span class="role-badge <?php echo $_SESSION['user_role'] ?? 'admin'; ?>">
-            <?php echo ucfirst(str_replace('_', ' ', htmlspecialchars($_SESSION['user_role'] ?? 'Admin'))); ?>
-        </span>
-    </div>
-</header>
+              <header class="admin-header" style="margin-bottom: 20px;">
+                <h1 style="margin-bottom: 15px;">
+                  <i class="fas fa-user-cog"></i> Profile Settings
+                </h1>
+              </header>
 
             <?php if ($message): ?>
                 <div class="alert alert-<?php echo $messageType; ?> alert-persistent">
