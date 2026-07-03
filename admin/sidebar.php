@@ -11,10 +11,11 @@ function isActive($page) {
 <!-- Sidebar Overlay (Mobile) -->
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
-<!-- Sidebar Toggle Button (Mobile) -->
-<button class="sidebar-toggle-btn" id="sidebarToggleBtn" onclick="toggleSidebar()">
+<div style="margin-top:50px;">
+<button class="sidebar-toggle-btn" id="sidebarToggleBtn"  onclick="toggleSidebar()">
     <i class="fas fa-bars"></i>
 </button>
+</div>
 
 <aside class="admin-sidebar" id="adminSidebar">
     <div class="sidebar-header">
