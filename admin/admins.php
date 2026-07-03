@@ -60,8 +60,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_super_admin) {
                             VALUES (?, ?, ?, ?, ?)
                         ");
                         if ($stmt->execute([$name, $email, $hashed_password, $role, $phone])) {
-                            // Log activity
-                            logActivity('add_admin', 'Added new admin: ' . $email);
+                          logActivity(
+            'add_admin',
+            'Added new admin: ' . $email . ' (Role: ' . $role . ')',
+            $_SESSION['user_id'],
+            $_SESSION['user_name']
+        );;
                             
                             $message = 'Admin added successfully!';
                             $messageType = 'success';
@@ -107,8 +111,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_super_admin) {
                             WHERE id = ?
                         ");
                         if ($stmt->execute([$name, $email, $role, $phone, $status, $id])) {
-                            // Log activity
-                            logActivity('update_admin', 'Updated admin: ' . $email);
+                             logActivity(
+            'update_admin',
+            'Updated admin: ' . $email . ' (Role: ' . $role . ', Status: ' . $status . ')',
+            $_SESSION['user_id'],
+            $_SESSION['user_name']
+        );
                             
                             $message = 'Admin updated successfully!';
                             $messageType = 'success';
@@ -141,9 +149,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_super_admin) {
                     
                     $stmt = $pdo->prepare("DELETE FROM users WHERE id = ? AND role IN ('admin', 'super_admin')");
                     if ($stmt->execute([$id]) && $stmt->rowCount() > 0) {
-                        // Log activity
-                        logActivity('delete_admin', 'Deleted admin: ' . ($admin['email'] ?? 'Unknown'));
-                        
+                         logActivity(
+            'delete_admin',
+            'Deleted admin: ' . ($admin['email'] ?? 'Unknown'),
+            $_SESSION['user_id'],
+            $_SESSION['user_name']
+        );
                         $message = 'Admin deleted successfully!';
                         $messageType = 'success';
                     } else {
@@ -170,9 +181,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_super_admin) {
                     $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
                     $stmt = $pdo->prepare("UPDATE users SET password = ? WHERE id = ?");
                     if ($stmt->execute([$hashed_password, $id])) {
-                        // Log activity
-                        logActivity('reset_password', 'Reset password for admin ID: ' . $id);
-                        
+                         logActivity(
+            'reset_password',
+            'Reset password for admin ID: ' . $id,
+            $_SESSION['user_id'],
+            $_SESSION['user_name']
+        );
+        
                         $message = 'Password reset successfully!';
                         $messageType = 'success';
                     } else {
