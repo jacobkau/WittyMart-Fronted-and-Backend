@@ -221,8 +221,7 @@ $page_title = 'Admin Management';
 
         <!-- Main Content -->
         <main class="admin-main">
-            <header class="admin-header">
-                <h1><i class="fas fa-user-shield"></i> Admin Management</h1>
+            <header class="admin-header" style="margin-bottom:20px">
                 <?php if ($is_super_admin): ?>
                     <button class="btn-primary" onclick="openModal('addAdminModal')">
                         <i class="fas fa-plus"></i> Add Admin
