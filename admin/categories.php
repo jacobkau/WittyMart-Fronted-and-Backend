@@ -106,8 +106,7 @@ $page_title = 'Categories';
 
         <!-- Main Content -->
         <main class="admin-main">
-            <header class="admin-header">
-                <h1><i class="fas fa-tags"></i> Categories</h1>
+            <header class="admin-header" style="margin-bottom:20px">
                 <button class="btn-primary" onclick="openModal('addCategoryModal')">
                     <i class="fas fa-plus"></i> Add Category
                 </button>
