@@ -29,10 +29,9 @@ $page_title = 'Dashboard';
 <body>
     <div class="admin-wrapper">
        <?php include "sidebar.php"?>
-
         <!-- Main Content -->
         <main class="admin-main">
-
+       <?php include "header.php"?>
             <!-- Stats Cards -->
             <div class="stats-grid">
                 <div class="stat-card">
