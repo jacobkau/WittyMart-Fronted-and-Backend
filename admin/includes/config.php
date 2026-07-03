@@ -94,6 +94,18 @@ define('PASSWORD_BCRYPT_COST', 12);
 define('BASE_URL', 'https://wittymart.onrender.com/'); 
 define('BASE_PATH', $_SERVER['DOCUMENT_ROOT'] . '/');
 
+// Add this to your config.php or run once
+$no_image_path = '../uploads/products/no-image.png';
+if (!file_exists($no_image_path)) {
+    // Create a simple placeholder image
+    $image = imagecreate(50, 50);
+    $bg = imagecolorallocate($image, 5, 87, 60); // #05573c
+    $text_color = imagecolorallocate($image, 255, 255, 255);
+    imagestring($image, 5, 20, 15, '?', $text_color);
+    imagepng($image, $no_image_path);
+    imagedestroy($image);
+}
+
 
 function getBaseUrl() {
     $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
@@ -284,6 +296,7 @@ function generateSlug($string) {
     // Trim hyphens from ends
     return trim($string, '-');
 }
+
 /**
  * Get all categories
  */
