@@ -14,11 +14,11 @@ $recent_orders = array_slice($orders, 0, 5);
 
 $page_title = 'Dashboard';
 
-// Include the main layout
-include 'main.php';
+// Start output buffering for page content
+ob_start();
 ?>
 
-<!-- Page Content (Rendered inside main.php) -->
+<!-- Page Content -->
 <div class="stats-grid">
     <div class="stat-card">
         <div class="stat-icon"><i class="fas fa-box"></i></div>
@@ -92,3 +92,11 @@ include 'main.php';
         <?php endif; ?>
     </div>
 </div>
+
+<?php
+// Capture the page content
+$page_content = ob_get_clean();
+
+// Now include the main layout
+include 'main.php';
+?>
