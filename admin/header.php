@@ -113,7 +113,7 @@ $user_avatar = $_SESSION['user_avatar'] ?? 'default.jpg';
 <body>
 <div class="nh-admin-header">
     <div class="nh-header-left">
-        <h1 class="nh-page-title">
+        <h1 class="nh-page-title" style="margin-left:260px">
             <i class="fas fa-tachometer-alt nh-title-icon"></i>
             <?= htmlspecialchars($page_title ?? 'Dashboard') ?>
         </h1>
