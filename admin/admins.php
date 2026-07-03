@@ -242,12 +242,12 @@ $page_title = 'Admin Management';
             <?php endif; ?>
 
             <!-- Admins Table -->
-            <div class="admin-card">
+            <div class="admin-card" style="padding:14px">
                 <div class="card-header">
                     <h2><i class="fas fa-users-cog"></i> Administrators</h2>
                     <span class="badge badge-info">Total: <?php echo count($admins); ?></span>
                 </div>
-                <div class="card-body">
+                <div class="card-body" style="padding:14px">
                     <div class="table-toolbar">
                         <div class="search-box">
                             <i class="fas fa-search"></i>
