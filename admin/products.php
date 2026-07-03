@@ -96,6 +96,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ");
                     
                     if ($stmt->execute([$name, $description, $price, $image_path, $category_id, $stock, $supplier, $sku])) {
+                         logActivity(
+            'add_product',
+            'Added product: ' . $name . ' (SKU: ' . $sku . ')',
+            $_SESSION['user_id'],
+            $_SESSION['user_name']
+        );
                         $message = 'Product added successfully!';
                         $messageType = 'success';
                     } else {
@@ -127,6 +133,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     $stmt = $pdo->prepare("DELETE FROM products WHERE id = ?");
                     if ($stmt->execute([$id])) {
+                        logActivity(
+            'delete_product',
+            'Deleted product: ' . $product_name . ' (ID: ' . $id . ')',
+            $_SESSION['user_id'],
+            $_SESSION['user_name']
+        );
                         $message = 'Product deleted successfully!';
                         $messageType = 'success';
                     } else {
@@ -197,6 +209,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ");
                     
                     if ($stmt->execute([$name, $description, $price, $image_path, $category_id, $stock, $supplier, $sku, $id])) {
+                         logActivity(
+            'update_product',
+            'Updated product: ' . $name . ' (ID: ' . $id . ')',
+            $_SESSION['user_id'],
+            $_SESSION['user_name']
+        );
                         $message = 'Product updated successfully!';
                         $messageType = 'success';
                     } else {
