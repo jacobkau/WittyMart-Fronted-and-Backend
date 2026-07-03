@@ -490,6 +490,7 @@ a {
 .nh-header-left {
     display: flex;
     align-items: center;
+    margin-left:260px !important;
 }
 
 .nh-page-title {
@@ -1836,6 +1837,9 @@ a {
         max-width: 350px;
         right: -10px !important;
     }
+    .nh-header-left{
+        display: none !important;
+    }
     
     .nh-user-info {
         display: none;
@@ -1931,8 +1935,8 @@ a {
         flex-wrap: wrap;
     }
     
-    .nh-header-left {
-        flex: 1;
+    .nh-header-left{
+        display: none !important;
     }
     
     .nh-page-title {
@@ -2014,7 +2018,9 @@ a {
     .login-box {
         padding: 20px 15px;
     }
-    
+     .nh-header-left{
+        display: none !important;
+    }
     .login-logo h1 {
         font-size: 18px;
     }
