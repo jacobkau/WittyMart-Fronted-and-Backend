@@ -145,9 +145,6 @@ $page_title = 'Settings';
         <?php include "sidebar.php" ?>
         <!-- Main Content -->
         <main class="admin-main">
-            <header class="admin-header" style="margin-bottom:10px">
-                <h1><i class="fas fa-cog"></i> System Settings</h1>
-            </header>
 
             <?php if ($message): ?>
                 <div class="alert alert-<?php echo $messageType; ?> alert-persistent">
