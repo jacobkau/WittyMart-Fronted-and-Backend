@@ -147,12 +147,7 @@ $page_title = 'Profile Settings';
 
         <!-- Main Content -->
         <main class="admin-main">
-              <header class="admin-header" style="margin-bottom: 20px;">
-                <h1 style="margin-bottom: 15px;">
-                  <i class="fas fa-user-cog"></i> Profile Settings
-                </h1>
-              </header>
-
+             
             <?php if ($message): ?>
                 <div class="alert alert-<?php echo $messageType; ?> alert-persistent">
                     <i class="fas fa-<?php echo $messageType === 'success' ? 'check-circle' : 'exclamation-circle'; ?>"></i>
