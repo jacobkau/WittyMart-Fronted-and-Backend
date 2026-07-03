@@ -255,8 +255,7 @@ $page_title = 'Products';
       
         <!-- Main Content -->
         <main class="admin-main">
-            <header class="admin-header" style="margin-bottom:10px">
-                <h1><i class="fas fa-box"></i> Products</h1>
+            <header class="admin-header" style="margin-bottom:20px">
                 <button class="btn-primary" onclick="openModal('addProductModal')">
                     <i class="fas fa-plus"></i> Add Product
                 </button>
