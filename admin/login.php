@@ -17,8 +17,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Please fill in all fields';
     } else {
         if (login($email, $password)) {
+             logActivity(
+                'login',
+                'User logged in successfully',
+                $user['id'],
+                $user['name']
+            );
             redirect('dashboard.php');
         } else {
+             logActivity(
+            'failed_login',
+            'Failed login attempt for email: ' . $email,
+            null,
+            null
+        );
             $error = 'Invalid email or password';
         }
     }
