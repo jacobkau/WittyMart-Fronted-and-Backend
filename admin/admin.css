@@ -572,8 +572,8 @@ a {
 }
 
 .nh-notif-menu {
-    min-width: 380px;
-    max-width: 650px;
+    min-width: 380px !important;
+    max-width: 400px !important;
     padding: 0;
     border: none;
     border-radius: 12px;
