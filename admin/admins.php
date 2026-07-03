@@ -221,13 +221,11 @@ $page_title = 'Admin Management';
 
         <!-- Main Content -->
         <main class="admin-main">
-            <header class="admin-header" style="margin-bottom:20px">
                 <?php if ($is_super_admin): ?>
-                    <button class="btn-primary" onclick="openModal('addAdminModal')">
+                    <button class="btn-primary" style="margin-bottom:20px" onclick="openModal('addAdminModal')">
                         <i class="fas fa-plus"></i> Add Admin
                     </button>
                 <?php endif; ?>
-            </header>
 
             <?php if ($message): ?>
                 <div class="alert alert-<?php echo $messageType; ?> alert-persistent">
@@ -273,43 +271,77 @@ $page_title = 'Admin Management';
                             </thead>
                             <tbody>
                                 <?php foreach ($admins as $admin): ?>
-                                    <tr>
-                                        <td>#<?php echo htmlspecialchars($admin['id']); ?></td>
-                                        <td>
-                                            <strong><?php echo htmlspecialchars($admin['name']); ?></strong>
-                                            <?php if ($admin['id'] == $_SESSION['user_id']): ?>
-                                                <span class="badge badge-primary">You</span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td><?php echo htmlspecialchars($admin['email']); ?></td>
-                                        <td>
-                                            <span class="badge badge-<?php echo $admin['role'] === 'super_admin' ? 'warning' : 'info'; ?>">
-                                                <?php echo ucfirst(str_replace('_', ' ', htmlspecialchars($admin['role']))); ?>
-                                            </span>
-                                        </td>
-                                        <td><?php echo htmlspecialchars($admin['phone'] ?? 'N/A'); ?></td>
-                                        <td>
-                                            <span class="badge badge-<?php echo ($admin['status'] ?? 'active') === 'active' ? 'success' : 'danger'; ?>">
-                                                <?php echo ucfirst(htmlspecialchars($admin['status'] ?? 'Active')); ?>
-                                            </span>
-                                        </td>
-                                        <td><?php echo date('M d, Y', strtotime($admin['created_at'])); ?></td>
-                                        <td>
-                                            <?php if ($is_super_admin && $admin['id'] != $_SESSION['user_id']): ?>
-                                                <button class="btn-sm btn-edit" onclick="editAdmin(<?php echo $admin['id']; ?>)">
-                                                    <i class="fas fa-edit"></i>
-                                                </button>
-                                                <button class="btn-sm btn-warning" onclick="resetPassword(<?php echo $admin['id']; ?>)">
-                                                    <i class="fas fa-key"></i>
-                                                </button>
-                                                <button class="btn-sm btn-delete" onclick="deleteAdmin(<?php echo $admin['id']; ?>)">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            <?php else: ?>
-                                                <span class="text-muted">No actions</span>
-                                            <?php endif; ?>
-                                        </td>
-                                    </tr>
+                                   <tr>
+    <td>
+        <span class="fw-bold text-primary">#<?php echo htmlspecialchars($admin['id']); ?></span>
+    </td>
+    <td>
+        <div class="d-flex align-items-center gap-2">
+            <div class="admin-avatar-circle" style="width: 32px; height: 32px; border-radius: 50%; background: <?php echo '#' . substr(md5($admin['name']), 0, 6); ?>; display: flex; align-items: center; justify-content: center; color: white; font-weight: 600; font-size: 14px;">
+                <?php echo strtoupper(substr($admin['name'], 0, 1)); ?>
+            </div>
+            <div>
+                <div class="fw-semibold"><?php echo htmlspecialchars($admin['name']); ?></div>
+                <?php if ($admin['id'] == $_SESSION['user_id']): ?>
+                    <span class="badge badge-primary" style="font-size: 9px; padding: 1px 8px;">You</span>
+                <?php endif; ?>
+            </div>
+        </div>
+    </td>
+    <td>
+        <div style="display: flex; align-items: center; gap: 6px;">
+            <i class="fas fa-envelope" style="color: var(--text-muted); font-size: 12px;"></i>
+            <?php echo htmlspecialchars($admin['email']); ?>
+        </div>
+    </td>
+    <td>
+        <span class="badge badge-<?php echo $admin['role'] === 'super_admin' ? 'super_admin' : 'admin'; ?>">
+            <?php echo ucfirst(str_replace('_', ' ', htmlspecialchars($admin['role']))); ?>
+        </span>
+    </td>
+    <td>
+        <?php if (!empty($admin['phone'])): ?>
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <i class="fas fa-phone" style="color: var(--text-muted); font-size: 12px;"></i>
+                <?php echo htmlspecialchars($admin['phone']); ?>
+            </div>
+        <?php else: ?>
+            <span class="text-muted" style="font-size: 12px;">N/A</span>
+        <?php endif; ?>
+    </td>
+    <td>
+        <span class="badge badge-<?php echo ($admin['status'] ?? 'active') === 'active' ? 'active' : (($admin['status'] ?? '') === 'suspended' ? 'suspended' : 'inactive'); ?>">
+            <?php echo ucfirst(htmlspecialchars($admin['status'] ?? 'Active')); ?>
+        </span>
+    </td>
+    <td>
+        <div style="display: flex; flex-direction: column; font-size: 12px;">
+            <span><?php echo date('M d, Y', strtotime($admin['created_at'])); ?></span>
+            <span class="text-muted" style="font-size: 10px;"><?php echo date('h:i A', strtotime($admin['created_at'])); ?></span>
+        </div>
+    </td>
+    <td>
+        <div class="action-buttons" style="display: flex; gap: 5px; flex-wrap: wrap;">
+            <?php if ($is_super_admin && $admin['id'] != $_SESSION['user_id']): ?>
+                <button class="btn-sm btn-edit" onclick="editAdmin(<?php echo $admin['id']; ?>)" title="Edit Admin">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn-sm btn-warning" onclick="resetPassword(<?php echo $admin['id']; ?>)" title="Reset Password">
+                    <i class="fas fa-key"></i>
+                </button>
+                <button class="btn-sm btn-delete" onclick="deleteAdmin(<?php echo $admin['id']; ?>)" title="Delete Admin">
+                    <i class="fas fa-trash"></i>
+                </button>
+            <?php elseif ($admin['id'] == $_SESSION['user_id']): ?>
+                <span class="text-muted" style="font-size: 11px;">
+                    <i class="fas fa-lock"></i> Current
+                </span>
+            <?php else: ?>
+                <span class="text-muted" style="font-size: 11px;">No actions</span>
+            <?php endif; ?>
+        </div>
+    </td>
+</tr>
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
