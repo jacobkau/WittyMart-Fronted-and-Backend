@@ -1759,7 +1759,7 @@ a {
     }
     
     .admin-main {
-        margin-left: 220px;
+        margin-left:0 !important;
     }
     
     .stats-grid {
