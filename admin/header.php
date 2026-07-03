@@ -111,7 +111,7 @@ $user_avatar = $_SESSION['user_avatar'] ?? 'default.jpg';
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
-<header class="nh-admin-header">
+<div class="nh-admin-header">
     <div class="nh-header-left">
         <h1 class="nh-page-title">
             <i class="fas fa-tachometer-alt nh-title-icon"></i>
@@ -236,5 +236,5 @@ $user_avatar = $_SESSION['user_avatar'] ?? 'default.jpg';
             </ul>
         </div>
     </div>
-</header>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
