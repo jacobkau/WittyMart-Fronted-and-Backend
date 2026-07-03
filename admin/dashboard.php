@@ -31,7 +31,7 @@ $page_title = 'Dashboard';
        <?php include "sidebar.php"?>
         <!-- Main Content -->
         <main class="admin-main">
-       <?php include "header.php"?>
+       <?php include "header.php"; ?>
             <!-- Stats Cards -->
             <div class="stats-grid">
                 <div class="stat-card">
