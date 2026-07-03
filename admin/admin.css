@@ -462,7 +462,6 @@ a {
     min-height: 100vh;
     background: var(--bg);
     transition: background 0.3s ease;
-    margin-left:5px;
     position: relative;
     z-index: 1;
 }
@@ -1757,11 +1756,7 @@ a {
     .admin-sidebar {
         width: 220px;
     }
-    
-    .admin-main {
-        margin-left:0 !important;
-    }
-    
+  
     .stats-grid {
         grid-template-columns: repeat(2, 1fr);
     }
@@ -1773,7 +1768,7 @@ a {
     
     .nh-page-title {
         font-size: 20px;
-        margin-left:120px !important;
+        margin-left:70px !important;
     }
 }
 
@@ -1812,12 +1807,7 @@ a {
         display: block;
         margin-top:70px !important;
     }
-    
-    .admin-main {
-        margin-left: 0;
-        padding: 15px;
-    }
-    
+        
     .nh-admin-header {
         position: sticky;
         top: 0;
@@ -1828,13 +1818,9 @@ a {
     
     .nh-page-title {
         font-size: 17px;
-        margin-left:120px !important;
+        margin-left:60px !important;
     }
-    
-    .nh-page-title i {
-        display: none;
-    }
-    
+        
     .nh-notif-menu {
         min-width: 320px;
         max-width: 350px;
@@ -1929,10 +1915,7 @@ a {
         padding: 12px;
         font-size: 14px;
     }
-    
-    .admin-main {
-        padding: 10px;
-    }
+   
     
     .nh-admin-header {
         padding: 6px 12px;
@@ -1946,7 +1929,7 @@ a {
     
     .nh-page-title {
         font-size: 15px;
-        margin-left:120px !important;
+        margin-left:60px !important;
     }
     
     .nh-notif-menu {
