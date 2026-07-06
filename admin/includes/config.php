@@ -493,25 +493,6 @@ function getTestimonials($limit = 10) {
 // PRODUCT IMAGE HELPER FUNCTIONS
 // ============================================
 
-/**
- * Get product image URL
- */
-function getProductImageUrl($image_path) {
-    if (empty($image_path)) {
-        return UPLOAD_URL . 'no-image.png';
-    }
-    
-    // If it's already a full URL, return it
-    if (strpos($image_path, 'http://') === 0 || strpos($image_path, 'https://') === 0) {
-        return $image_path;
-    }
-    
-    // Clean the path
-    $image_path = ltrim($image_path, '/');
-    $image_path = str_replace('../', '', $image_path);
-    
-    return UPLOAD_URL . basename($image_path);
-}
 
 /**
  * Render star rating
