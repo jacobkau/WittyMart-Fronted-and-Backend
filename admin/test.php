@@ -3,6 +3,11 @@
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
+// Start session first
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 echo "<h1>Health Check</h1>";
 
 // 1. Check PHP version
@@ -11,7 +16,7 @@ echo phpversion() . "<br>";
 
 // 2. Check config file
 echo "<h3>Config File:</h3>";
-if (file_exists('includes/config.php')) {
+if (file_exists('../includes/config.php')) {
     echo "✅ config.php found<br>";
 } else {
     echo "❌ config.php NOT found<br>";
@@ -19,7 +24,7 @@ if (file_exists('includes/config.php')) {
 
 // 3. Check database connection
 echo "<h3>Database Connection:</h3>";
-require_once 'includes/config.php';
+require_once '../includes/config.php';
 
 if (isset($pdo)) {
     echo "✅ PDO exists<br>";
@@ -42,6 +47,11 @@ if (session_status() === PHP_SESSION_ACTIVE) {
     echo "</pre>";
 } else {
     echo "❌ Session not active<br>";
+    // Try to start session
+    session_start();
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        echo "✅ Session started successfully<br>";
+    }
 }
 
 // 5. Check upload directory
@@ -53,5 +63,15 @@ if (file_exists($upload_dir)) {
     echo "Writable: " . (is_writable($upload_dir) ? '✅ Yes' : '❌ No') . "<br>";
 } else {
     echo "❌ Upload directory NOT found<br>";
+}
+
+// 6. Check if user is logged in
+echo "<h3>Login Status:</h3>";
+if (isset($_SESSION['user_id'])) {
+    echo "✅ User is logged in (ID: " . $_SESSION['user_id'] . ")<br>";
+    echo "Name: " . ($_SESSION['user_name'] ?? 'N/A') . "<br>";
+    echo "Role: " . ($_SESSION['user_role'] ?? 'N/A') . "<br>";
+} else {
+    echo "❌ No user logged in<br>";
 }
 ?>
