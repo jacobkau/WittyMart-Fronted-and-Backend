@@ -15,22 +15,19 @@ $message = '';
 $messageType = '';
 
 // ===== IMAGE UPLOAD DIRECTORY =====
-// Use absolute path for reliability
-$upload_dir = BASE_PATH . 'uploads/products/';
+$upload_dir = UPLOAD_DIR; // Use the constant from config.php
 if (!file_exists($upload_dir)) {
     mkdir($upload_dir, 0777, true);
 }
 
-// Also create the relative path for the web
-$upload_web_dir = 'uploads/products/';
-if (!file_exists($upload_web_dir)) {
-    mkdir($upload_web_dir, 0777, true);
-}
-
 // ===== HELPER FUNCTION FOR PRODUCT IMAGE URL =====
 function getProductImageUrl($image_path) {
+    // Base URL from config
+    $base_url = 'https://wittymart.onrender.com/';
+    
+    // If no image, return placeholder
     if (empty($image_path)) {
-        return BASE_URL . 'uploads/products/no-image.png';
+        return $base_url . 'uploads/products/no-image.png';
     }
     
     // If it's already a full URL, return it
@@ -38,45 +35,19 @@ function getProductImageUrl($image_path) {
         return $image_path;
     }
     
-    // Remove leading slashes and '../'
+    // Clean the path - remove leading slashes and '../'
     $image_path = ltrim($image_path, '/');
     $image_path = str_replace('../', '', $image_path);
     
-    return BASE_URL . $image_path;
+    // Return full URL
+    return $base_url . $image_path;
 }
 
-// ===== HELPER FUNCTION TO DELETE IMAGE =====
-function deleteProductImage($image_path) {
-    if (empty($image_path)) {
-        return true;
-    }
+// ===== UPLOAD IMAGE FUNCTION =====
+function uploadProductImage($file) {
+    $upload_dir = UPLOAD_DIR;
     
-    // Try multiple paths
-    $paths_to_try = [
-        BASE_PATH . $image_path,
-        BASE_PATH . 'uploads/products/' . basename($image_path),
-        $image_path,
-        '../' . $image_path,
-        'uploads/products/' . basename($image_path)
-    ];
-    
-    foreach ($paths_to_try as $path) {
-        if (file_exists($path) && is_file($path)) {
-            if (unlink($path)) {
-                error_log("Deleted image: " . $path);
-                return true;
-            } else {
-                error_log("Failed to delete image: " . $path);
-            }
-        }
-    }
-    
-    error_log("Image not found for deletion: " . $image_path);
-    return false;
-}
-
-// ===== HELPER FUNCTION TO UPLOAD IMAGE =====
-function uploadProductImage($file, $upload_dir, $upload_web_dir) {
+    // Validate file
     if (!isset($file) || $file['error'] !== UPLOAD_ERR_OK) {
         return ['success' => false, 'path' => '', 'error' => 'No file uploaded or upload error.'];
     }
@@ -98,24 +69,46 @@ function uploadProductImage($file, $upload_dir, $upload_web_dir) {
     $filename = time() . '_' . uniqid() . '.' . $extension;
     $filename = preg_replace('/[^a-zA-Z0-9._-]/', '', $filename);
     
-    // Upload to both absolute and relative paths
-    $abs_target_path = $upload_dir . $filename;
-    $rel_target_path = $upload_web_dir . $filename;
+    // Full path for saving
+    $target_path = $upload_dir . $filename;
     
-    if (move_uploaded_file($file['tmp_name'], $abs_target_path)) {
-        // Also copy to web path
-        if (!file_exists($rel_target_path)) {
-            copy($abs_target_path, $rel_target_path);
-        }
+    // Move uploaded file
+    if (move_uploaded_file($file['tmp_name'], $target_path)) {
+        error_log('File uploaded successfully to: ' . $target_path);
         return [
             'success' => true,
             'path' => 'uploads/products/' . $filename,
-            'abs_path' => $abs_target_path,
-            'rel_path' => $rel_target_path
+            'full_path' => $target_path,
+            'url' => 'https://wittymart.onrender.com/uploads/products/' . $filename
         ];
     } else {
-        return ['success' => false, 'path' => '', 'error' => 'Failed to move uploaded file.'];
+        error_log('Failed to move uploaded file to: ' . $target_path);
+        return ['success' => false, 'path' => '', 'error' => 'Failed to save file.'];
     }
+}
+
+// ===== DELETE IMAGE FUNCTION =====
+function deleteProductImage($image_path) {
+    if (empty($image_path)) {
+        return true;
+    }
+    
+    // Get just the filename
+    $filename = basename($image_path);
+    $full_path = UPLOAD_DIR . $filename;
+    
+    if (file_exists($full_path) && is_file($full_path)) {
+        if (unlink($full_path)) {
+            error_log('Deleted image: ' . $full_path);
+            return true;
+        } else {
+            error_log('Failed to delete image: ' . $full_path);
+        }
+    } else {
+        error_log('Image not found for deletion: ' . $full_path);
+    }
+    
+    return false;
 }
 
 // ===== HANDLE FORM SUBMISSIONS =====
@@ -153,7 +146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Handle image upload
                     $image_path = '';
                     if (isset($_FILES['product_image']) && $_FILES['product_image']['error'] === UPLOAD_ERR_OK) {
-                        $upload_result = uploadProductImage($_FILES['product_image'], $upload_dir, $upload_web_dir);
+                        $upload_result = uploadProductImage($_FILES['product_image']);
                         if ($upload_result['success']) {
                             $image_path = $upload_result['path'];
                         } else {
@@ -191,19 +184,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 try {
                     $id = intval($_POST['id'] ?? 0);
                     
-                    // Get product image and name before deletion
                     $stmt = $pdo->prepare("SELECT image, name FROM products WHERE id = ?");
                     $stmt->execute([$id]);
                     $product = $stmt->fetch();
                     
-                    if ($product) {
-                        // Delete the image file if it exists
-                        if (!empty($product['image'])) {
-                            deleteProductImage($product['image']);
-                        }
+                    if ($product && $product['image']) {
+                        deleteProductImage($product['image']);
                     }
                     
-                    // Delete the product from database
                     $stmt = $pdo->prepare("DELETE FROM products WHERE id = ?");
                     if ($stmt->execute([$id])) {
                         logActivity(
@@ -254,15 +242,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $sku = sanitize($sku);
                     }
                     
-                    // Get current image
                     $stmt = $pdo->prepare("SELECT image FROM products WHERE id = ?");
                     $stmt->execute([$id]);
                     $current = $stmt->fetch();
                     $image_path = $current['image'] ?? '';
                     
-                    // Handle new image upload
                     if (isset($_FILES['edit_product_image']) && $_FILES['edit_product_image']['error'] === UPLOAD_ERR_OK) {
-                        $upload_result = uploadProductImage($_FILES['edit_product_image'], $upload_dir, $upload_web_dir);
+                        $upload_result = uploadProductImage($_FILES['edit_product_image']);
                         if ($upload_result['success']) {
                             // Delete old image
                             if (!empty($image_path)) {
@@ -275,7 +261,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
                     
-                    // Update product in database
                     $stmt = $pdo->prepare("
                         UPDATE products 
                         SET name = ?, description = ?, price = ?, image = ?, category_id = ?, stock = ?, supplier = ?, sku = ?
@@ -417,7 +402,7 @@ $page_title = 'Products';
                                                  alt="<?php echo htmlspecialchars($product['name']); ?>" 
                                                  class="product-thumb"
                                                  style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; background: #f0f0f0;"
-                                                 onerror="this.src='<?php echo BASE_URL; ?>uploads/products/no-image.png'">
+                                                 onerror="this.src='https://wittymart.onrender.com/uploads/products/no-image.png'">
                                         </td>
                                         <td><strong><?php echo htmlspecialchars($product['name']); ?></strong></td>
                                         <td><code><?php echo htmlspecialchars($product['sku'] ?? 'N/A'); ?></code></td>
@@ -945,7 +930,7 @@ $page_title = 'Products';
                         
                         const imgPreview = document.getElementById('editImagePreview');
                         if (data.product.image) {
-                            const imgUrl = '<?php echo BASE_URL; ?>' + data.product.image;
+                            const imgUrl = 'https://wittymart.onrender.com/' + data.product.image;
                             imgPreview.innerHTML = `<img src="${imgUrl}" alt="Product Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px;"><p>Current image</p>`;
                         } else {
                             imgPreview.innerHTML = `<i class="fas fa-image" style="font-size: 40px; color: #ddd;"></i><p>No image</p>`;
