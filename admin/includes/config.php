@@ -117,8 +117,8 @@ function getBaseUrl() {
     return $protocol . $host . $base_dir . '/';
 }
 
-define('BASE_URL', getBaseUrl());
-define('UPLOADS_URL', BASE_URL . 'uploads/products/');
+define('UPLOAD_DIR', BASE_PATH . 'uploads/products/');
+define('UPLOAD_URL', BASE_URL . 'uploads/products/');
 
 
 /**
