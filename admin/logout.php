@@ -1,10 +1,20 @@
 <?php
 session_start();
+
+// ===== INCLUDE CONFIG TO GET DATABASE CONNECTION =====
+require_once 'includes/config.php';  // This defines $pdo
+
 /**
  * Log an activity
  */
 function logActivity($action, $description = '', $user_id = null, $user_name = null) {
     global $pdo;
+    
+    // Check if PDO is available
+    if (!$pdo) {
+        error_log('PDO connection not available for logging');
+        return false;
+    }
     
     // Get current user if not provided
     if ($user_id === null && isset($_SESSION['user_id'])) {
@@ -29,14 +39,18 @@ function logActivity($action, $description = '', $user_id = null, $user_name = n
         return false;
     }
 }
-  if (isset($_SESSION['user_id'])) {
-        logActivity(
-            'logout',
-            'User logged out',
-            $_SESSION['user_id'],
-            $_SESSION['user_name'] ?? null
-        );
-    }
+
+// ===== LOG LOGOUT =====
+if (isset($_SESSION['user_id'])) {
+    logActivity(
+        'logout',
+        'User logged out',
+        $_SESSION['user_id'],
+        $_SESSION['user_name'] ?? null
+    );
+}
+
+// ===== DESTROY SESSION =====
 session_destroy();
 ?>
 <!DOCTYPE html>
@@ -81,15 +95,15 @@ session_destroy();
 </head>
 <body>
     <div class="logout-box">
-        <h1> Goodbye!</h1>
+        <h1>👋 Goodbye!</h1>
         <div class="spinner"></div>
         <p>You have been logged out successfully.</p>
-        <p><a href="index.php">Return to Homepage</a></p>
+        <p><a href="login.php">Login Again</a> | <a href="index.php">Return to Homepage</a></p>
     </div>
     <script>
         // Auto redirect after 3 seconds
         setTimeout(function() {
-            window.location.href = 'index.php';
+            window.location.href = 'login.php';
         }, 3000);
     </script>
 </body>
