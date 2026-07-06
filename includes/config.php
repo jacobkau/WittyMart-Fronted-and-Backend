@@ -208,22 +208,7 @@ function getTestimonials($limit = 10) {
 
 // ============================================
 // PRODUCT IMAGE HELPER FUNCTIONS
-// ============================================
 
-/**
- * Render star rating
- */
-function renderStars($rating) {
-    $html = '';
-    for ($i = 1; $i <= 5; $i++) {
-        if ($i <= $rating) {
-            $html .= '<i class="fas fa-star" style="color: #ffc107;"></i>';
-        } else {
-            $html .= '<i class="far fa-star" style="color: #ddd;"></i>';
-        }
-    }
-    return $html;
-}
 
 // ============================================
 // CART FUNCTIONS
