@@ -1,77 +1,42 @@
 <?php
-// admin/health.php - Health check
+// admin/debug.php - Show all errors
 ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-// Start session first
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+echo "<h1>Debug Mode</h1>";
 
-echo "<h1>Health Check</h1>";
-
-// 1. Check PHP version
-echo "<h3>PHP Version:</h3>";
-echo phpversion() . "<br>";
-
-// 2. Check config file
-echo "<h3>Config File:</h3>";
-if (file_exists('../includes/config.php')) {
-    echo "✅ config.php found<br>";
+// Check if config.php exists and can be loaded
+echo "<h3>Loading config.php...</h3>";
+if (file_exists(__DIR__ . '/../includes/config.php')) {
+    echo "✅ config.php found at: " . __DIR__ . '/../includes/config.php' . "<br>";
+    require_once __DIR__ . '/../includes/config.php';
+    echo "✅ config.php loaded successfully<br>";
 } else {
-    echo "❌ config.php NOT found<br>";
+    die("❌ config.php NOT found at: " . __DIR__ . '/../includes/config.php');
 }
 
-// 3. Check database connection
-echo "<h3>Database Connection:</h3>";
-require_once '../includes/config.php';
-
+// Check if PDO exists
+echo "<h3>Checking PDO...</h3>";
 if (isset($pdo)) {
     echo "✅ PDO exists<br>";
-    try {
-        $stmt = $pdo->query("SELECT 1");
-        echo "✅ Database query successful<br>";
-    } catch (PDOException $e) {
-        echo "❌ Database query failed: " . $e->getMessage() . "<br>";
-    }
 } else {
-    echo "❌ PDO not defined<br>";
+    die("❌ PDO not defined");
 }
 
-// 4. Check session
-echo "<h3>Session:</h3>";
-if (session_status() === PHP_SESSION_ACTIVE) {
-    echo "✅ Session active<br>";
-    echo "<pre>";
-    print_r($_SESSION);
-    echo "</pre>";
-} else {
-    echo "❌ Session not active<br>";
-    // Try to start session
-    session_start();
-    if (session_status() === PHP_SESSION_ACTIVE) {
-        echo "✅ Session started successfully<br>";
-    }
-}
+// Check session
+echo "<h3>Checking Session...</h3>";
+echo "Session status: " . session_status() . "<br>";
+echo "Session ID: " . session_id() . "<br>";
 
-// 5. Check upload directory
-echo "<h3>Upload Directory:</h3>";
-$upload_dir = '../uploads/products/';
-if (file_exists($upload_dir)) {
-    echo "✅ Upload directory exists<br>";
-    echo "Path: " . realpath($upload_dir) . "<br>";
-    echo "Writable: " . (is_writable($upload_dir) ? '✅ Yes' : '❌ No') . "<br>";
-} else {
-    echo "❌ Upload directory NOT found<br>";
-}
-
-// 6. Check if user is logged in
+// Check if user is logged in
 echo "<h3>Login Status:</h3>";
 if (isset($_SESSION['user_id'])) {
     echo "✅ User is logged in (ID: " . $_SESSION['user_id'] . ")<br>";
     echo "Name: " . ($_SESSION['user_name'] ?? 'N/A') . "<br>";
-    echo "Role: " . ($_SESSION['user_role'] ?? 'N/A') . "<br>";
 } else {
     echo "❌ No user logged in<br>";
 }
+
+echo "<h3>All good! Your admin panel should work.</h3>";
 ?>
