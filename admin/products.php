@@ -15,27 +15,107 @@ $message = '';
 $messageType = '';
 
 // ===== IMAGE UPLOAD DIRECTORY =====
-$upload_dir = '../uploads/products/';
+// Use absolute path for reliability
+$upload_dir = BASE_PATH . 'uploads/products/';
 if (!file_exists($upload_dir)) {
     mkdir($upload_dir, 0777, true);
 }
 
+// Also create the relative path for the web
+$upload_web_dir = 'uploads/products/';
+if (!file_exists($upload_web_dir)) {
+    mkdir($upload_web_dir, 0777, true);
+}
+
 // ===== HELPER FUNCTION FOR PRODUCT IMAGE URL =====
 function getProductImageUrl($image_path) {
-    $base_url = BASE_URL;
-    
     if (empty($image_path)) {
-        return $base_url . 'uploads/products/no-image.png';
+        return BASE_URL . 'uploads/products/no-image.png';
     }
     
-    $image_path = ltrim($image_path, '/');
-    $image_path = str_replace('../', '', $image_path);
-    
-    if (strpos($image_path, 'http') === 0) {
+    // If it's already a full URL, return it
+    if (strpos($image_path, 'http://') === 0 || strpos($image_path, 'https://') === 0) {
         return $image_path;
     }
     
-    return $base_url . $image_path;
+    // Remove leading slashes and '../'
+    $image_path = ltrim($image_path, '/');
+    $image_path = str_replace('../', '', $image_path);
+    
+    return BASE_URL . $image_path;
+}
+
+// ===== HELPER FUNCTION TO DELETE IMAGE =====
+function deleteProductImage($image_path) {
+    if (empty($image_path)) {
+        return true;
+    }
+    
+    // Try multiple paths
+    $paths_to_try = [
+        BASE_PATH . $image_path,
+        BASE_PATH . 'uploads/products/' . basename($image_path),
+        $image_path,
+        '../' . $image_path,
+        'uploads/products/' . basename($image_path)
+    ];
+    
+    foreach ($paths_to_try as $path) {
+        if (file_exists($path) && is_file($path)) {
+            if (unlink($path)) {
+                error_log("Deleted image: " . $path);
+                return true;
+            } else {
+                error_log("Failed to delete image: " . $path);
+            }
+        }
+    }
+    
+    error_log("Image not found for deletion: " . $image_path);
+    return false;
+}
+
+// ===== HELPER FUNCTION TO UPLOAD IMAGE =====
+function uploadProductImage($file, $upload_dir, $upload_web_dir) {
+    if (!isset($file) || $file['error'] !== UPLOAD_ERR_OK) {
+        return ['success' => false, 'path' => '', 'error' => 'No file uploaded or upload error.'];
+    }
+    
+    // Validate file type
+    $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    $file_type = mime_content_type($file['tmp_name']);
+    if (!in_array($file_type, $allowed_types)) {
+        return ['success' => false, 'path' => '', 'error' => 'Invalid file type. Only JPG, PNG, GIF, and WEBP are allowed.'];
+    }
+    
+    // Validate file size (5MB max)
+    if ($file['size'] > 5 * 1024 * 1024) {
+        return ['success' => false, 'path' => '', 'error' => 'File size exceeds 5MB limit.'];
+    }
+    
+    // Generate unique filename
+    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+    $filename = time() . '_' . uniqid() . '.' . $extension;
+    $filename = preg_replace('/[^a-zA-Z0-9._-]/', '', $filename);
+    
+    // Upload to both absolute and relative paths
+    $abs_target_path = $upload_dir . $filename;
+    $rel_target_path = $upload_web_dir . $filename;
+    
+    if (move_uploaded_file($file['tmp_name'], $abs_target_path)) {
+        // Also copy to web path
+        if (!file_exists($rel_target_path)) {
+            copy($abs_target_path, $rel_target_path);
+        }
+        return [
+            'success' => true,
+            'path' => 'uploads/products/' . $filename,
+            'abs_path' => $abs_target_path,
+            'rel_path' => $rel_target_path
+        ];
+    } else {
+        return ['success' => false, 'path' => '', 'error' => 'Failed to move uploaded file.'];
+    }
 }
 
 // ===== HANDLE FORM SUBMISSIONS =====
@@ -70,16 +150,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $sku = sanitize($sku);
                     }
                     
+                    // Handle image upload
                     $image_path = '';
                     if (isset($_FILES['product_image']) && $_FILES['product_image']['error'] === UPLOAD_ERR_OK) {
-                        $file = $_FILES['product_image'];
-                        $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', $file['name']);
-                        $target_path = $upload_dir . $filename;
-                        
-                        if (move_uploaded_file($file['tmp_name'], $target_path)) {
-                            $image_path = 'uploads/products/' . $filename;
+                        $upload_result = uploadProductImage($_FILES['product_image'], $upload_dir, $upload_web_dir);
+                        if ($upload_result['success']) {
+                            $image_path = $upload_result['path'];
                         } else {
-                            $message = 'Failed to upload image.';
+                            $message = 'Image upload failed: ' . $upload_result['error'];
                             $messageType = 'error';
                         }
                     }
@@ -113,17 +191,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 try {
                     $id = intval($_POST['id'] ?? 0);
                     
+                    // Get product image and name before deletion
                     $stmt = $pdo->prepare("SELECT image, name FROM products WHERE id = ?");
                     $stmt->execute([$id]);
                     $product = $stmt->fetch();
                     
-                    if ($product && $product['image']) {
-                        $image_path = '../' . $product['image'];
-                        if (file_exists($image_path)) {
-                            unlink($image_path);
+                    if ($product) {
+                        // Delete the image file if it exists
+                        if (!empty($product['image'])) {
+                            deleteProductImage($product['image']);
                         }
                     }
                     
+                    // Delete the product from database
                     $stmt = $pdo->prepare("DELETE FROM products WHERE id = ?");
                     if ($stmt->execute([$id])) {
                         logActivity(
@@ -174,24 +254,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $sku = sanitize($sku);
                     }
                     
+                    // Get current image
                     $stmt = $pdo->prepare("SELECT image FROM products WHERE id = ?");
                     $stmt->execute([$id]);
                     $current = $stmt->fetch();
                     $image_path = $current['image'] ?? '';
                     
+                    // Handle new image upload
                     if (isset($_FILES['edit_product_image']) && $_FILES['edit_product_image']['error'] === UPLOAD_ERR_OK) {
-                        $file = $_FILES['edit_product_image'];
-                        $filename = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', $file['name']);
-                        $target_path = $upload_dir . $filename;
-                        
-                        if (move_uploaded_file($file['tmp_name'], $target_path)) {
-                            if ($image_path && file_exists('../' . $image_path)) {
-                                unlink('../' . $image_path);
+                        $upload_result = uploadProductImage($_FILES['edit_product_image'], $upload_dir, $upload_web_dir);
+                        if ($upload_result['success']) {
+                            // Delete old image
+                            if (!empty($image_path)) {
+                                deleteProductImage($image_path);
                             }
-                            $image_path = 'uploads/products/' . $filename;
+                            $image_path = $upload_result['path'];
+                        } else {
+                            $message = 'Image upload failed: ' . $upload_result['error'];
+                            $messageType = 'error';
                         }
                     }
                     
+                    // Update product in database
                     $stmt = $pdo->prepare("
                         UPDATE products 
                         SET name = ?, description = ?, price = ?, image = ?, category_id = ?, stock = ?, supplier = ?, sku = ?
@@ -280,7 +364,7 @@ $page_title = 'Products';
             <!-- Products Table -->
             <div class="admin-card">
                 <div class="card-body">
-                    <!-- ===== SEARCH TOOLBAR ===== -->
+                    <!-- Search Toolbar -->
                     <div class="table-toolbar" style="padding:14px;">
                         <div class="search-box">
                             <i class="fas fa-search"></i>
@@ -421,7 +505,7 @@ $page_title = 'Products';
                             <p>No image selected</p>
                         </div>
                     </div>
-                    <small class="form-text text-muted">Supported formats: JPG, PNG, GIF. Max size: 5MB</small>
+                    <small class="form-text text-muted">Supported formats: JPG, PNG, GIF, WEBP. Max size: 5MB</small>
                 </div>
                 
                 <div class="form-group">
