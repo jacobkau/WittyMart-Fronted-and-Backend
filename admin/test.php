@@ -1,21 +1,57 @@
 <?php
-// admin/test.php - Test for errors
+// admin/health.php - Health check
 ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-echo "PHP is working!<br>";
+echo "<h1>Health Check</h1>";
 
-// Test database connection
-require_once '../includes/config.php';
+// 1. Check PHP version
+echo "<h3>PHP Version:</h3>";
+echo phpversion() . "<br>";
+
+// 2. Check config file
+echo "<h3>Config File:</h3>";
+if (file_exists('includes/config.php')) {
+    echo "✅ config.php found<br>";
+} else {
+    echo "❌ config.php NOT found<br>";
+}
+
+// 3. Check database connection
+echo "<h3>Database Connection:</h3>";
+require_once 'includes/config.php';
 
 if (isset($pdo)) {
-    echo "Database connection successful!<br>";
-    
-    // Test query
-    $stmt = $pdo->query("SELECT 1");
-    echo "Query successful!<br>";
+    echo "✅ PDO exists<br>";
+    try {
+        $stmt = $pdo->query("SELECT 1");
+        echo "✅ Database query successful<br>";
+    } catch (PDOException $e) {
+        echo "❌ Database query failed: " . $e->getMessage() . "<br>";
+    }
 } else {
-    echo "Database connection failed!<br>";
+    echo "❌ PDO not defined<br>";
+}
+
+// 4. Check session
+echo "<h3>Session:</h3>";
+if (session_status() === PHP_SESSION_ACTIVE) {
+    echo "✅ Session active<br>";
+    echo "<pre>";
+    print_r($_SESSION);
+    echo "</pre>";
+} else {
+    echo "❌ Session not active<br>";
+}
+
+// 5. Check upload directory
+echo "<h3>Upload Directory:</h3>";
+$upload_dir = '../uploads/products/';
+if (file_exists($upload_dir)) {
+    echo "✅ Upload directory exists<br>";
+    echo "Path: " . realpath($upload_dir) . "<br>";
+    echo "Writable: " . (is_writable($upload_dir) ? '✅ Yes' : '❌ No') . "<br>";
+} else {
+    echo "❌ Upload directory NOT found<br>";
 }
 ?>
