@@ -1,5 +1,12 @@
 <?php
-require_once 'includes/config.php';
+// ===== IMPORTANT: Include config first =====
+require_once __DIR__ . '/includes/config.php';
+
+// ===== CHECK IF PDO IS AVAILABLE =====
+if (!isset($pdo)) {
+    error_log('PDO not available in index.php');
+    die('Database connection error. Please try again later.');
+}
 
 // ===== FETCH FEATURED PRODUCTS =====
 try {
@@ -461,23 +468,7 @@ function renderStars($rating) {
     <script>
         // ===== ADD TO CART FUNCTION =====
         function addToCart(productId) {
-            // You can implement AJAX cart functionality here
             alert('Product ' + productId + ' added to cart!');
-            // Uncomment for AJAX:
-            /*
-            fetch('add_to_cart.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ product_id: productId, quantity: 1 })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Product added to cart!');
-                }
-            })
-            .catch(error => console.error('Error:', error));
-            */
         }
 
         // ===== HERO SLIDER =====
@@ -490,7 +481,10 @@ function renderStars($rating) {
             if (index < 0) currentSlide = totalSlides - 1;
             
             const offset = -currentSlide * 100;
-            document.getElementById('heroSlides').style.transform = `translateX(${offset}%)`;
+            const slider = document.getElementById('heroSlides');
+            if (slider) {
+                slider.style.transform = `translateX(${offset}%)`;
+            }
         }
 
         function nextSlide() {
@@ -504,32 +498,8 @@ function renderStars($rating) {
         }
 
         // Auto-slide every 5 seconds
-        setInterval(nextSlide, 5000);
-
-        // ===== TESTIMONIAL SLIDER (Alternative - if you prefer sliding) =====
-        let currentTestimonial = 0;
-        const testimonialSlides = document.querySelectorAll('.slide1');
-        const totalTestimonials = testimonialSlides.length;
-
-        function showTestimonial(index) {
-            if (index >= totalTestimonials) currentTestimonial = 0;
-            if (index < 0) currentTestimonial = totalTestimonials - 1;
-            
-            const track = document.getElementById('testimonialTrack');
-            if (track) {
-                const offset = -currentTestimonial * 100;
-                track.style.transform = `translateX(${offset}%)`;
-            }
-        }
-
-        function nextTestimonial() {
-            currentTestimonial++;
-            showTestimonial(currentTestimonial);
-        }
-
-        function prevTestimonial() {
-            currentTestimonial--;
-            showTestimonial(currentTestimonial);
+        if (totalSlides > 0) {
+            setInterval(nextSlide, 5000);
         }
     </script>
 </body>
