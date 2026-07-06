@@ -45,6 +45,12 @@ function isActive($page) {
         <a href="categories.php" class="<?php echo isActive('categories.php'); ?>">
             <i class="fas fa-tags"></i> Categories
         </a>
+         <a href="featured.php" class="<?php echo isActive('featured.php'); ?>">
+            <i class="fas fa-star"></i> Featured Products
+        </a>
+        <a href="testimonials.php" class="<?php echo isActive('testimonials.php'); ?>">
+            <i class="fas fa-comment-dots"></i> Testimonials
+        </a>
         
         <hr class="sidebar-divider">
      
