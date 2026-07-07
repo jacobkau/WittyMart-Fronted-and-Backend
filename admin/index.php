@@ -200,10 +200,10 @@ $featured_products = getFeaturedProducts(8);
                 <h1 class="display-4 fw-bold text-white mb-3">Smart Shopping for <span>Witty Minds</span></h1>
                 <p class="text-light opacity-75 fs-5 mb-4">Manage products, orders, and insights — all from one place.</p>
                 <div class="d-flex flex-wrap gap-3">
-                    <a href="shop.php" class="btn btn-light btn-lg rounded-pill px-5 fw-semibold" style="color:#0b2b3f;">
+                    <a href="login.php" class="btn btn-light btn-lg rounded-pill px-5 fw-semibold" style="color:#0b2b3f;">
                         <i class="fas fa-boxes me-2"></i> Manage Products
                     </a>
-                    <a href="#" class="btn btn-outline-light-custom btn-lg rounded-pill px-4">
+                    <a href="login.php" class="btn btn-outline-light-custom btn-lg rounded-pill px-4">
                         <i class="fas fa-chart-simple me-2"></i> Analytics
                     </a>
                 </div>
@@ -243,8 +243,8 @@ $featured_products = getFeaturedProducts(8);
 <section class="container-custom pb-5">
     <div class="d-flex justify-content-between align-items-center flex-wrap mb-4">
         <h2 class="section-title fs-2 m-0">Featured <span>Products</span></h2>
-        <a href="shop.php" class="btn btn-outline-secondary rounded-pill px-4 py-2 border-2 fw-semibold">
-            View All <i class="fas fa-arrow-right ms-1"></i>
+        <a href="login.php" class="btn btn-outline-secondary rounded-pill px-4 py-2 border-2 fw-semibold">
+            Manage All <i class="fas fa-arrow-right ms-1"></i>
         </a>
     </div>
 
