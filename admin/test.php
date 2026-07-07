@@ -1,42 +1,56 @@
 <?php
-// admin/debug.php - Show all errors
+// admin/test_login.php - Debug Login Page
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-echo "<h1>Debug Mode</h1>";
+echo "<h1>Debug Login Test</h1>";
 
-// Check if config.php exists and can be loaded
-echo "<h3>Loading config.php...</h3>";
-if (file_exists(__DIR__ . '/../includes/config.php')) {
-    echo "✅ config.php found at: " . __DIR__ . '/../includes/config.php' . "<br>";
-    require_once __DIR__ . '/../includes/config.php';
-    echo "✅ config.php loaded successfully<br>";
-} else {
-    die("❌ config.php NOT found at: " . __DIR__ . '/../includes/config.php');
-}
+// Test 1: Check if config.php loads
+echo "<h3>1. Loading config.php...</h3>";
+require_once __DIR__ . 'includes/config.php';
+echo "✅ config.php loaded<br>";
 
-// Check if PDO exists
-echo "<h3>Checking PDO...</h3>";
-if (isset($pdo)) {
-    echo "✅ PDO exists<br>";
-} else {
-    die("❌ PDO not defined");
-}
+// Test 2: Check if auth.php loads
+echo "<h3>2. Loading auth.php...</h3>";
+require_once __DIR__ . 'includes/auth.php';
+echo "✅ auth.php loaded<br>";
 
-// Check session
-echo "<h3>Checking Session...</h3>";
+// Test 3: Check session
+echo "<h3>3. Session Status:</h3>";
 echo "Session status: " . session_status() . "<br>";
 echo "Session ID: " . session_id() . "<br>";
 
-// Check if user is logged in
-echo "<h3>Login Status:</h3>";
-if (isset($_SESSION['user_id'])) {
-    echo "✅ User is logged in (ID: " . $_SESSION['user_id'] . ")<br>";
-    echo "Name: " . ($_SESSION['user_name'] ?? 'N/A') . "<br>";
+// Test 4: Check if user is logged in
+echo "<h3>4. Login Status:</h3>";
+if (isLoggedIn()) {
+    echo "✅ User is logged in<br>";
+    echo "User ID: " . ($_SESSION['user_id'] ?? 'N/A') . "<br>";
+    echo "User Name: " . ($_SESSION['user_name'] ?? 'N/A') . "<br>";
 } else {
-    echo "❌ No user logged in<br>";
+    echo "❌ Not logged in<br>";
 }
 
-echo "<h3>All good! Your admin panel should work.</h3>";
+// Test 5: Simple form test
+echo "<h3>5. Form Test:</h3>";
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    echo "Form submitted!<br>";
+    echo "Email: " . htmlspecialchars($_POST['email'] ?? '') . "<br>";
+    echo "Password: " . (isset($_POST['password']) ? '******' : 'Not set') . "<br>";
+    
+    // Test login function
+    $email = $_POST['email'] ?? '';
+    $password = $_POST['password'] ?? '';
+    
+    if (!empty($email) && !empty($password)) {
+        echo "Calling login() function...<br>";
+        $result = login($email, $password);
+        echo "Login result: " . ($result ? '✅ Success' : '❌ Failed') . "<br>";
+    }
+}
 ?>
+<form method="POST">
+    <input type="email" name="email" placeholder="Email" required>
+    <input type="password" name="password" placeholder="Password" required>
+    <button type="submit">Test Login</button>
+</form>
