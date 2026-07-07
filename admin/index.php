@@ -22,7 +22,7 @@ $featured_products = getFeaturedProducts(8);
             background: #f8fafc;
         }
         .admin-hero {
-            background: linear-gradient(145deg, #0b2b3f 0%, #1a4b62 100%);
+            background: linear-gradient(145deg, #05573c 0%, #05573c 100%);
             padding: 4rem 1rem 3rem;
             border-radius: 0 0 3rem 3rem;
             box-shadow: 0 12px 30px rgba(0,0,0,0.1);
@@ -91,7 +91,7 @@ $featured_products = getFeaturedProducts(8);
         }
         .section-title {
             font-weight: 700;
-            color: #0b2b3f;
+            color: #05573c;
             letter-spacing: -0.3px;
         }
         .section-title span {
