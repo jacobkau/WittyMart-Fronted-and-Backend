@@ -1,6 +1,4 @@
 <?php
-// admin/sidebar.php - Sidebar with Mobile Toggle
-
 $current_page = basename($_SERVER['PHP_SELF']);
 
 function isActive($page) {
