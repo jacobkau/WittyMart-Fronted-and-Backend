@@ -1,4 +1,8 @@
 <?php
+// admin/login.php
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 
 require_once 'includes/config.php';
 require_once 'includes/auth.php';
@@ -16,21 +20,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($email) || empty($password)) {
         $error = 'Please fill in all fields';
     } else {
+        // Store email for logging
+        $login_email = $email;
+        
         if (login($email, $password)) {
-             logActivity(
-                'login',
-                'User logged in successfully',
-                $user['id'],
-                $user['name']
-            );
+            // login() function already logs the activity internally
+            // No need to call logActivity again here
             redirect('dashboard.php');
         } else {
-             logActivity(
-            'failed_login',
-            'Failed login attempt for email: ' . $email,
-            null,
-            null
-        );
+            // Log failed login attempt (login() already does this internally)
             $error = 'Invalid email or password';
         }
     }
@@ -84,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             <?php endif; ?>
             
-            <form method="POST" action="<?php echo $_SERVER['PHP_SELF']; ?>" id="loginForm">
+            <form method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" id="loginForm">
                 <div class="mb-3">
                     <label class="form-label"><i class="fas fa-envelope"></i> Email</label>
                     <div class="input-group">
@@ -128,7 +126,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
-
         document.getElementById('loginForm').addEventListener('submit', function(e) {
             const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value.trim();
@@ -138,16 +135,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 return;
             }
             
-           
             const btn = document.getElementById('loginBtn');
             btn.disabled = true;
             document.getElementById('btnContent').style.display = 'none';
             document.getElementById('btnLoading').style.display = 'inline-block';
-            
-            
             btn.classList.add('loading');
         });
-        
         
         document.getElementById('togglePassword').addEventListener('click', function() {
             const passwordInput = document.getElementById('password');
@@ -162,7 +155,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         });
         
-     
         document.addEventListener('DOMContentLoaded', function() {
             const alert = document.querySelector('.alert-custom');
             if (alert) {
