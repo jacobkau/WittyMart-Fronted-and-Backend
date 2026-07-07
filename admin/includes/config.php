@@ -325,25 +325,6 @@ function getCategories() {
 }
 
 
-/**
- * Get recent activities
- */
-function getRecentActivities($limit = 10) {
-    global $pdo;
-    
-    try {
-        $stmt = $pdo->prepare("
-            SELECT * FROM activity_logs 
-            ORDER BY created_at DESC 
-            LIMIT ?
-        ");
-        $stmt->execute([$limit]);
-        return $stmt->fetchAll();
-    } catch (PDOException $e) {
-        error_log('Get activities error: ' . $e->getMessage());
-        return [];
-    }
-}
 
 /**
  * Get activity logs with pagination
