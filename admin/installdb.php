@@ -7,14 +7,14 @@ try {
 
     echo "<h2>Creating Database Tables...</h2>";
 
-    // SQL statements to create tables
-    $sqls = [
+    // First, create all tables
+    $table_sqls = [
         // Users table modifications
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_picture VARCHAR(255) NULL;",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20) NULL;",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP NULL;",
         
-        // Cart table
+        // Cart table (user-based)
         "CREATE TABLE IF NOT EXISTS cart (
             id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -25,7 +25,7 @@ try {
             UNIQUE(user_id, product_id)
         );",
         
-        // Cart items (alternative/session-based)
+        // Cart items table (session-based for guests)
         "CREATE TABLE IF NOT EXISTS cart_items (
             id SERIAL PRIMARY KEY,
             session_id VARCHAR(255) NULL,
@@ -74,9 +74,26 @@ try {
             product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(user_id, product_id)
-        );",
-        
-        // Indexes
+        );"
+    ];
+
+    echo "<h3>Creating Tables...</h3>";
+    foreach ($table_sqls as $sql) {
+        try {
+            $pdo->exec($sql);
+            echo "<p style='color: green;'>✓ Table created/updated successfully</p>";
+        } catch (PDOException $e) {
+            if (strpos($e->getMessage(), 'already exists') !== false) {
+                echo "<p style='color: orange;'>⚠ Table already exists</p>";
+            } else {
+                echo "<p style='color: red;'>✗ Error creating table: " . $e->getMessage() . "</p>";
+            }
+        }
+    }
+
+    // Now create indexes (tables now exist)
+    echo "<h3>Creating Indexes...</h3>";
+    $index_sqls = [
         "CREATE INDEX IF NOT EXISTS idx_cart_user_id ON cart(user_id);",
         "CREATE INDEX IF NOT EXISTS idx_cart_product_id ON cart(product_id);",
         "CREATE INDEX IF NOT EXISTS idx_cart_items_user_id ON cart_items(user_id);",
@@ -84,9 +101,25 @@ try {
         "CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);",
         "CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);",
         "CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);",
-        "CREATE INDEX IF NOT EXISTS idx_wishlist_user_id ON wishlist(user_id);",
-        
-        // Trigger function
+        "CREATE INDEX IF NOT EXISTS idx_wishlist_user_id ON wishlist(user_id);"
+    ];
+
+    foreach ($index_sqls as $sql) {
+        try {
+            $pdo->exec($sql);
+            echo "<p style='color: green;'>✓ Index created successfully</p>";
+        } catch (PDOException $e) {
+            if (strpos($e->getMessage(), 'already exists') !== false) {
+                echo "<p style='color: orange;'>⚠ Index already exists</p>";
+            } else {
+                echo "<p style='color: red;'>✗ Error creating index: " . $e->getMessage() . "</p>";
+            }
+        }
+    }
+
+    // Create triggers
+    echo "<h3>Creating Triggers...</h3>";
+    $trigger_sqls = [
         "CREATE OR REPLACE FUNCTION update_updated_at_column()
         RETURNS TRIGGER AS $$
         BEGIN
@@ -95,9 +128,12 @@ try {
         END;
         $$ language 'plpgsql';",
         
-        // Triggers
         "DROP TRIGGER IF EXISTS update_cart_updated_at ON cart;",
         "CREATE TRIGGER update_cart_updated_at BEFORE UPDATE ON cart
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();",
+        
+        "DROP TRIGGER IF EXISTS update_cart_items_updated_at ON cart_items;",
+        "CREATE TRIGGER update_cart_items_updated_at BEFORE UPDATE ON cart_items
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();",
         
         "DROP TRIGGER IF EXISTS update_orders_updated_at ON orders;",
@@ -105,23 +141,12 @@ try {
         FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();"
     ];
 
-    // Execute using PDO
-    foreach ($sqls as $sql) {
+    foreach ($trigger_sqls as $sql) {
         try {
-            $result = $pdo->exec($sql);
-            if ($result !== false) {
-                echo "<p style='color: green;'>✓ Table/Column updated successfully</p>";
-            } else {
-                echo "<p style='color: orange;'>⚠ No changes made</p>";
-            }
+            $pdo->exec($sql);
+            echo "<p style='color: green;'>✓ Trigger created successfully</p>";
         } catch (PDOException $e) {
-            if (strpos($e->getMessage(), 'already exists') !== false || 
-                strpos($e->getMessage(), 'duplicate key') !== false ||
-                strpos($e->getMessage(), 'already defined') !== false) {
-                echo "<p style='color: orange;'>⚠ Item already exists: " . $e->getMessage() . "</p>";
-            } else {
-                echo "<p style='color: red;'>✗ Error: " . $e->getMessage() . "</p>";
-            }
+            echo "<p style='color: red;'>✗ Error creating trigger: " . $e->getMessage() . "</p>";
         }
     }
 
