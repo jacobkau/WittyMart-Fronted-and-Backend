@@ -224,7 +224,7 @@ $page_title = 'Profile Settings';
                         <h2><i class="fas fa-user-circle"></i> Profile Information</h2>
                     </div>
                     <div class="card-body">
-                        <!-- Profile Picture -->
+                        <!-- Profile Picture Upload -->
                         <form method="POST" enctype="multipart/form-data" id="profilePictureForm">
                             <input type="hidden" name="action" value="update_profile_picture">
                             <div class="profile-avatar-section">
@@ -245,7 +245,7 @@ $page_title = 'Profile Settings';
                                     <button type="submit" class="btn-upload-submit" style="display: none;" id="uploadBtn">
                                         <i class="fas fa-upload"></i> Upload
                                     </button>
-                                    <p class="text-muted small">Max size: 5MB. Supported: JPG, PNG, GIF, WEBP</p>
+                                    <p class="text-muted small" style="margin-top: 8px;">Max size: 5MB. Supported: JPG, PNG, GIF, WEBP</p>
                                 </div>
                             </div>
                         </form>
@@ -447,6 +447,10 @@ $page_title = 'Profile Settings';
             justify-content: center;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
+            font-size: 60px;
+        }
+        
+        .avatar-circle i {
             font-size: 60px;
         }
         
@@ -764,7 +768,7 @@ $page_title = 'Profile Settings';
     </style>
 
     <script>
-        // Toggle password visibility - Fixed function name
+        // Toggle password visibility - FIXED FUNCTION NAME
         function togglePasswordVisibility(id) {
             const input = document.getElementById(id);
             const button = input.parentElement.querySelector('.toggle-password');
@@ -779,13 +783,15 @@ $page_title = 'Profile Settings';
             }
         }
         
-        // Show upload button when file is selected
+        // Auto-submit profile picture when file is selected
         document.getElementById('profile_picture')?.addEventListener('change', function() {
             const uploadBtn = document.getElementById('uploadBtn');
             if (this.files.length > 0) {
                 uploadBtn.style.display = 'inline-block';
-                // Auto-submit after file selection
-                document.getElementById('profilePictureForm').submit();
+                // Auto-submit after a short delay to show the button
+                setTimeout(() => {
+                    document.getElementById('profilePictureForm').submit();
+                }, 500);
             } else {
                 uploadBtn.style.display = 'none';
             }
