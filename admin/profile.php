@@ -115,14 +115,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         case 'update_notifications':
             $email_notifications = isset($_POST['email_notifications']) ? 1 : 0;
             $order_updates = isset($_POST['order_updates']) ? 1 : 0;
-         
+            
+            // Store preferences in database or session
+            $_SESSION['email_notifications'] = $email_notifications;
+            $_SESSION['order_updates'] = $order_updates;
+            
             logActivity('notification_update', 'Updated notification preferences');
             
             $message = 'Notification preferences updated successfully!';
             $messageType = 'success';
             break;
-         case 'update_profile_picture':
-         
+            
+        case 'update_profile_picture':
             if (isset($_FILES['profile_picture']) && $_FILES['profile_picture']['error'] === UPLOAD_ERR_OK) {
                 $file = $_FILES['profile_picture'];
                 $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -136,23 +140,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $messageType = 'error';
                 } else {
                     try {
-                     
                         $upload_dir = 'uploads/profile_pictures/';
                         if (!file_exists($upload_dir)) {
                             mkdir($upload_dir, 0777, true);
                         }
                         
-                    
                         $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
                         $filename = 'profile_' . $_SESSION['user_id'] . '_' . time() . '.' . $extension;
                         $filepath = $upload_dir . $filename;
                         
-                        
                         if (move_uploaded_file($file['tmp_name'], $filepath)) {
-                           
+                            // Delete old profile picture if exists
                             if (!empty($user['profile_picture']) && file_exists($user['profile_picture'])) {
                                 unlink($user['profile_picture']);
                             }
+                            
                             $stmt = $pdo->prepare("UPDATE users SET profile_picture = ? WHERE id = ?");
                             if ($stmt->execute([$filepath, $_SESSION['user_id']])) {
                                 logActivity('profile_picture_update', 'Updated profile picture');
@@ -184,6 +186,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ===== GET USER ACTIVITY =====
 $activities = getUserActivities($_SESSION['user_id'], 10);
 
+// If no activities, create a sample activity for testing
+if (empty($activities)) {
+    logActivity('profile_view', 'Viewed profile page');
+    $activities = getUserActivities($_SESSION['user_id'], 10);
+}
+
 $page_title = 'Profile Settings';
 ?>
 <!DOCTYPE html>
@@ -195,241 +203,94 @@ $page_title = 'Profile Settings';
     <link rel="stylesheet" href="admin.css">
     <link rel="shortcut icon" href="images/logo.png" type="image/x-icon">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-</head>
-<body>
-    <?php include "header.php"?>
-    <div class="admin-wrapper">
-        <?php include "sidebar.php" ?>
-
-        <!-- Main Content -->
-        <main class="admin-main">
-             
-            <?php if ($message): ?>
-                <div class="alert alert-<?php echo $messageType; ?> alert-persistent">
-                    <i class="fas fa-<?php echo $messageType === 'success' ? 'check-circle' : 'exclamation-circle'; ?>"></i>
-                    <?php echo htmlspecialchars($message); ?>
-                </div>
-            <?php endif; ?>
-
-            <!-- Profile Grid -->
-            <div class="profile-grid" style="margin-bottom:25px:">
-                <!-- Profile Information -->
-                <div class="admin-card" style="padding:14px">
-                    <div class="card-header">
-                        <h2> Profile Information</h2>
-                    </div>
-                    <div class="card-body" style="padding:14px">
-
-                          <form method="POST" enctype="multipart/form-data" id="profilePictureForm">
-                            <input type="hidden" name="action" value="update_profile_picture">
-                            <div class="profile-avatar-section">
-                                <div class="profile-avatar">
-                                    <?php if (!empty($user['profile_picture']) && file_exists($user['profile_picture'])): ?>
-                                        <img src="<?php echo htmlspecialchars($user['profile_picture']); ?>" alt="Profile Picture" class="profile-img">
-                                    <?php else: ?>
-                                        <div class="avatar-circle">
-                                            <i class="fas fa-user-circle"></i>
-                                        </div>
-                                    <?php endif; ?>
-                                </div>
-                                <div class="avatar-upload">
-                                    <label for="profile_picture" class="btn-upload">
-                                        <i class="fas fa-camera"></i> Change Photo
-                                    </label>
-                                    <input type="file" name="profile_picture" id="profile_picture" accept="image/*" style="display: none;">
-                                    <button type="submit" class="btn-upload-submit" style="display: none;" id="uploadBtn">
-                                        <i class="fas fa-upload"></i> Upload
-                                    </button>
-                                    <p class="text-muted small" style="margin-top: 8px;">Max size: 5MB. Supported: JPG, PNG, GIF, WEBP</p>
-                                </div>
-                            </div>
-                        </form>
-                        
-                        <form method="POST" style="padding:14px">
-                            <input type="hidden" name="action" value="update_profile">
-                            
-                            <div class="profile-avatar">
-                                <div class="avatar-circle">
-                                    <i class="fas fa-user-circle"></i>
-                                </div>
-                                <div>
-                                    <h3><?php echo htmlspecialchars($user['name'] ?? 'Admin'); ?></h3>
-                                    <p class="text-muted"><?php echo htmlspecialchars($user['role'] ?? 'Administrator'); ?></p>
-                                </div>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label><i class="fas fa-user"></i> Full Name</label>
-                                <input type="text" name="name" value="<?php echo htmlspecialchars($user['name'] ?? ''); ?>" required>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label><i class="fas fa-envelope"></i> Email Address</label>
-                                <input type="email" name="email" value="<?php echo htmlspecialchars($user['email'] ?? ''); ?>" required>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label><i class="fas fa-phone"></i> Phone Number</label>
-                                <input type="tel" name="phone" value="<?php echo htmlspecialchars($user['phone'] ?? ''); ?>" placeholder="Enter phone number">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label><i class="fas fa-calendar-alt"></i> Joined</label>
-                                <input type="text" value="<?php echo date('F d, Y', strtotime($user['created_at'] ?? 'now')); ?>" disabled>
-                            </div>
-                            
-                            <button type="submit" class="btn-primary">
-                                <i class="fas fa-save"></i> Update Profile
-                            </button>
-                        </form>
-                    </div>
-                </div>
-
-                <!-- Change Password -->
-                <div class="admin-card" style="padding:14px">
-                    <div class="card-header">
-                        <h2><i class="fas fa-lock"></i> Change Password</h2>
-                    </div>
-                    <div class="card-body">
-                        <form method="POST">
-                            <input type="hidden" name="action" value="change_password">
-                            
-                            <div class="form-group">
-                                <label><i class="fas fa-key"></i> Current Password</label>
-                                <div class="password-wrapper">
-                                    <input type="password" name="current_password" id="current_password" required placeholder="Enter current password">
-                                  
-                                </div>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label><i class="fas fa-lock"></i> New Password</label>
-                                <div class="password-wrapper">
-                                    <input type="password" name="new_password" id="new_password" required placeholder="Enter new password">
-                                 
-                                </div>
-                              
-                            </div>
-                            
-                            <div class="form-group">
-                                <label><i class="fas fa-check-circle"></i> Confirm New Password</label>
-                                <div class="password-wrapper">
-                                    <input type="password" name="confirm_password" id="confirm_password" required placeholder="Confirm new password">
-                                  
-                                </div>
-                            </div>
-                            
-                            <button type="submit" class="btn-primary">
-                                <i class="fas fa-key"></i> Change Password
-                            </button>
-                        </form>
-                    </div>
-                </div>
-
-                <!-- Recent Activity -->
-                <div class="admin-card" style="padding:14px">
-                    <div class="card-header">
-                        <h2><i class="fas fa-clock"></i> Recent Activity</h2>
-                    </div>
-                    <div class="card-body">
-                        <?php if (count($activities) > 0): ?>
-                            <div class="activity-list">
-                                <?php foreach ($activities as $activity): ?>
-                                    <div class="activity-item">
-                                        <div class="activity-icon">
-                                            <i class="fas fa-<?php echo getActivityIcon($activity['action']); ?>"></i>
-                                        </div>
-                                        <div class="activity-content">
-                                            <p><?php echo htmlspecialchars($activity['description'] ?? $activity['action']); ?></p>
-                                            <span class="activity-time">
-                                                <i class="fas fa-clock"></i> 
-                                                <?php echo timeAgo($activity['created_at']); ?>
-                                            </span>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php else: ?>
-                            <p class="text-muted text-center" style="padding: 20px 0;">
-                                <i class="fas fa-inbox" style="font-size: 24px; display: block; margin-bottom: 10px; opacity: 0.5;"></i>
-                                No recent activity
-                            </p>
-                        <?php endif; ?>
-                    </div>
-                </div>
-
-                <!-- Notification Preferences -->
-                <div class="admin-card" style="padding:14px">
-                    <div class="card-header">
-                        <h2><i class="fas fa-bell"></i> Notification Preferences</h2>
-                    </div>
-                    <div class="card-body">
-                        <form method="POST">
-                            <input type="hidden" name="action" value="update_notifications">
-                            
-                            <div class="notification-option">
-                                <div>
-                                    <h4><i class="fas fa-envelope"></i> Email Notifications</h4>
-                                    <p class="text-muted">Receive email notifications about system updates</p>
-                                </div>
-                                <label class="switch">
-                                    <input type="checkbox" name="email_notifications" checked>
-                                    <span class="slider"></span>
-                                </label>
-                            </div>
-                            
-                            <div class="notification-option">
-                                <div>
-                                    <h4><i class="fas fa-shopping-cart"></i> Order Updates</h4>
-                                    <p class="text-muted">Get notified about new orders and status changes</p>
-                                </div>
-                                <label class="switch">
-                                    <input type="checkbox" name="order_updates" checked>
-                                    <span class="slider"></span>
-                                </label>
-                            </div>
-                            
-                            <button type="submit" class="btn-primary">
-                                <i class="fas fa-save"></i> Save Preferences
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            </div>
-        </main>
-    </div>
-
     <style>
         /* Profile Page Styles */
+        :root {
+            --primary: #05573c;
+            --primary-dark: #04402c;
+            --bg: #f8f9fa;
+            --border: #e9ecef;
+            --text: #212529;
+            --text-muted: #6c757d;
+        }
+        
         .profile-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 25px;
+            padding: 20px;
         }
         
-        .profile-avatar {
+        .admin-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+        
+        .card-header {
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg);
+        }
+        
+        .card-header h2 {
+            margin: 0;
+            font-size: 18px;
+            color: var(--text);
             display: flex;
             align-items: center;
-            gap: 20px;
+            gap: 10px;
+        }
+        
+        .card-header h2 i {
+            color: var(--primary);
+        }
+        
+        .card-body {
+            padding: 24px;
+        }
+        
+        .profile-avatar-section {
+            display: flex;
+            align-items: center;
+            gap: 25px;
             padding: 20px;
             background: var(--bg);
             border-radius: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 25px;
         }
-         .profile-avatar .profile-img {
+        
+        .profile-avatar {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            overflow: hidden;
+            flex-shrink: 0;
+            border: 4px solid var(--primary);
+        }
+        
+        .profile-avatar .profile-img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
         
         .avatar-circle {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
             font-size: 60px;
-            color: var(--primary);
         }
         
         .avatar-circle i {
-            font-size: 80px;
+            font-size: 60px;
         }
+        
         .avatar-upload {
             flex: 1;
         }
@@ -443,6 +304,7 @@ $page_title = 'Profile Settings';
             cursor: pointer;
             transition: 0.3s;
             font-size: 14px;
+            border: none;
         }
         
         .btn-upload:hover {
@@ -467,6 +329,53 @@ $page_title = 'Profile Settings';
             background: #218838;
         }
         
+        .profile-avatar {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 20px;
+            background: var(--bg);
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 18px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: var(--text);
+            font-size: 14px;
+        }
+        
+        .form-group label i {
+            color: var(--primary);
+            margin-right: 6px;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 14px;
+            transition: 0.2s;
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(5, 87, 60, 0.1);
+        }
+        
+        .form-group input:disabled {
+            background: var(--bg);
+            cursor: not-allowed;
+        }
+        
         .password-wrapper {
             display: flex;
             position: relative;
@@ -488,8 +397,32 @@ $page_title = 'Profile Settings';
             cursor: pointer;
             padding: 5px 10px;
             font-size: 14px;
-        }   
-    
+        }
+        
+        .password-wrapper .toggle-password:hover {
+            color: var(--primary);
+        }
+        
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 24px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+        
         .activity-list {
             max-height: 300px;
             overflow-y: auto;
@@ -560,6 +493,7 @@ $page_title = 'Profile Settings';
         .notification-option p {
             margin: 5px 0 0;
             font-size: 12px;
+            color: var(--text-muted);
         }
         
         /* Toggle Switch */
@@ -608,62 +542,54 @@ $page_title = 'Profile Settings';
         .switch input:checked + .slider:before {
             transform: translateX(22px);
         }
-        .user-info {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: 500;
-    color: var(--text);
-}
-
-.user-info i {
-    color: var(--primary);
-    font-size: 18px;
-}
-
-.role-badge {
-    display: inline-block;
-    padding: 4px 16px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.role-badge.admin {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: #fff;
-    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
-}
-
-.role-badge.super_admin {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-    color: #fff;
-    box-shadow: 0 2px 10px rgba(245, 87, 108, 0.3);
-}
-
-.role-badge.user {
-    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-    color: #fff;
-    box-shadow: 0 2px 10px rgba(79, 172, 254, 0.3);
-}
-
-.role-badge.manager {
-    background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-    color: #1a1a2e;
-    box-shadow: 0 2px 10px rgba(67, 233, 123, 0.3);
-}
-
-
-.role-badge.super_admin {
-    animation: pulseGlow 2s ease-in-out infinite;
-}
-
-@keyframes pulseGlow {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-}
+        
+        .alert {
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .alert-persistent {
+            animation: slideDown 0.3s ease;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .text-muted {
+            color: var(--text-muted);
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        
+        .small {
+            font-size: 12px;
+        }
         
         /* Responsive */
         @media (max-width: 992px) {
@@ -673,7 +599,7 @@ $page_title = 'Profile Settings';
         }
         
         @media (max-width: 480px) {
-            .profile-avatar {
+            .profile-avatar-section {
                 flex-direction: column;
                 text-align: center;
             }
@@ -685,13 +611,228 @@ $page_title = 'Profile Settings';
             }
         }
     </style>
+</head>
+<body>
+    <?php include "header.php"?>
+    <div class="admin-wrapper">
+        <?php include "sidebar.php" ?>
+
+        <!-- Main Content -->
+        <main class="admin-main">
+            <div style="padding: 20px;">
+                <?php if ($message): ?>
+                    <div class="alert alert-<?php echo $messageType; ?> alert-persistent">
+                        <i class="fas fa-<?php echo $messageType === 'success' ? 'check-circle' : 'exclamation-circle'; ?>"></i>
+                        <?php echo htmlspecialchars($message); ?>
+                    </div>
+                <?php endif; ?>
+
+                <!-- Profile Grid -->
+                <div class="profile-grid">
+                    <!-- Profile Information -->
+                    <div class="admin-card">
+                        <div class="card-header">
+                            <h2><i class="fas fa-user-circle"></i> Profile Information</h2>
+                        </div>
+                        <div class="card-body">
+                            <!-- Profile Picture Upload -->
+                            <form method="POST" enctype="multipart/form-data" id="profilePictureForm">
+                                <input type="hidden" name="action" value="update_profile_picture">
+                                <div class="profile-avatar-section">
+                                    <div class="profile-avatar">
+                                        <?php if (!empty($user['profile_picture']) && file_exists($user['profile_picture'])): ?>
+                                            <img src="<?php echo htmlspecialchars($user['profile_picture']); ?>" alt="Profile Picture" class="profile-img">
+                                        <?php else: ?>
+                                            <div class="avatar-circle">
+                                                <i class="fas fa-user-circle"></i>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="avatar-upload">
+                                        <label for="profile_picture" class="btn-upload">
+                                            <i class="fas fa-camera"></i> Change Photo
+                                        </label>
+                                        <input type="file" name="profile_picture" id="profile_picture" accept="image/*" style="display: none;">
+                                        <button type="submit" class="btn-upload-submit" style="display: none;" id="uploadBtn">
+                                            <i class="fas fa-upload"></i> Upload
+                                        </button>
+                                        <p class="text-muted small" style="margin-top: 8px;">Max size: 5MB. Supported: JPG, PNG, GIF, WEBP</p>
+                                    </div>
+                                </div>
+                            </form>
+                            
+                            <form method="POST">
+                                <input type="hidden" name="action" value="update_profile">
+                                
+                                <div class="form-group">
+                                    <label><i class="fas fa-user"></i> Full Name</label>
+                                    <input type="text" name="name" value="<?php echo htmlspecialchars($user['name'] ?? ''); ?>" required>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label><i class="fas fa-envelope"></i> Email Address</label>
+                                    <input type="email" name="email" value="<?php echo htmlspecialchars($user['email'] ?? ''); ?>" required>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label><i class="fas fa-phone"></i> Phone Number</label>
+                                    <input type="tel" name="phone" value="<?php echo htmlspecialchars($user['phone'] ?? ''); ?>" placeholder="Enter phone number">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label><i class="fas fa-calendar-alt"></i> Joined</label>
+                                    <input type="text" value="<?php echo date('F d, Y', strtotime($user['created_at'] ?? 'now')); ?>" disabled>
+                                </div>
+                                
+                                <button type="submit" class="btn-primary">
+                                    <i class="fas fa-save"></i> Update Profile
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Change Password -->
+                    <div class="admin-card">
+                        <div class="card-header">
+                            <h2><i class="fas fa-lock"></i> Change Password</h2>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST">
+                                <input type="hidden" name="action" value="change_password">
+                                
+                                <div class="form-group">
+                                    <label><i class="fas fa-key"></i> Current Password</label>
+                                    <div class="password-wrapper">
+                                        <input type="password" name="current_password" id="current_password" required placeholder="Enter current password">
+                                        <button type="button" class="toggle-password" onclick="togglePasswordVisibility('current_password')">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label><i class="fas fa-lock"></i> New Password</label>
+                                    <div class="password-wrapper">
+                                        <input type="password" name="new_password" id="new_password" required placeholder="Enter new password">
+                                        <button type="button" class="toggle-password" onclick="togglePasswordVisibility('new_password')">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label><i class="fas fa-check-circle"></i> Confirm New Password</label>
+                                    <div class="password-wrapper">
+                                        <input type="password" name="confirm_password" id="confirm_password" required placeholder="Confirm new password">
+                                        <button type="button" class="toggle-password" onclick="togglePasswordVisibility('confirm_password')">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <button type="submit" class="btn-primary">
+                                    <i class="fas fa-key"></i> Change Password
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity -->
+                    <div class="admin-card">
+                        <div class="card-header">
+                            <h2><i class="fas fa-clock"></i> Recent Activity</h2>
+                        </div>
+                        <div class="card-body">
+                            <?php if (count($activities) > 0): ?>
+                                <div class="activity-list">
+                                    <?php foreach ($activities as $activity): ?>
+                                        <div class="activity-item">
+                                            <div class="activity-icon">
+                                                <i class="fas fa-<?php echo getActivityIcon($activity['action'] ?? 'view'); ?>"></i>
+                                            </div>
+                                            <div class="activity-content">
+                                                <p><?php echo htmlspecialchars($activity['description'] ?? $activity['action'] ?? 'Activity'); ?></p>
+                                                <span class="activity-time">
+                                                    <i class="fas fa-clock"></i> 
+                                                    <?php echo timeAgo($activity['created_at'] ?? date('Y-m-d H:i:s')); ?>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php else: ?>
+                                <p class="text-muted text-center" style="padding: 20px 0;">
+                                    <i class="fas fa-inbox" style="font-size: 24px; display: block; margin-bottom: 10px; opacity: 0.5;"></i>
+                                    No recent activity
+                                </p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <!-- Notification Preferences -->
+                    <div class="admin-card">
+                        <div class="card-header">
+                            <h2><i class="fas fa-bell"></i> Notification Preferences</h2>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST">
+                                <input type="hidden" name="action" value="update_notifications">
+                                
+                                <div class="notification-option">
+                                    <div>
+                                        <h4><i class="fas fa-envelope"></i> Email Notifications</h4>
+                                        <p class="text-muted">Receive email notifications about system updates</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" name="email_notifications" <?php echo isset($_SESSION['email_notifications']) && $_SESSION['email_notifications'] ? 'checked' : 'checked'; ?>>
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                                
+                                <div class="notification-option">
+                                    <div>
+                                        <h4><i class="fas fa-shopping-cart"></i> Order Updates</h4>
+                                        <p class="text-muted">Get notified about new orders and status changes</p>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" name="order_updates" <?php echo isset($_SESSION['order_updates']) && $_SESSION['order_updates'] ? 'checked' : 'checked'; ?>>
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                                
+                                <button type="submit" class="btn-primary" style="margin-top: 10px;">
+                                    <i class="fas fa-save"></i> Save Preferences
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
 
     <script>
-          document.getElementById('profile_picture')?.addEventListener('change', function() {
+        // Toggle password visibility
+        function togglePasswordVisibility(id) {
+            const input = document.getElementById(id);
+            const button = input.parentElement.querySelector('.toggle-password');
+            const icon = button.querySelector('i');
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'fas fa-eye';
+            }
+        }
+        
+        // Auto-submit profile picture when file is selected
+        document.getElementById('profile_picture')?.addEventListener('change', function() {
             const uploadBtn = document.getElementById('uploadBtn');
             if (this.files.length > 0) {
                 uploadBtn.style.display = 'inline-block';
-                // Auto-submit after a short delay to show the button
+                // Auto-submit after a short delay
                 setTimeout(() => {
                     document.getElementById('profilePictureForm').submit();
                 }, 500);
