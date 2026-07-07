@@ -1,7 +1,9 @@
 <?php
 
+// ===== ENABLE ERROR DISPLAY FOR DEBUGGING =====
 error_reporting(E_ALL);
-ini_set('display_errors', 0);
+ini_set('display_errors', 1);  // CHANGE: Set to 1 for debugging
+ini_set('display_startup_errors', 1);
 
 // ===== SESSION CONFIGURATION =====
 // Only set session ini settings if session is not already active
@@ -13,6 +15,9 @@ if (session_status() === PHP_SESSION_NONE) {
     if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
         ini_set('session.cookie_secure', 1);
     }
+    
+    // Set session cookie path to root
+    ini_set('session.cookie_path', '/');
     
     // Start session
     session_start();
