@@ -7,7 +7,7 @@ try {
 
     echo "<h2>Creating Database Tables...</h2>";
 
-    // First, create all tables
+    // First, create or alter all tables
     $table_sqls = [
         // Users table modifications
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_picture VARCHAR(255) NULL;",
@@ -25,7 +25,7 @@ try {
             UNIQUE(user_id, product_id)
         );",
         
-        // Cart items table (session-based for guests)
+        // Cart items table (session-based for guests) - with IF NOT EXISTS
         "CREATE TABLE IF NOT EXISTS cart_items (
             id SERIAL PRIMARY KEY,
             session_id VARCHAR(255) NULL,
@@ -35,6 +35,9 @@ try {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );",
+        
+        // Add session_id column if it doesn't exist (for existing tables)
+        "ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS session_id VARCHAR(255) NULL;",
         
         // Orders table
         "CREATE TABLE IF NOT EXISTS orders (
@@ -77,21 +80,22 @@ try {
         );"
     ];
 
-    echo "<h3>Creating Tables...</h3>";
+    echo "<h3>Creating/Altering Tables...</h3>";
     foreach ($table_sqls as $sql) {
         try {
             $pdo->exec($sql);
-            echo "<p style='color: green;'>✓ Table created/updated successfully</p>";
+            echo "<p style='color: green;'>✓ Table/Column created/updated successfully</p>";
         } catch (PDOException $e) {
-            if (strpos($e->getMessage(), 'already exists') !== false) {
-                echo "<p style='color: orange;'>⚠ Table already exists</p>";
+            if (strpos($e->getMessage(), 'already exists') !== false || 
+                strpos($e->getMessage(), 'duplicate column') !== false) {
+                echo "<p style='color: orange;'>⚠ Item already exists</p>";
             } else {
-                echo "<p style='color: red;'>✗ Error creating table: " . $e->getMessage() . "</p>";
+                echo "<p style='color: red;'>✗ Error: " . $e->getMessage() . "</p>";
             }
         }
     }
 
-    // Now create indexes (tables now exist)
+    // Now create indexes (tables now exist with all columns)
     echo "<h3>Creating Indexes...</h3>";
     $index_sqls = [
         "CREATE INDEX IF NOT EXISTS idx_cart_user_id ON cart(user_id);",
