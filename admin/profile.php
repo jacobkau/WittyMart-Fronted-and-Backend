@@ -121,9 +121,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = 'Notification preferences updated successfully!';
             $messageType = 'success';
             break;
-            
-        case 'update_profile_picture':
-            // Handle profile picture upload
+         case 'update_profile_picture':
+         
             if (isset($_FILES['profile_picture']) && $_FILES['profile_picture']['error'] === UPLOAD_ERR_OK) {
                 $file = $_FILES['profile_picture'];
                 $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -137,32 +136,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $messageType = 'error';
                 } else {
                     try {
-                        // Create upload directory if it doesn't exist
+                     
                         $upload_dir = 'uploads/profile_pictures/';
                         if (!file_exists($upload_dir)) {
                             mkdir($upload_dir, 0777, true);
                         }
                         
-                        // Generate unique filename
+                    
                         $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
                         $filename = 'profile_' . $_SESSION['user_id'] . '_' . time() . '.' . $extension;
                         $filepath = $upload_dir . $filename;
                         
-                        // Move uploaded file
+                        
                         if (move_uploaded_file($file['tmp_name'], $filepath)) {
-                            // Delete old profile picture if exists
+                           
                             if (!empty($user['profile_picture']) && file_exists($user['profile_picture'])) {
                                 unlink($user['profile_picture']);
                             }
-                            
-                            // Update database
                             $stmt = $pdo->prepare("UPDATE users SET profile_picture = ? WHERE id = ?");
                             if ($stmt->execute([$filepath, $_SESSION['user_id']])) {
                                 logActivity('profile_picture_update', 'Updated profile picture');
                                 $message = 'Profile picture updated successfully!';
                                 $messageType = 'success';
-                                
-                                // Refresh user data
                                 $user = getCurrentUser();
                             } else {
                                 $message = 'Failed to update database.';
@@ -217,15 +212,15 @@ $page_title = 'Profile Settings';
             <?php endif; ?>
 
             <!-- Profile Grid -->
-            <div class="profile-grid">
+            <div class="profile-grid" style="margin-bottom:25px:">
                 <!-- Profile Information -->
-                <div class="admin-card">
+                <div class="admin-card" style="padding:14px">
                     <div class="card-header">
-                        <h2><i class="fas fa-user-circle"></i> Profile Information</h2>
+                        <h2> Profile Information</h2>
                     </div>
-                    <div class="card-body">
-                        <!-- Profile Picture Upload -->
-                        <form method="POST" enctype="multipart/form-data" id="profilePictureForm">
+                    <div class="card-body" style="padding:14px">
+
+                          <form method="POST" enctype="multipart/form-data" id="profilePictureForm">
                             <input type="hidden" name="action" value="update_profile_picture">
                             <div class="profile-avatar-section">
                                 <div class="profile-avatar">
@@ -249,9 +244,19 @@ $page_title = 'Profile Settings';
                                 </div>
                             </div>
                         </form>
-
-                        <form method="POST">
+                        
+                        <form method="POST" style="padding:14px">
                             <input type="hidden" name="action" value="update_profile">
+                            
+                            <div class="profile-avatar">
+                                <div class="avatar-circle">
+                                    <i class="fas fa-user-circle"></i>
+                                </div>
+                                <div>
+                                    <h3><?php echo htmlspecialchars($user['name'] ?? 'Admin'); ?></h3>
+                                    <p class="text-muted"><?php echo htmlspecialchars($user['role'] ?? 'Administrator'); ?></p>
+                                </div>
+                            </div>
                             
                             <div class="form-group">
                                 <label><i class="fas fa-user"></i> Full Name</label>
@@ -281,7 +286,7 @@ $page_title = 'Profile Settings';
                 </div>
 
                 <!-- Change Password -->
-                <div class="admin-card">
+                <div class="admin-card" style="padding:14px">
                     <div class="card-header">
                         <h2><i class="fas fa-lock"></i> Change Password</h2>
                     </div>
@@ -293,7 +298,7 @@ $page_title = 'Profile Settings';
                                 <label><i class="fas fa-key"></i> Current Password</label>
                                 <div class="password-wrapper">
                                     <input type="password" name="current_password" id="current_password" required placeholder="Enter current password">
-                                    <button type="button" class="toggle-password" onclick="togglePasswordVisibility('current_password')">
+                                    <button type="button" class="toggle-password" onclick="togglePassword('current_password')">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                 </div>
@@ -302,25 +307,19 @@ $page_title = 'Profile Settings';
                             <div class="form-group">
                                 <label><i class="fas fa-lock"></i> New Password</label>
                                 <div class="password-wrapper">
-                                    <input type="password" name="new_password" id="new_password" required placeholder="Enter new password" onkeyup="checkPasswordStrength(this.value)">
-                                    <button type="button" class="toggle-password" onclick="togglePasswordVisibility('new_password')">
+                                    <input type="password" name="new_password" id="new_password" required placeholder="Enter new password">
+                                    <button type="button" class="toggle-password" onclick="togglePassword('new_password')">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                 </div>
                                 <div class="password-strength" id="passwordStrength"></div>
-                                <div class="password-requirements">
-                                    <small><i class="fas fa-circle" id="reqLength"></i> At least 6 characters</small>
-                                    <small><i class="fas fa-circle" id="reqUpper"></i> One uppercase letter</small>
-                                    <small><i class="fas fa-circle" id="reqNumber"></i> One number</small>
-                                    <small><i class="fas fa-circle" id="reqSpecial"></i> One special character</small>
-                                </div>
                             </div>
                             
                             <div class="form-group">
                                 <label><i class="fas fa-check-circle"></i> Confirm New Password</label>
                                 <div class="password-wrapper">
                                     <input type="password" name="confirm_password" id="confirm_password" required placeholder="Confirm new password">
-                                    <button type="button" class="toggle-password" onclick="togglePasswordVisibility('confirm_password')">
+                                    <button type="button" class="toggle-password" onclick="togglePassword('confirm_password')">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                 </div>
@@ -334,7 +333,7 @@ $page_title = 'Profile Settings';
                 </div>
 
                 <!-- Recent Activity -->
-                <div class="admin-card">
+                <div class="admin-card" style="padding:14px">
                     <div class="card-header">
                         <h2><i class="fas fa-clock"></i> Recent Activity</h2>
                     </div>
@@ -366,7 +365,7 @@ $page_title = 'Profile Settings';
                 </div>
 
                 <!-- Notification Preferences -->
-                <div class="admin-card">
+                <div class="admin-card" style="padding:14px">
                     <div class="card-header">
                         <h2><i class="fas fa-bell"></i> Notification Preferences</h2>
                     </div>
@@ -414,46 +413,29 @@ $page_title = 'Profile Settings';
             gap: 25px;
         }
         
-        .profile-avatar-section {
+        .profile-avatar {
             display: flex;
             align-items: center;
-            gap: 25px;
+            gap: 20px;
             padding: 20px;
             background: var(--bg);
             border-radius: 10px;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
-        
-        .profile-avatar {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            overflow: hidden;
-            flex-shrink: 0;
-            border: 4px solid var(--primary);
-        }
-        
-        .profile-avatar .profile-img {
+         .profile-avatar .profile-img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
         
         .avatar-circle {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
             font-size: 60px;
+            color: var(--primary);
         }
         
         .avatar-circle i {
-            font-size: 60px;
+            font-size: 80px;
         }
-        
         .avatar-upload {
             flex: 1;
         }
@@ -523,53 +505,12 @@ $page_title = 'Profile Settings';
             margin-top: 8px;
             border-radius: 2px;
             transition: all 0.3s ease;
-            display: none;
         }
         
-        .password-strength.weak { 
-            background: #dc3545; 
-            width: 25%; 
-            display: block;
-        }
-        .password-strength.medium { 
-            background: #ffc107; 
-            width: 50%; 
-            display: block;
-        }
-        .password-strength.strong { 
-            background: #28a745; 
-            width: 75%; 
-            display: block;
-        }
-        .password-strength.very-strong { 
-            background: #28a745; 
-            width: 100%; 
-            display: block;
-        }
-        
-        .password-requirements {
-            margin-top: 8px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        
-        .password-requirements small {
-            font-size: 11px;
-            color: var(--text-muted);
-        }
-        
-        .password-requirements small i {
-            margin-right: 4px;
-        }
-        
-        .password-requirements small .fas.fa-check-circle {
-            color: #28a745;
-        }
-        
-        .password-requirements small .fas.fa-circle {
-            color: #dc3545;
-        }
+        .password-strength.weak { background: #dc3545; width: 25%; }
+        .password-strength.medium { background: #ffc107; width: 50%; }
+        .password-strength.strong { background: #28a745; width: 75%; }
+        .password-strength.very-strong { background: #28a745; width: 100%; }
         
         .activity-list {
             max-height: 300px;
@@ -689,62 +630,62 @@ $page_title = 'Profile Settings';
         .switch input:checked + .slider:before {
             transform: translateX(22px);
         }
-        
         .user-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-weight: 500;
-            color: var(--text);
-        }
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    color: var(--text);
+}
 
-        .user-info i {
-            color: var(--primary);
-            font-size: 18px;
-        }
+.user-info i {
+    color: var(--primary);
+    font-size: 18px;
+}
 
-        .role-badge {
-            display: inline-block;
-            padding: 4px 16px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
+.role-badge {
+    display: inline-block;
+    padding: 4px 16px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
 
-        .role-badge.admin {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #fff;
-            box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
-        }
+.role-badge.admin {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
+}
 
-        .role-badge.super_admin {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: #fff;
-            box-shadow: 0 2px 10px rgba(245, 87, 108, 0.3);
-        }
+.role-badge.super_admin {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(245, 87, 108, 0.3);
+}
 
-        .role-badge.user {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            color: #fff;
-            box-shadow: 0 2px 10px rgba(79, 172, 254, 0.3);
-        }
+.role-badge.user {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: #fff;
+    box-shadow: 0 2px 10px rgba(79, 172, 254, 0.3);
+}
 
-        .role-badge.manager {
-            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-            color: #1a1a2e;
-            box-shadow: 0 2px 10px rgba(67, 233, 123, 0.3);
-        }
+.role-badge.manager {
+    background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    color: #1a1a2e;
+    box-shadow: 0 2px 10px rgba(67, 233, 123, 0.3);
+}
 
-        .role-badge.super_admin {
-            animation: pulseGlow 2s ease-in-out infinite;
-        }
 
-        @keyframes pulseGlow {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-        }
+.role-badge.super_admin {
+    animation: pulseGlow 2s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
         
         /* Responsive */
         @media (max-width: 992px) {
@@ -754,7 +695,7 @@ $page_title = 'Profile Settings';
         }
         
         @media (max-width: 480px) {
-            .profile-avatar-section {
+            .profile-avatar {
                 flex-direction: column;
                 text-align: center;
             }
@@ -768,7 +709,7 @@ $page_title = 'Profile Settings';
     </style>
 
     <script>
-        // Toggle password visibility - FIXED FUNCTION NAME
+        // Toggle password visibility
         function togglePasswordVisibility(id) {
             const input = document.getElementById(id);
             const button = input.parentElement.querySelector('.toggle-password');
@@ -783,8 +724,23 @@ $page_title = 'Profile Settings';
             }
         }
         
-        // Auto-submit profile picture when file is selected
-        document.getElementById('profile_picture')?.addEventListener('change', function() {
+        // Password strength indicator
+        document.getElementById('new_password')?.addEventListener('keyup', function() {
+            const strength = document.getElementById('passwordStrength');
+            const password = this.value;
+            
+            let score = 0;
+            if (password.length >= 6) score++;
+            if (password.length >= 10) score++;
+            if (/[A-Z]/.test(password)) score++;
+            if (/[0-9]/.test(password)) score++;
+            if (/[^A-Za-z0-9]/.test(password)) score++;
+            
+            const levels = ['', 'weak', 'medium', 'strong', 'very-strong'];
+            strength.className = 'password-strength ' + (levels[score] || '');
+            strength.style.display = password ? 'block' : 'none';
+        });
+          document.getElementById('profile_picture')?.addEventListener('change', function() {
             const uploadBtn = document.getElementById('uploadBtn');
             if (this.files.length > 0) {
                 uploadBtn.style.display = 'inline-block';
@@ -796,56 +752,6 @@ $page_title = 'Profile Settings';
                 uploadBtn.style.display = 'none';
             }
         });
-        
-        // Password strength indicator with requirements
-        function checkPasswordStrength(password) {
-            const strength = document.getElementById('passwordStrength');
-            const reqLength = document.getElementById('reqLength');
-            const reqUpper = document.getElementById('reqUpper');
-            const reqNumber = document.getElementById('reqNumber');
-            const reqSpecial = document.getElementById('reqSpecial');
-            
-            // Check requirements
-            const hasLength = password.length >= 6;
-            const hasUpper = /[A-Z]/.test(password);
-            const hasNumber = /[0-9]/.test(password);
-            const hasSpecial = /[^A-Za-z0-9]/.test(password);
-            
-            // Update requirement icons
-            updateRequirementIcon(reqLength, hasLength);
-            updateRequirementIcon(reqUpper, hasUpper);
-            updateRequirementIcon(reqNumber, hasNumber);
-            updateRequirementIcon(reqSpecial, hasSpecial);
-            
-            // Calculate strength
-            let score = 0;
-            if (hasLength) score++;
-            if (hasUpper) score++;
-            if (hasNumber) score++;
-            if (hasSpecial) score++;
-            if (password.length >= 10) score++;
-            
-            const levels = ['', 'weak', 'medium', 'strong', 'very-strong'];
-            const labels = ['', 'Weak', 'Medium', 'Strong', 'Very Strong'];
-            
-            if (password.length > 0) {
-                strength.className = 'password-strength ' + (levels[score] || '');
-                strength.textContent = labels[score] || '';
-                strength.style.display = 'block';
-            } else {
-                strength.style.display = 'none';
-            }
-        }
-        
-        function updateRequirementIcon(element, met) {
-            if (met) {
-                element.className = 'fas fa-check-circle';
-                element.style.color = '#28a745';
-            } else {
-                element.className = 'fas fa-circle';
-                element.style.color = '#dc3545';
-            }
-        }
         
         // Auto-hide alerts
         setTimeout(() => {
