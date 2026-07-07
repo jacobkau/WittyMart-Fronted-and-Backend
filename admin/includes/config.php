@@ -697,19 +697,37 @@ function getTestimonials($limit = 10) {
     }
 }
 
+
 /**
- * Get cart items for current user
+ * Get cart items for current user or session
  */
-function getCartItems() {
+function getCartItems($user_id = null) {
     global $pdo;
     
-    if (!isset($_SESSION['user_id'])) {
-        return [];
+    if ($user_id === null && isset($_SESSION['user_id'])) {
+        $user_id = $_SESSION['user_id'];
     }
     
     try {
-        $stmt = $pdo->prepare("SELECT c.*, p.name, p.price, p.image FROM cart c INNER JOIN products p ON c.product_id = p.id WHERE c.user_id = ?");
-        $stmt->execute([$_SESSION['user_id']]);
+        if ($user_id) {
+            $stmt = $pdo->prepare("
+                SELECT c.*, p.name, p.price, p.image, p.stock 
+                FROM cart c 
+                INNER JOIN products p ON c.product_id = p.id 
+                WHERE c.user_id = ?
+            ");
+            $stmt->execute([$user_id]);
+        } else {
+            // Use session ID for guest users
+            $session_id = session_id();
+            $stmt = $pdo->prepare("
+                SELECT c.*, p.name, p.price, p.image, p.stock 
+                FROM cart_items c 
+                INNER JOIN products p ON c.product_id = p.id 
+                WHERE c.session_id = ?
+            ");
+            $stmt->execute([$session_id]);
+        }
         return $stmt->fetchAll();
     } catch (PDOException $e) {
         error_log('Get cart items error: ' . $e->getMessage());
@@ -720,28 +738,180 @@ function getCartItems() {
 /**
  * Add item to cart
  */
-function addToCart($product_id, $quantity = 1) {
+function addToCart($product_id, $quantity = 1, $user_id = null) {
     global $pdo;
     
-    if (!isset($_SESSION['user_id'])) {
-        return false;
+    if ($user_id === null && isset($_SESSION['user_id'])) {
+        $user_id = $_SESSION['user_id'];
     }
     
     try {
-        $stmt = $pdo->prepare("SELECT id, quantity FROM cart WHERE user_id = ? AND product_id = ?");
-        $stmt->execute([$_SESSION['user_id'], $product_id]);
-        $existing = $stmt->fetch();
-        
-        if ($existing) {
-            $new_quantity = $existing['quantity'] + $quantity;
-            $stmt = $pdo->prepare("UPDATE cart SET quantity = ? WHERE id = ?");
-            return $stmt->execute([$new_quantity, $existing['id']]);
+        if ($user_id) {
+            // Check if product already in cart
+            $stmt = $pdo->prepare("SELECT id, quantity FROM cart WHERE user_id = ? AND product_id = ?");
+            $stmt->execute([$user_id, $product_id]);
+            $existing = $stmt->fetch();
+            
+            if ($existing) {
+                $new_quantity = $existing['quantity'] + $quantity;
+                $stmt = $pdo->prepare("UPDATE cart SET quantity = ? WHERE id = ?");
+                return $stmt->execute([$new_quantity, $existing['id']]);
+            } else {
+                $stmt = $pdo->prepare("INSERT INTO cart (user_id, product_id, quantity) VALUES (?, ?, ?)");
+                return $stmt->execute([$user_id, $product_id, $quantity]);
+            }
         } else {
-            $stmt = $pdo->prepare("INSERT INTO cart (user_id, product_id, quantity) VALUES (?, ?, ?)");
-            return $stmt->execute([$_SESSION['user_id'], $product_id, $quantity]);
+            // Guest user - use session
+            $session_id = session_id();
+            $stmt = $pdo->prepare("SELECT id, quantity FROM cart_items WHERE session_id = ? AND product_id = ?");
+            $stmt->execute([$session_id, $product_id]);
+            $existing = $stmt->fetch();
+            
+            if ($existing) {
+                $new_quantity = $existing['quantity'] + $quantity;
+                $stmt = $pdo->prepare("UPDATE cart_items SET quantity = ? WHERE id = ?");
+                return $stmt->execute([$new_quantity, $existing['id']]);
+            } else {
+                $stmt = $pdo->prepare("INSERT INTO cart_items (session_id, product_id, quantity) VALUES (?, ?, ?)");
+                return $stmt->execute([$session_id, $product_id, $quantity]);
+            }
         }
     } catch (PDOException $e) {
         error_log('Add to cart error: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Remove item from cart
+ */
+function removeFromCart($item_id, $user_id = null) {
+    global $pdo;
+    
+    if ($user_id === null && isset($_SESSION['user_id'])) {
+        $user_id = $_SESSION['user_id'];
+    }
+    
+    try {
+        if ($user_id) {
+            $stmt = $pdo->prepare("DELETE FROM cart WHERE id = ? AND user_id = ?");
+            return $stmt->execute([$item_id, $user_id]);
+        } else {
+            $session_id = session_id();
+            $stmt = $pdo->prepare("DELETE FROM cart_items WHERE id = ? AND session_id = ?");
+            return $stmt->execute([$item_id, $session_id]);
+        }
+    } catch (PDOException $e) {
+        error_log('Remove from cart error: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Update cart item quantity
+ */
+function updateCartQuantity($item_id, $quantity, $user_id = null) {
+    global $pdo;
+    
+    if ($user_id === null && isset($_SESSION['user_id'])) {
+        $user_id = $_SESSION['user_id'];
+    }
+    
+    if ($quantity <= 0) {
+        return removeFromCart($item_id, $user_id);
+    }
+    
+    try {
+        if ($user_id) {
+            $stmt = $pdo->prepare("UPDATE cart SET quantity = ? WHERE id = ? AND user_id = ?");
+            return $stmt->execute([$quantity, $item_id, $user_id]);
+        } else {
+            $session_id = session_id();
+            $stmt = $pdo->prepare("UPDATE cart_items SET quantity = ? WHERE id = ? AND session_id = ?");
+            return $stmt->execute([$quantity, $item_id, $session_id]);
+        }
+    } catch (PDOException $e) {
+        error_log('Update cart quantity error: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Get cart total
+ */
+function getCartTotal($user_id = null) {
+    $items = getCartItems($user_id);
+    $total = 0;
+    foreach ($items as $item) {
+        $total += $item['price'] * $item['quantity'];
+    }
+    return $total;
+}
+
+/**
+ * Clear cart
+ */
+function clearCart($user_id = null) {
+    global $pdo;
+    
+    if ($user_id === null && isset($_SESSION['user_id'])) {
+        $user_id = $_SESSION['user_id'];
+    }
+    
+    try {
+        if ($user_id) {
+            $stmt = $pdo->prepare("DELETE FROM cart WHERE user_id = ?");
+            return $stmt->execute([$user_id]);
+        } else {
+            $session_id = session_id();
+            $stmt = $pdo->prepare("DELETE FROM cart_items WHERE session_id = ?");
+            return $stmt->execute([$session_id]);
+        }
+    } catch (PDOException $e) {
+        error_log('Clear cart error: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Merge guest cart with user cart after login
+ */
+function mergeGuestCart($user_id) {
+    global $pdo;
+    
+    $session_id = session_id();
+    
+    try {
+        // Get guest cart items
+        $stmt = $pdo->prepare("SELECT * FROM cart_items WHERE session_id = ?");
+        $stmt->execute([$session_id]);
+        $guest_items = $stmt->fetchAll();
+        
+        foreach ($guest_items as $item) {
+            // Check if product already in user cart
+            $stmt = $pdo->prepare("SELECT id, quantity FROM cart WHERE user_id = ? AND product_id = ?");
+            $stmt->execute([$user_id, $item['product_id']]);
+            $existing = $stmt->fetch();
+            
+            if ($existing) {
+                // Update quantity
+                $new_quantity = $existing['quantity'] + $item['quantity'];
+                $stmt = $pdo->prepare("UPDATE cart SET quantity = ? WHERE id = ?");
+                $stmt->execute([$new_quantity, $existing['id']]);
+            } else {
+                // Add to user cart
+                $stmt = $pdo->prepare("INSERT INTO cart (user_id, product_id, quantity) VALUES (?, ?, ?)");
+                $stmt->execute([$user_id, $item['product_id'], $item['quantity']]);
+            }
+        }
+        
+        // Clear guest cart
+        $stmt = $pdo->prepare("DELETE FROM cart_items WHERE session_id = ?");
+        $stmt->execute([$session_id]);
+        
+        return true;
+    } catch (PDOException $e) {
+        error_log('Merge cart error: ' . $e->getMessage());
         return false;
     }
 }
