@@ -32,7 +32,7 @@ echo "<!DOCTYPE html>
 echo "<div class='section'>";
 echo "<h2>Step 1: Loading Configuration</h2>";
 
-$config_path = __DIR__ . 'includes/config.php';
+$config_path = __DIR__ . '/includes/config.php';
 if (!file_exists($config_path)) {
     die("<span class='fail'>❌ config.php not found at: " . $config_path . "</span>");
 }
