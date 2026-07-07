@@ -298,9 +298,7 @@ $page_title = 'Profile Settings';
                                 <label><i class="fas fa-key"></i> Current Password</label>
                                 <div class="password-wrapper">
                                     <input type="password" name="current_password" id="current_password" required placeholder="Enter current password">
-                                    <button type="button" class="toggle-password" onclick="togglePassword('current_password')">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
+                                  
                                 </div>
                             </div>
                             
@@ -308,20 +306,16 @@ $page_title = 'Profile Settings';
                                 <label><i class="fas fa-lock"></i> New Password</label>
                                 <div class="password-wrapper">
                                     <input type="password" name="new_password" id="new_password" required placeholder="Enter new password">
-                                    <button type="button" class="toggle-password" onclick="togglePassword('new_password')">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
+                                 
                                 </div>
-                                <div class="password-strength" id="passwordStrength"></div>
+                              
                             </div>
                             
                             <div class="form-group">
                                 <label><i class="fas fa-check-circle"></i> Confirm New Password</label>
                                 <div class="password-wrapper">
                                     <input type="password" name="confirm_password" id="confirm_password" required placeholder="Confirm new password">
-                                    <button type="button" class="toggle-password" onclick="togglePassword('confirm_password')">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
+                                  
                                 </div>
                             </div>
                             
@@ -494,24 +488,8 @@ $page_title = 'Profile Settings';
             cursor: pointer;
             padding: 5px 10px;
             font-size: 14px;
-        }
-        
-        .password-wrapper .toggle-password:hover {
-            color: var(--primary);
-        }
-        
-        .password-strength {
-            height: 4px;
-            margin-top: 8px;
-            border-radius: 2px;
-            transition: all 0.3s ease;
-        }
-        
-        .password-strength.weak { background: #dc3545; width: 25%; }
-        .password-strength.medium { background: #ffc107; width: 50%; }
-        .password-strength.strong { background: #28a745; width: 75%; }
-        .password-strength.very-strong { background: #28a745; width: 100%; }
-        
+        }   
+    
         .activity-list {
             max-height: 300px;
             overflow-y: auto;
@@ -709,37 +687,6 @@ $page_title = 'Profile Settings';
     </style>
 
     <script>
-        // Toggle password visibility
-        function togglePasswordVisibility(id) {
-            const input = document.getElementById(id);
-            const button = input.parentElement.querySelector('.toggle-password');
-            const icon = button.querySelector('i');
-            
-            if (input.type === 'password') {
-                input.type = 'text';
-                icon.className = 'fas fa-eye-slash';
-            } else {
-                input.type = 'password';
-                icon.className = 'fas fa-eye';
-            }
-        }
-        
-        // Password strength indicator
-        document.getElementById('new_password')?.addEventListener('keyup', function() {
-            const strength = document.getElementById('passwordStrength');
-            const password = this.value;
-            
-            let score = 0;
-            if (password.length >= 6) score++;
-            if (password.length >= 10) score++;
-            if (/[A-Z]/.test(password)) score++;
-            if (/[0-9]/.test(password)) score++;
-            if (/[^A-Za-z0-9]/.test(password)) score++;
-            
-            const levels = ['', 'weak', 'medium', 'strong', 'very-strong'];
-            strength.className = 'password-strength ' + (levels[score] || '');
-            strength.style.display = password ? 'block' : 'none';
-        });
           document.getElementById('profile_picture')?.addEventListener('change', function() {
             const uploadBtn = document.getElementById('uploadBtn');
             if (this.files.length > 0) {
