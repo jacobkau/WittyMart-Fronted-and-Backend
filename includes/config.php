@@ -134,7 +134,7 @@ function hasRole($role) {
 function requireLogin() {
     if (!isLoggedIn()) {
         $_SESSION['redirect_after_login'] = $_SERVER['REQUEST_URI'];
-        header('Location: login-register.php');
+        header('Location: home.php');
         exit();
     }
 }
@@ -145,12 +145,12 @@ function requireLogin() {
 function requireAdmin() {
     if (!isLoggedIn()) {
         $_SESSION['redirect_after_login'] = $_SERVER['REQUEST_URI'];
-        header('Location: login-register.php');
+        header('Location: home.php');
         exit();
     }
     
     if (!isAdmin()) {
-        header('Location: index.php');
+        header('Location: welcome.php');
         exit();
     }
 }
@@ -201,7 +201,7 @@ function redirectAfterLogin() {
         unset($_SESSION['redirect_after_login']);
         header('Location: ' . $redirect);
     } else {
-        header('Location: index.php');
+        header('Location: welcome.php');
     }
     exit();
 }
