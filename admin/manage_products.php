@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $description = sanitize($_POST['description'] ?? '');
                 $price = floatval($_POST['price'] ?? 0);
                 $category_id = intval($_POST['category_id'] ?? 0);
-                // Remove status from insert since it doesn't exist yet
+                $status = sanitize($_POST['status'] ?? 'active');
                 
                 // Handle image upload
                 $image_name = null;
@@ -43,9 +43,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 if ($name && $price > 0) {
-                    // Insert without status column
-                    $stmt = $pdo->prepare("INSERT INTO products (name, description, price, category_id, image) VALUES (?, ?, ?, ?, ?)");
-                    if ($stmt->execute([$name, $description, $price, $category_id, $image_name])) {
+                    $stmt = $pdo->prepare("INSERT INTO products (name, description, price, category_id, image, status) VALUES (?, ?, ?, ?, ?, ?)");
+                    if ($stmt->execute([$name, $description, $price, $category_id, $image_name, $status])) {
                         if (function_exists('logActivity')) {
                             logActivity(
                                 'add_product',
@@ -72,6 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $description = sanitize($_POST['description'] ?? '');
                 $price = floatval($_POST['price'] ?? 0);
                 $category_id = intval($_POST['category_id'] ?? 0);
+                $status = sanitize($_POST['status'] ?? 'active');
                 
                 // Handle image upload
                 $image_name = null;
@@ -92,13 +92,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 if ($name && $price > 0 && $id) {
                     if ($image_name) {
-                        // Update with new image
-                        $stmt = $pdo->prepare("UPDATE products SET name = ?, description = ?, price = ?, category_id = ?, image = ? WHERE id = ?");
-                        $result = $stmt->execute([$name, $description, $price, $category_id, $image_name, $id]);
+                        $stmt = $pdo->prepare("UPDATE products SET name = ?, description = ?, price = ?, category_id = ?, image = ?, status = ? WHERE id = ?");
+                        $result = $stmt->execute([$name, $description, $price, $category_id, $image_name, $status, $id]);
                     } else {
-                        // Update without changing image
-                        $stmt = $pdo->prepare("UPDATE products SET name = ?, description = ?, price = ?, category_id = ? WHERE id = ?");
-                        $result = $stmt->execute([$name, $description, $price, $category_id, $id]);
+                        $stmt = $pdo->prepare("UPDATE products SET name = ?, description = ?, price = ?, category_id = ?, status = ? WHERE id = ?");
+                        $result = $stmt->execute([$name, $description, $price, $category_id, $status, $id]);
                     }
                     
                     if ($result) {
@@ -124,7 +122,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
             case 'delete':
                 $id = intval($_POST['id']);
-                // Check if product is in any cart before deleting
                 $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM cart WHERE product_id = ?");
                 $stmt->execute([$id]);
                 $cart_count = $stmt->fetch()['count'];
@@ -203,6 +200,18 @@ function getProductImage($image_name) {
     return '../uploads/products/' . $image_name;
 }
 
+// Helper function to escape JavaScript strings
+function jsEscape($str) {
+    if ($str === null) return '';
+    $str = str_replace("\\", "\\\\", $str);
+    $str = str_replace("'", "\\'", $str);
+    $str = str_replace('"', '\\"', $str);
+    $str = str_replace("\r", "\\r", $str);
+    $str = str_replace("\n", "\\n", $str);
+    $str = str_replace("\t", "\\t", $str);
+    return $str;
+}
+
 $page_title = 'Products';
 ?>
 <!DOCTYPE html>
@@ -230,6 +239,7 @@ $page_title = 'Products';
         .status-active { background-color: #28a745; }
         .status-inactive { background-color: #dc3545; }
         .status-draft { background-color: #ffc107; color: #333; }
+        .status-deleted { background-color: #6c757d; }
         .form-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -326,6 +336,7 @@ $page_title = 'Products';
                                     <th>Description</th>
                                     <th>Price</th>
                                     <th>Category</th>
+                                    <th>Status</th>
                                     <th>Created</th>
                                     <th>Actions</th>
                                 </tr>
@@ -342,6 +353,11 @@ $page_title = 'Products';
                                         <td><?php echo htmlspecialchars(substr($product['description'] ?? '', 0, 50)); ?>...</td>
                                         <td>Ksh <?php echo number_format($product['price'], 0); ?></td>
                                         <td><?php echo htmlspecialchars($product['category_name'] ?? 'Uncategorized'); ?></td>
+                                        <td>
+                                            <span class="status-badge status-<?php echo htmlspecialchars($product['status'] ?? 'active'); ?>">
+                                                <?php echo htmlspecialchars($product['status'] ?? 'active'); ?>
+                                            </span>
+                                        </td>
                                         <td><?php echo date('M d, Y', strtotime($product['created_at'] ?? 'now')); ?></td>
                                         <td>
                                             <div class="action-buttons">
@@ -410,15 +426,25 @@ $page_title = 'Products';
                     <textarea name="description" rows="3" placeholder="Enter product description"></textarea>
                 </div>
                 
-                <div class="form-group">
-                    <label><i class="fas fa-image"></i> Product Image</label>
-                    <div class="file-input-wrapper">
-                        <button type="button" class="btn-secondary" style="width:100%;">
-                            <i class="fas fa-upload"></i> Choose Image
-                        </button>
-                        <input type="file" name="image" accept="image/*">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-image"></i> Product Image</label>
+                        <div class="file-input-wrapper">
+                            <button type="button" class="btn-secondary" style="width:100%;">
+                                <i class="fas fa-upload"></i> Choose Image
+                            </button>
+                            <input type="file" name="image" accept="image/*">
+                        </div>
+                        <small style="display:block; margin-top:5px; color:#666;">Max size: 5MB (JPG, PNG, GIF)</small>
                     </div>
-                    <small style="display:block; margin-top:5px; color:#666;">Max size: 5MB (JPG, PNG, GIF)</small>
+                    <div class="form-group">
+                        <label><i class="fas fa-toggle-on"></i> Status</label>
+                        <select name="status">
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="draft">Draft</option>
+                        </select>
+                    </div>
                 </div>
                 
                 <button type="submit" class="btn-primary" style="width:100%; margin-top:10px;">
@@ -467,16 +493,26 @@ $page_title = 'Products';
                     <textarea name="description" id="editProductDescription" rows="3" placeholder="Enter product description"></textarea>
                 </div>
                 
-                <div class="form-group">
-                    <label><i class="fas fa-image"></i> Product Image</label>
-                    <div id="editProductImagePreview" style="margin-bottom:10px;"></div>
-                    <div class="file-input-wrapper">
-                        <button type="button" class="btn-secondary" style="width:100%;">
-                            <i class="fas fa-upload"></i> Change Image
-                        </button>
-                        <input type="file" name="image" accept="image/*">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-image"></i> Product Image</label>
+                        <div id="editProductImagePreview" style="margin-bottom:10px;"></div>
+                        <div class="file-input-wrapper">
+                            <button type="button" class="btn-secondary" style="width:100%;">
+                                <i class="fas fa-upload"></i> Change Image
+                            </button>
+                            <input type="file" name="image" accept="image/*">
+                        </div>
+                        <small style="display:block; margin-top:5px; color:#666;">Leave empty to keep current image</small>
                     </div>
-                    <small style="display:block; margin-top:5px; color:#666;">Leave empty to keep current image</small>
+                    <div class="form-group">
+                        <label><i class="fas fa-toggle-on"></i> Status</label>
+                        <select name="status" id="editProductStatus">
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="draft">Draft</option>
+                        </select>
+                    </div>
                 </div>
                 
                 <button type="submit" class="btn-primary" style="width:100%; margin-top:10px;">
@@ -495,10 +531,11 @@ $page_title = 'Products';
             if (id === 'editProductModal') {
                 <?php if ($edit_product): ?>
                     document.getElementById('editProductId').value = '<?php echo $edit_product['id']; ?>';
-                    document.getElementById('editProductName').value = '<?php echo addslashes($edit_product['name']); ?>';
-                    document.getElementById('editProductDescription').value = '<?php echo addslashes($edit_product['description'] ?? ''); ?>';
+                    document.getElementById('editProductName').value = '<?php echo jsEscape($edit_product['name']); ?>';
+                    document.getElementById('editProductDescription').value = '<?php echo jsEscape($edit_product['description'] ?? ''); ?>';
                     document.getElementById('editProductPrice').value = '<?php echo $edit_product['price']; ?>';
                     document.getElementById('editProductCategory').value = '<?php echo $edit_product['category_id'] ?? ''; ?>';
+                    document.getElementById('editProductStatus').value = '<?php echo $edit_product['status'] ?? 'active'; ?>';
                     
                     // Show current image
                     var imagePreview = document.getElementById('editProductImagePreview');
