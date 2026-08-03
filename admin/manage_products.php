@@ -361,9 +361,9 @@ $page_title = 'Products';
                                         <td><?php echo date('M d, Y', strtotime($product['created_at'] ?? 'now')); ?></td>
                                         <td>
                                             <div class="action-buttons">
-                                                <a href="manage_products.php?edit=<?php echo $product['id']; ?>" class="btn-edit">
+                                                <button class="btn-edit" onclick="editProduct(<?php echo $product['id']; ?>)">
                                                     <i class="fas fa-edit"></i>
-                                                </a>
+                                                </button>
                                                 <form method="POST" onsubmit="return confirm('Are you sure you want to delete this product?')">
                                                     <input type="hidden" name="action" value="delete">
                                                     <input type="hidden" name="id" value="<?php echo $product['id']; ?>">
@@ -523,29 +523,24 @@ $page_title = 'Products';
     </div>
 
     <script>
+        // Store product data for editing
+        var productData = {};
+        
+        <?php foreach ($products as $product): ?>
+            productData[<?php echo $product['id']; ?>] = {
+                id: <?php echo $product['id']; ?>,
+                name: '<?php echo jsEscape($product['name']); ?>',
+                description: '<?php echo jsEscape($product['description'] ?? ''); ?>',
+                price: '<?php echo $product['price']; ?>',
+                category_id: '<?php echo $product['category_id'] ?? ''; ?>',
+                status: '<?php echo $product['status'] ?? 'active'; ?>',
+                image: '<?php echo $product['image'] ? jsEscape($product['image']) : ''; ?>'
+            };
+        <?php endforeach; ?>
+        
         function openModal(id) {
             document.getElementById(id).style.display = 'block';
             document.body.style.overflow = 'hidden';
-            
-            // If edit modal, populate fields
-            if (id === 'editProductModal') {
-                <?php if ($edit_product): ?>
-                    document.getElementById('editProductId').value = '<?php echo $edit_product['id']; ?>';
-                    document.getElementById('editProductName').value = '<?php echo jsEscape($edit_product['name']); ?>';
-                    document.getElementById('editProductDescription').value = '<?php echo jsEscape($edit_product['description'] ?? ''); ?>';
-                    document.getElementById('editProductPrice').value = '<?php echo $edit_product['price']; ?>';
-                    document.getElementById('editProductCategory').value = '<?php echo $edit_product['category_id'] ?? ''; ?>';
-                    document.getElementById('editProductStatus').value = '<?php echo $edit_product['status'] ?? 'active'; ?>';
-                    
-                    // Show current image
-                    var imagePreview = document.getElementById('editProductImagePreview');
-                    <?php if ($edit_product['image']): ?>
-                        imagePreview.innerHTML = '<img src="<?php echo getProductImage($edit_product['image']); ?>" alt="Current image" style="max-height:100px; border-radius:4px;"><br><small style="color:#666;">Current image: <?php echo $edit_product['image']; ?></small>';
-                    <?php else: ?>
-                        imagePreview.innerHTML = '<small style="color:#666;">No image uploaded</small>';
-                    <?php endif; ?>
-                <?php endif; ?>
-            }
         }
         
         function closeModal(id) {
@@ -553,10 +548,38 @@ $page_title = 'Products';
             document.body.style.overflow = 'auto';
         }
         
+        function editProduct(productId) {
+            // Get product data
+            var data = productData[productId];
+            if (!data) {
+                alert('Product data not found!');
+                return;
+            }
+            
+            // Populate edit form
+            document.getElementById('editProductId').value = data.id;
+            document.getElementById('editProductName').value = data.name;
+            document.getElementById('editProductDescription').value = data.description;
+            document.getElementById('editProductPrice').value = data.price;
+            document.getElementById('editProductCategory').value = data.category_id;
+            document.getElementById('editProductStatus').value = data.status;
+            
+            // Show current image
+            var imagePreview = document.getElementById('editProductImagePreview');
+            if (data.image) {
+                imagePreview.innerHTML = '<img src="<?php echo '../uploads/products/'; ?>' + data.image + '" alt="Current image" style="max-height:100px; border-radius:4px;"><br><small style="color:#666;">Current image: ' + data.image + '</small>';
+            } else {
+                imagePreview.innerHTML = '<small style="color:#666;">No image uploaded</small>';
+            }
+            
+            // Open the modal
+            openModal('editProductModal');
+        }
+        
         // Auto-open edit modal if edit parameter is set
         <?php if ($edit_product): ?>
             window.onload = function() {
-                openModal('editProductModal');
+                editProduct(<?php echo $edit_product['id']; ?>);
             };
         <?php endif; ?>
         
@@ -571,7 +594,7 @@ $page_title = 'Products';
         // Close modal with Escape key
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
-                document.querySelectorAll('.modal').forEach(modal => {
+                document.querySelectorAll('.modal').forEach(function(modal) {
                     modal.style.display = 'none';
                 });
                 document.body.style.overflow = 'auto';
