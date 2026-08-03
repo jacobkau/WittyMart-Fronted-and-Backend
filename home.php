@@ -535,7 +535,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
         <div class="auth-container">
             <!-- Logo -->
             <div class="logo-container">
-                <img src="imas/logo.png" alt="WittyMart Logo">
+                <img src="images/logo.png" alt="WittyMart Logo">
                 <h1>WittyMart</h1>
                 <p>Smart Shopping for Witty Minds!</p>
             </div>
