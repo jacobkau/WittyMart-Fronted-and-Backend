@@ -52,24 +52,14 @@ function isActive($page) {
         <a href="manage_products.php" class="<?php echo isActive('manage_products.php'); ?>">
             <i class="fas fa-star"></i> SmartPicks 
         </a>        
-        <hr class="sidebar-divider">
-     
-        <div class="sidebar-label">Account</div>
+        <hr class="sidebar-divider">     
         <a href="admins.php" class="<?php echo isActive('admins.php'); ?>">
             <i class="fas fa-user-shield"></i> Admin Management
-        </a>
-        <a href="profile.php" class="<?php echo isActive('profile.php'); ?>">
-            <i class="fas fa-user-cog"></i> Profile
-        </a>
-        <a href="settings.php" class="<?php echo isActive('settings.php'); ?>">
-            <i class="fas fa-cog"></i> Settings
-        </a>
+        </a>     
         <a href="activity_logs.php" class="<?php echo isActive('activity_logs.php'); ?>">
             <i class="fas fa-history"></i> Activity Logs
         </a>
-        
-        <hr class="sidebar-divider">
-    
+        <hr class="sidebar-divider">    
         <a href="logout.php" class="logout-link">
             <i class="fas fa-sign-out-alt"></i> Logout
         </a>
