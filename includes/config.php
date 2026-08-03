@@ -103,6 +103,158 @@ if (!file_exists($no_image_path)) {
     }
 }
 
+// ============================================
+// AUTHENTICATION FUNCTIONS
+// ============================================
+
+/**
+ * Check if user is logged in
+ */
+function isLoggedIn() {
+    return isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
+}
+
+/**
+ * Check if user is admin
+ */
+function isAdmin() {
+    return isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true;
+}
+
+/**
+ * Check if user has a specific role
+ */
+function hasRole($role) {
+    return isset($_SESSION['user_role']) && $_SESSION['user_role'] === $role;
+}
+
+/**
+ * Require user to be logged in (redirect if not)
+ */
+function requireLogin() {
+    if (!isLoggedIn()) {
+        $_SESSION['redirect_after_login'] = $_SERVER['REQUEST_URI'];
+        header('Location: login-register.php');
+        exit();
+    }
+}
+
+/**
+ * Require user to be admin (redirect if not)
+ */
+function requireAdmin() {
+    if (!isLoggedIn()) {
+        $_SESSION['redirect_after_login'] = $_SERVER['REQUEST_URI'];
+        header('Location: login-register.php');
+        exit();
+    }
+    
+    if (!isAdmin()) {
+        header('Location: index.php');
+        exit();
+    }
+}
+
+/**
+ * Get current user data
+ */
+function getCurrentUser() {
+    global $pdo;
+    
+    if (!isLoggedIn()) {
+        return null;
+    }
+    
+    try {
+        $stmt = $pdo->prepare("SELECT id, name, email, phone, username, role, status, created_at FROM users WHERE id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        return $stmt->fetch();
+    } catch (PDOException $e) {
+        error_log('Get current user error: ' . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * Logout user
+ */
+function logoutUser() {
+    $_SESSION = array();
+    
+    if (ini_get("session.use_cookies")) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000,
+            $params["path"], $params["domain"],
+            $params["secure"], $params["httponly"]
+        );
+    }
+    
+    session_destroy();
+}
+
+/**
+ * Redirect to previous page or default
+ */
+function redirectAfterLogin() {
+    if (isset($_SESSION['redirect_after_login'])) {
+        $redirect = $_SESSION['redirect_after_login'];
+        unset($_SESSION['redirect_after_login']);
+        header('Location: ' . $redirect);
+    } else {
+        header('Location: index.php');
+    }
+    exit();
+}
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+/**
+ * Log activity for audit trail
+ */
+function logActivity($action, $details, $userId = null, $userName = null) {
+    global $pdo;
+    
+    try {
+        // Check if activity_log table exists, if not create it
+        $stmt = $pdo->prepare("
+            CREATE TABLE IF NOT EXISTS activity_log (
+                id SERIAL PRIMARY KEY,
+                user_id INT,
+                user_name VARCHAR(100),
+                action VARCHAR(50),
+                details TEXT,
+                ip_address VARCHAR(45),
+                user_agent TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ");
+        $stmt->execute();
+        
+        // Insert log entry
+        $stmt = $pdo->prepare("
+            INSERT INTO activity_log (user_id, user_name, action, details, ip_address, user_agent) 
+            VALUES (?, ?, ?, ?, ?, ?)
+        ");
+        
+        $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';
+        
+        return $stmt->execute([
+            $userId ?? ($_SESSION['user_id'] ?? null),
+            $userName ?? ($_SESSION['user_name'] ?? 'System'),
+            $action,
+            $details,
+            $ip,
+            $userAgent
+        ]);
+    } catch (PDOException $e) {
+        error_log('Log activity error: ' . $e->getMessage());
+        return false;
+    }
+}
+
 function getBaseUrl() {
     $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
     $host = $_SERVER['HTTP_HOST'];
