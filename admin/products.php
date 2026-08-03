@@ -912,39 +912,50 @@ $page_title = 'Products';
             }
         }
 
-        // ===== EDIT PRODUCT =====
-        function editProduct(id) {
-            fetch('includes/ajax.php?action=get_product&id=' + id)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        document.getElementById('edit_product_id').value = data.product.id;
-                        document.getElementById('edit_product_name').value = data.product.name;
-                        document.getElementById('edit_product_description').value = data.product.description || '';
-                        document.getElementById('edit_product_price').value = data.product.price;
-                        document.getElementById('edit_product_category').value = data.product.category_id || '';
-                        document.getElementById('edit_product_stock').value = data.product.stock || 0;
-                        document.getElementById('edit_product_sku').value = data.product.sku || '';
-                        document.getElementById('edit_product_supplier').value = data.product.supplier || '';
-                        
-                        const imgPreview = document.getElementById('editImagePreview');
-                        if (data.product.image) {
-                            const imgUrl = 'https://wittymart.onrender.com/' + data.product.image;
-                            imgPreview.innerHTML = `<img src="${imgUrl}" alt="Product Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px;"><p>Current image</p>`;
-                        } else {
-                            imgPreview.innerHTML = `<i class="fas fa-image" style="font-size: 40px; color: #ddd;"></i><p>No image</p>`;
-                        }
-                        
-                        openModal('editProductModal');
-                    } else {
-                        alert('Failed to load product data');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Error loading product data');
-                });
-        }
+       // ===== EDIT PRODUCT =====
+function editProduct(id) {
+    // Show loading state
+    const modal = document.getElementById('editProductModal');
+    if (modal) {
+        // You could show a loading spinner here
+    }
+    
+    fetch('includes/ajax.php?action=get_product&id=' + id)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok: ' + response.status);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                document.getElementById('edit_product_id').value = data.product.id;
+                document.getElementById('edit_product_name').value = data.product.name || '';
+                document.getElementById('edit_product_description').value = data.product.description || '';
+                document.getElementById('edit_product_price').value = data.product.price || 0;
+                document.getElementById('edit_product_category').value = data.product.category_id || '';
+                document.getElementById('edit_product_stock').value = data.product.stock || 0;
+                document.getElementById('edit_product_sku').value = data.product.sku || '';
+                document.getElementById('edit_product_supplier').value = data.product.supplier || '';
+                
+                const imgPreview = document.getElementById('editImagePreview');
+                if (data.product.image) {
+                    const imgUrl = 'https://wittymart.onrender.com/' + data.product.image;
+                    imgPreview.innerHTML = `<img src="${imgUrl}" alt="Product Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px;"><p>Current image</p>`;
+                } else {
+                    imgPreview.innerHTML = `<i class="fas fa-image" style="font-size: 40px; color: #ddd;"></i><p>No image</p>`;
+                }
+                
+                openModal('editProductModal');
+            } else {
+                alert('Failed to load product data: ' + (data.message || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error loading product data. Please check the console for details.\n\n' + error.message);
+        });
+}
 
         // ===== AUTO-HIDE ALERTS =====
         setTimeout(() => {
