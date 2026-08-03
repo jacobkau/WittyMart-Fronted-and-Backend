@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $description = sanitize($_POST['description'] ?? '');
                 $price = floatval($_POST['price'] ?? 0);
                 $category_id = intval($_POST['category_id'] ?? 0);
-                $status = sanitize($_POST['status'] ?? 'active');
+                // Remove status from insert since it doesn't exist yet
                 
                 // Handle image upload
                 $image_name = null;
@@ -43,14 +43,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 if ($name && $price > 0) {
-                    $stmt = $pdo->prepare("INSERT INTO products (name, description, price, category_id, image, status) VALUES (?, ?, ?, ?, ?, ?)");
-                    if ($stmt->execute([$name, $description, $price, $category_id, $image_name, $status])) {
-                        logActivity(
-                            'add_product',
-                            'Added product: ' . $name,
-                            $_SESSION['user_id'],
-                            $_SESSION['user_name']
-                        );
+                    // Insert without status column
+                    $stmt = $pdo->prepare("INSERT INTO products (name, description, price, category_id, image) VALUES (?, ?, ?, ?, ?)");
+                    if ($stmt->execute([$name, $description, $price, $category_id, $image_name])) {
+                        if (function_exists('logActivity')) {
+                            logActivity(
+                                'add_product',
+                                'Added product: ' . $name,
+                                $_SESSION['user_id'],
+                                $_SESSION['user_name']
+                            );
+                        }
                         $message = 'Product added successfully!';
                         $messageType = 'success';
                     } else {
@@ -69,7 +72,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $description = sanitize($_POST['description'] ?? '');
                 $price = floatval($_POST['price'] ?? 0);
                 $category_id = intval($_POST['category_id'] ?? 0);
-                $status = sanitize($_POST['status'] ?? 'active');
                 
                 // Handle image upload
                 $image_name = null;
@@ -91,21 +93,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($name && $price > 0 && $id) {
                     if ($image_name) {
                         // Update with new image
-                        $stmt = $pdo->prepare("UPDATE products SET name = ?, description = ?, price = ?, category_id = ?, image = ?, status = ? WHERE id = ?");
-                        $result = $stmt->execute([$name, $description, $price, $category_id, $image_name, $status, $id]);
+                        $stmt = $pdo->prepare("UPDATE products SET name = ?, description = ?, price = ?, category_id = ?, image = ? WHERE id = ?");
+                        $result = $stmt->execute([$name, $description, $price, $category_id, $image_name, $id]);
                     } else {
                         // Update without changing image
-                        $stmt = $pdo->prepare("UPDATE products SET name = ?, description = ?, price = ?, category_id = ?, status = ? WHERE id = ?");
-                        $result = $stmt->execute([$name, $description, $price, $category_id, $status, $id]);
+                        $stmt = $pdo->prepare("UPDATE products SET name = ?, description = ?, price = ?, category_id = ? WHERE id = ?");
+                        $result = $stmt->execute([$name, $description, $price, $category_id, $id]);
                     }
                     
                     if ($result) {
-                        logActivity(
-                            'update_product',
-                            'Updated product: ' . $name . ' (ID: ' . $id . ')',
-                            $_SESSION['user_id'],
-                            $_SESSION['user_name']
-                        );
+                        if (function_exists('logActivity')) {
+                            logActivity(
+                                'update_product',
+                                'Updated product: ' . $name . ' (ID: ' . $id . ')',
+                                $_SESSION['user_id'],
+                                $_SESSION['user_name']
+                            );
+                        }
                         $message = 'Product updated successfully!';
                         $messageType = 'success';
                     } else {
@@ -120,37 +124,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
             case 'delete':
                 $id = intval($_POST['id']);
-                // Check if product is in any cart or order before deleting
+                // Check if product is in any cart before deleting
                 $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM cart WHERE product_id = ?");
                 $stmt->execute([$id]);
                 $cart_count = $stmt->fetch()['count'];
                 
                 if ($cart_count > 0) {
-                    // Soft delete - update status instead of actual deletion
-                    $stmt = $pdo->prepare("UPDATE products SET status = 'deleted' WHERE id = ?");
-                    if ($stmt->execute([$id])) {
-                        logActivity(
-                            'delete_product',
-                            'Soft deleted product ID: ' . $id,
-                            $_SESSION['user_id'],
-                            $_SESSION['user_name']
-                        );
-                        $message = 'Product marked as deleted successfully!';
-                        $messageType = 'success';
-                    } else {
-                        $message = 'Failed to delete product.';
-                        $messageType = 'error';
-                    }
+                    $message = 'Cannot delete product as it is in a cart.';
+                    $messageType = 'error';
                 } else {
-                    // Hard delete if not in cart
                     $stmt = $pdo->prepare("DELETE FROM products WHERE id = ?");
                     if ($stmt->execute([$id])) {
-                        logActivity(
-                            'delete_product',
-                            'Deleted product ID: ' . $id,
-                            $_SESSION['user_id'],
-                            $_SESSION['user_name']
-                        );
+                        if (function_exists('logActivity')) {
+                            logActivity(
+                                'delete_product',
+                                'Deleted product ID: ' . $id,
+                                $_SESSION['user_id'],
+                                $_SESSION['user_name']
+                            );
+                        }
                         $message = 'Product deleted successfully!';
                         $messageType = 'success';
                     } else {
@@ -173,7 +165,6 @@ try {
         SELECT p.*, c.name as category_name 
         FROM products p
         LEFT JOIN categories c ON p.category_id = c.id
-        WHERE p.status != 'deleted' OR p.status IS NULL
         ORDER BY p.created_at DESC
     ");
     $stmt->execute();
@@ -204,6 +195,14 @@ if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
     }
 }
 
+// Helper function to get product image URL
+function getProductImage($image_name) {
+    if (empty($image_name) || !file_exists(UPLOAD_DIR . $image_name)) {
+        return '../uploads/products/no-image.png';
+    }
+    return '../uploads/products/' . $image_name;
+}
+
 $page_title = 'Products';
 ?>
 <!DOCTYPE html>
@@ -231,7 +230,6 @@ $page_title = 'Products';
         .status-active { background-color: #28a745; }
         .status-inactive { background-color: #dc3545; }
         .status-draft { background-color: #ffc107; color: #333; }
-        .status-deleted { background-color: #6c757d; }
         .form-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -249,6 +247,7 @@ $page_title = 'Products';
             position: relative;
             overflow: hidden;
             display: inline-block;
+            width: 100%;
         }
         .file-input-wrapper input[type=file] {
             position: absolute;
@@ -281,6 +280,17 @@ $page_title = 'Products';
         }
         .action-buttons form {
             display: inline;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn-secondary:hover {
+            background-color: #5a6268;
         }
     </style>
 </head>
@@ -316,7 +326,6 @@ $page_title = 'Products';
                                     <th>Description</th>
                                     <th>Price</th>
                                     <th>Category</th>
-                                    <th>Status</th>
                                     <th>Created</th>
                                     <th>Actions</th>
                                 </tr>
@@ -333,12 +342,7 @@ $page_title = 'Products';
                                         <td><?php echo htmlspecialchars(substr($product['description'] ?? '', 0, 50)); ?>...</td>
                                         <td>Ksh <?php echo number_format($product['price'], 0); ?></td>
                                         <td><?php echo htmlspecialchars($product['category_name'] ?? 'Uncategorized'); ?></td>
-                                        <td>
-                                            <span class="status-badge status-<?php echo htmlspecialchars($product['status'] ?? 'active'); ?>">
-                                                <?php echo htmlspecialchars($product['status'] ?? 'active'); ?>
-                                            </span>
-                                        </td>
-                                        <td><?php echo date('M d, Y', strtotime($product['created_at'])); ?></td>
+                                        <td><?php echo date('M d, Y', strtotime($product['created_at'] ?? 'now')); ?></td>
                                         <td>
                                             <div class="action-buttons">
                                                 <a href="manage_products.php?edit=<?php echo $product['id']; ?>" class="btn-edit">
@@ -406,25 +410,15 @@ $page_title = 'Products';
                     <textarea name="description" rows="3" placeholder="Enter product description"></textarea>
                 </div>
                 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label><i class="fas fa-image"></i> Product Image</label>
-                        <div class="file-input-wrapper">
-                            <button type="button" class="btn-secondary" style="width:100%;">
-                                <i class="fas fa-upload"></i> Choose Image
-                            </button>
-                            <input type="file" name="image" accept="image/*">
-                        </div>
-                        <small style="display:block; margin-top:5px; color:#666;">Max size: 5MB (JPG, PNG, GIF)</small>
+                <div class="form-group">
+                    <label><i class="fas fa-image"></i> Product Image</label>
+                    <div class="file-input-wrapper">
+                        <button type="button" class="btn-secondary" style="width:100%;">
+                            <i class="fas fa-upload"></i> Choose Image
+                        </button>
+                        <input type="file" name="image" accept="image/*">
                     </div>
-                    <div class="form-group">
-                        <label><i class="fas fa-toggle-on"></i> Status</label>
-                        <select name="status">
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                            <option value="draft">Draft</option>
-                        </select>
-                    </div>
+                    <small style="display:block; margin-top:5px; color:#666;">Max size: 5MB (JPG, PNG, GIF)</small>
                 </div>
                 
                 <button type="submit" class="btn-primary" style="width:100%; margin-top:10px;">
@@ -473,26 +467,16 @@ $page_title = 'Products';
                     <textarea name="description" id="editProductDescription" rows="3" placeholder="Enter product description"></textarea>
                 </div>
                 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label><i class="fas fa-image"></i> Product Image</label>
-                        <div id="editProductImagePreview" style="margin-bottom:10px;"></div>
-                        <div class="file-input-wrapper">
-                            <button type="button" class="btn-secondary" style="width:100%;">
-                                <i class="fas fa-upload"></i> Change Image
-                            </button>
-                            <input type="file" name="image" accept="image/*">
-                        </div>
-                        <small style="display:block; margin-top:5px; color:#666;">Leave empty to keep current image</small>
+                <div class="form-group">
+                    <label><i class="fas fa-image"></i> Product Image</label>
+                    <div id="editProductImagePreview" style="margin-bottom:10px;"></div>
+                    <div class="file-input-wrapper">
+                        <button type="button" class="btn-secondary" style="width:100%;">
+                            <i class="fas fa-upload"></i> Change Image
+                        </button>
+                        <input type="file" name="image" accept="image/*">
                     </div>
-                    <div class="form-group">
-                        <label><i class="fas fa-toggle-on"></i> Status</label>
-                        <select name="status" id="editProductStatus">
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                            <option value="draft">Draft</option>
-                        </select>
-                    </div>
+                    <small style="display:block; margin-top:5px; color:#666;">Leave empty to keep current image</small>
                 </div>
                 
                 <button type="submit" class="btn-primary" style="width:100%; margin-top:10px;">
@@ -515,7 +499,6 @@ $page_title = 'Products';
                     document.getElementById('editProductDescription').value = '<?php echo addslashes($edit_product['description'] ?? ''); ?>';
                     document.getElementById('editProductPrice').value = '<?php echo $edit_product['price']; ?>';
                     document.getElementById('editProductCategory').value = '<?php echo $edit_product['category_id'] ?? ''; ?>';
-                    document.getElementById('editProductStatus').value = '<?php echo $edit_product['status'] ?? 'active'; ?>';
                     
                     // Show current image
                     var imagePreview = document.getElementById('editProductImagePreview');
