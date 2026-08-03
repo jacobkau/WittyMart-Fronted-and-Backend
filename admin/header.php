@@ -214,7 +214,7 @@ $user_avatar = $_SESSION['user_avatar'] ?? 'default.jpg';
                     </a>
                 </li>
                  <li>
-                    <a class="dropdown-item" href="profile.php">
+                    <a class="dropdown-item" href="slider.php">
                         <i class="fa-solid fa-sliders"></i> Slider
                     </a>
                 </li>
