@@ -8,6 +8,20 @@ if (!isset($pdo)) {
     die('Database connection error. Please try again later.');
 }
 
+// ===== FETCH SLIDER IMAGES =====
+try {
+    $stmt = $pdo->prepare("
+        SELECT * FROM slider_images 
+        WHERE status = 'active' 
+        ORDER BY display_order ASC, created_at DESC
+    ");
+    $stmt->execute();
+    $slider_images = $stmt->fetchAll();
+} catch (PDOException $e) {
+    error_log('Slider images error: ' . $e->getMessage());
+    $slider_images = [];
+}
+
 // ===== FETCH FEATURED PRODUCTS =====
 try {
     $stmt = $pdo->prepare("
@@ -64,6 +78,14 @@ try {
 function getProductImageUrl($image_path) {
     if (empty($image_path)) {
         return 'uploads/products/no-image.png';
+    }
+    return $image_path;
+}
+
+// ===== HELPER FUNCTION FOR SLIDER IMAGE =====
+function getSliderImageUrl($image_path) {
+    if (empty($image_path)) {
+        return 'images/default-slide.jpg';
     }
     return $image_path;
 }
@@ -253,7 +275,182 @@ function renderStars($rating) {
             opacity: 0.3;
         }
 
+        /* Hero Slider Styles */
+        .hero {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+            align-items: stretch;
+        }
+
+        .about-shop {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .about-shop h1 {
+            font-size: 28px;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .about-shop h1 span {
+            color: #05573c;
+        }
+
+        .about-shop p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+
+        .hero-slider {
+            position: relative;
+            overflow: hidden;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            background: #000;
+            min-height: 300px;
+        }
+
+        .slides {
+            display: flex;
+            transition: transform 0.5s ease-in-out;
+            height: 100%;
+        }
+
+        .slide {
+            min-width: 100%;
+            position: relative;
+            height: 100%;
+        }
+
+        .slide img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            min-height: 300px;
+            max-height: 400px;
+        }
+
+        .slide .caption {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 30px;
+            background: linear-gradient(transparent, rgba(0,0,0,0.7));
+            color: #fff;
+        }
+
+        .slide .caption h2 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .slide .caption p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .slide .caption .slider-btn {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 20px;
+            background: #05573c;
+            color: #fff;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background 0.3s ease;
+        }
+
+        .slide .caption .slider-btn:hover {
+            background: #03402c;
+        }
+
+        .slider-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255,255,255,0.3);
+            color: #fff;
+            border: none;
+            padding: 12px 18px;
+            cursor: pointer;
+            font-size: 24px;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+            z-index: 10;
+            backdrop-filter: blur(5px);
+        }
+
+        .slider-nav:hover {
+            background: rgba(255,255,255,0.6);
+            color: #333;
+        }
+
+        .slider-nav.prev {
+            left: 15px;
+        }
+
+        .slider-nav.next {
+            right: 15px;
+        }
+
+        /* Slider Dots */
+        .slider-dots {
+            position: absolute;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+            z-index: 10;
+        }
+
+        .slider-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.5);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+            padding: 0;
+        }
+
+        .slider-dot.active {
+            background: #fff;
+            transform: scale(1.2);
+        }
+
         /* Responsive */
+        @media (max-width: 992px) {
+            .hero {
+                grid-template-columns: 1fr;
+            }
+
+            .about-shop {
+                order: 2;
+            }
+
+            .hero-slider {
+                order: 1;
+                min-height: 250px;
+            }
+
+            .slide img {
+                min-height: 250px;
+                max-height: 300px;
+            }
+        }
+
         @media (max-width: 768px) {
             .product-grid {
                 grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -266,6 +463,22 @@ function renderStars($rating) {
 
             .product-card img {
                 height: 140px;
+            }
+
+            .about-shop h1 {
+                font-size: 22px;
+            }
+
+            .slide .caption h2 {
+                font-size: 18px;
+            }
+
+            .slide .caption p {
+                font-size: 12px;
+            }
+
+            .slide .caption {
+                padding: 20px;
             }
         }
     </style>
@@ -286,37 +499,58 @@ function renderStars($rating) {
           
             <div class="hero-slider">
                 <div class="slides" id="heroSlides">
-                    <div class="slide">
-                        <img src="images/smart.jpg" alt="Deal 1">
-                        <div class="caption">
-                            <h2>Smartphone Pro X</h2>
-                            <p>Grab the latest smartphone at 20% off!</p>
+                    <?php if (!empty($slider_images)): ?>
+                        <?php foreach ($slider_images as $index => $slide): ?>
+                            <div class="slide" data-index="<?php echo $index; ?>">
+                                <img src="<?php echo htmlspecialchars(getSliderImageUrl($slide['image_path'])); ?>" 
+                                     alt="<?php echo htmlspecialchars($slide['title']); ?>">
+                                <div class="caption">
+                                    <h2><?php echo htmlspecialchars($slide['title']); ?></h2>
+                                    <p><?php echo htmlspecialchars($slide['subtitle'] ?? ''); ?></p>
+                                    <?php if (!empty($slide['link']) && !empty($slide['button_text'])): ?>
+                                        <a href="<?php echo htmlspecialchars($slide['link']); ?>" class="slider-btn">
+                                            <?php echo htmlspecialchars($slide['button_text']); ?>
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <!-- Default fallback slides -->
+                        <div class="slide">
+                            <img src="images/smart.jpg" alt="Deal 1">
+                            <div class="caption">
+                                <h2>Smartphone Pro X</h2>
+                                <p>Grab the latest smartphone at 20% off!</p>
+                            </div>
                         </div>
-                    </div>
-                    <div class="slide">
-                        <img src="images/head1.jpeg" alt="Deal 2">
-                        <div class="caption">
-                            <h2>Noise Cancelling Headphones</h2>
-                            <p>Experience sound like never before.</p>
+                        <div class="slide">
+                            <img src="images/head1.jpeg" alt="Deal 2">
+                            <div class="caption">
+                                <h2>Noise Cancelling Headphones</h2>
+                                <p>Experience sound like never before.</p>
+                            </div>
                         </div>
-                    </div>
-                    <div class="slide">
-                        <img src="images/watch5.jpg" alt="Deal 3">
-                        <div class="caption">
-                            <h2>Fitness Smartwatch</h2>
-                            <p>Track your health goals in style.</p>
+                        <div class="slide">
+                            <img src="images/watch5.jpg" alt="Deal 3">
+                            <div class="caption">
+                                <h2>Fitness Smartwatch</h2>
+                                <p>Track your health goals in style.</p>
+                            </div>
                         </div>
-                    </div>
-                    <div class="slide">
-                        <img src="images/laptops.jpeg" alt="Deal 4">
-                        <div class="caption">
-                            <h2>Smart Home Devices</h2>
-                            <p>Make your home smarter with our devices.</p>
-                        </div>
-                    </div>
+                    <?php endif; ?>
                 </div>
-                <button class="slider-nav prev" onclick="prevSlide()">‹</button>
-                <button class="slider-nav next" onclick="nextSlide()">›</button>
+                
+                <?php if (count($slider_images) > 1): ?>
+                    <button class="slider-nav prev" onclick="prevSlide()">‹</button>
+                    <button class="slider-nav next" onclick="nextSlide()">›</button>
+                    <div class="slider-dots" id="sliderDots">
+                        <?php foreach ($slider_images as $index => $slide): ?>
+                            <button class="slider-dot <?php echo $index === 0 ? 'active' : ''; ?>" 
+                                    onclick="goToSlide(<?php echo $index; ?>)"></button>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
             </div>
         </section>
 
@@ -408,8 +642,9 @@ function renderStars($rating) {
             <?php endif; ?>
         </section>
     </main>
-<?php include "footer.php"; ?>
-<script src="script.js"></script>
+    
+    <?php include "footer.php"; ?>
+    <script src="script.js"></script>
     <script>
         // ===== ADD TO CART FUNCTION =====
         function addToCart(productId) {
@@ -420,6 +655,7 @@ function renderStars($rating) {
         let currentSlide = 0;
         const slides = document.querySelectorAll('#heroSlides .slide');
         const totalSlides = slides.length;
+        let autoSlideInterval;
 
         function showSlide(index) {
             if (index >= totalSlides) currentSlide = 0;
@@ -430,21 +666,81 @@ function renderStars($rating) {
             if (slider) {
                 slider.style.transform = `translateX(${offset}%)`;
             }
+            
+            // Update dots
+            document.querySelectorAll('.slider-dot').forEach((dot, i) => {
+                dot.classList.toggle('active', i === currentSlide);
+            });
         }
 
         function nextSlide() {
             currentSlide++;
             showSlide(currentSlide);
+            resetAutoSlide();
         }
 
         function prevSlide() {
             currentSlide--;
             showSlide(currentSlide);
+            resetAutoSlide();
         }
 
-        // Auto-slide every 5 seconds
+        function goToSlide(index) {
+            currentSlide = index;
+            showSlide(currentSlide);
+            resetAutoSlide();
+        }
+
+        function resetAutoSlide() {
+            clearInterval(autoSlideInterval);
+            if (totalSlides > 1) {
+                autoSlideInterval = setInterval(nextSlide, 5000);
+            }
+        }
+
+        // Initialize slider
         if (totalSlides > 0) {
-            setInterval(nextSlide, 5000);
+            showSlide(0);
+            if (totalSlides > 1) {
+                autoSlideInterval = setInterval(nextSlide, 5000);
+            }
+        }
+
+        // Pause auto-slide on hover
+        const sliderContainer = document.querySelector('.hero-slider');
+        if (sliderContainer) {
+            sliderContainer.addEventListener('mouseenter', () => {
+                clearInterval(autoSlideInterval);
+            });
+            
+            sliderContainer.addEventListener('mouseleave', () => {
+                if (totalSlides > 1) {
+                    autoSlideInterval = setInterval(nextSlide, 5000);
+                }
+            });
+        }
+
+        // ===== TOUCH SUPPORT FOR MOBILE =====
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        const sliderElement = document.getElementById('heroSlides');
+        if (sliderElement) {
+            sliderElement.addEventListener('touchstart', (e) => {
+                touchStartX = e.changedTouches[0].screenX;
+            }, { passive: true });
+            
+            sliderElement.addEventListener('touchend', (e) => {
+                touchEndX = e.changedTouches[0].screenX;
+                const diff = touchStartX - touchEndX;
+                if (Math.abs(diff) > 50) {
+                    if (diff > 0) {
+                        nextSlide();
+                    } else {
+                        prevSlide();
+                    }
+                }
+            }, { passive: true });
         }
     </script>
 </body>
