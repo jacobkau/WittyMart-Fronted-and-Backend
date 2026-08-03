@@ -19,7 +19,7 @@
             
             <?php
             // Include configuration
-            include "config.php";
+           require_once __DIR__ . '/includes/config.php';
             
             // Get smart picks products (limit to 8)
             $smart_products = getSmartPicks(8);
