@@ -20,13 +20,26 @@
             
             <nav id="main-nav">
                 <ul class="nav-links" id="nav-links">
-                    <li><a href="index.php" class="active">Home</a></li>
-                    <li><a href="shop.php">Shop</a></li>
-                    <li><a href="cart.php">Cart</a></li>
-                    <li><a href="about.php">About</a></li>
-                    <li><a href="contact.php">Contact</a></li>
-                    <li><a href="terms.php">Terms</a></li>
-                    <li><a href="home.php">Account</a></li>
+                    <?php
+                    // Get the current page filename
+                    $current_page = basename($_SERVER['PHP_SELF']);
+                    
+                    // Define navigation links
+                    $nav_links = [
+                        'index.php' => 'Home',
+                        'shop.php' => 'Shop',
+                        'cart.php' => 'Cart',
+                        'about.php' => 'About',
+                        'contact.php' => 'Contact',
+                        'terms.php' => 'Terms',
+                        'home.php' => 'Account'
+                    ];
+                    
+                    foreach ($nav_links as $page => $label):
+                        $active_class = ($current_page == $page) ? 'active' : '';
+                    ?>
+                        <li><a href="<?php echo $page; ?>" class="<?php echo $active_class; ?>"><?php echo $label; ?></a></li>
+                    <?php endforeach; ?>
                     <li><button class="theme-toggle" onclick="toggleTheme()" id="theme-icon" title="Switch to Dark Mode"><i class="fas fa-sun"></i></button></li>
                 </ul>
             </nav>
@@ -65,3 +78,5 @@
             <li><a href="breadcrumbs.php?#grocery"><i class="fas fa-shopping-basket"></i> Grocery</a></li>
         </ul>
     </div>
+</body>
+</html>
