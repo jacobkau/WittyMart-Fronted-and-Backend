@@ -4,9 +4,7 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0);
 
 // ===== SESSION CONFIGURATION =====
-// Only set session ini settings if session is not already active
 if (session_status() === PHP_SESSION_NONE) {
-    // Set session cookie parameters
     ini_set('session.cookie_httponly', 1);
     ini_set('session.use_only_cookies', 1);
     
@@ -14,19 +12,16 @@ if (session_status() === PHP_SESSION_NONE) {
         ini_set('session.cookie_secure', 1);
     }
     
-    // Start session
     session_start();
 }
 
 // Get database URL from environment variable (Render)
 $database_url = getenv('DATABASE_URL');
 
-// If not found, try to get it from $_ENV (alternative)
 if (!$database_url && isset($_ENV['DATABASE_URL'])) {
     $database_url = $_ENV['DATABASE_URL'];
 }
 
-// For debugging - check if URL exists
 error_log('DATABASE_URL exists: ' . ($database_url ? 'Yes' : 'No'));
 
 if (!$database_url) {
@@ -63,7 +58,6 @@ try {
     ]);
     
 } catch (PDOException $e) {
-    // Log error (don't display to user)
     error_log('Database connection failed: ' . $e->getMessage());
     error_log('Connection details - Host: ' . $db_config['host'] . ', DB: ' . $db_config['dbname']);
     die('Database connection error. Please try again later.');
@@ -73,24 +67,16 @@ try {
 // APPLICATION CONFIGURATION
 // ============================================
 
-// Site URL (auto-detect for development)
 $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
 $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
 define('SITE_URL', $protocol . $host);
-
-// Admin panel URL
 define('ADMIN_URL', SITE_URL . '/admin');
-
-// Session timeout (30 minutes)
 define('SESSION_TIMEOUT', 1800);
-
-// Security settings
 define('PASSWORD_BCRYPT_COST', 12);
 
 // ============================================
-// HELPER FUNCTIONS
+// SITE CONFIGURATION
 // ============================================
-// ===== SITE CONFIGURATION =====
 define('BASE_URL', 'https://wittymart.onrender.com/'); 
 define('BASE_PATH', $_SERVER['DOCUMENT_ROOT'] . '/');
 
@@ -108,7 +94,7 @@ $no_image_path = UPLOAD_DIR . 'no-image.png';
 if (!file_exists($no_image_path)) {
     if (function_exists('imagecreate')) {
         $image = imagecreate(50, 50);
-        $bg = imagecolorallocate($image, 5, 87, 60); // #05573c
+        $bg = imagecolorallocate($image, 5, 87, 60);
         $text_color = imagecolorallocate($image, 255, 255, 255);
         imagestring($image, 5, 20, 15, '?', $text_color);
         imagepng($image, $no_image_path);
@@ -121,9 +107,7 @@ function getBaseUrl() {
     $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
     $host = $_SERVER['HTTP_HOST'];
     $script_dir = dirname($_SERVER['SCRIPT_NAME']);
-    
     $base_dir = str_replace('/admin', '', $script_dir);
-    
     return $protocol . $host . $base_dir . '/';
 }
 
@@ -154,69 +138,70 @@ function verifyCSRFToken($token) {
     return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
 }
 
-// Generate CSRF token for forms
 $csrf_token = generateCSRFToken();
 
 // ============================================
-// FEATURED PRODUCTS FUNCTIONS
+// SMART PICKS FUNCTIONS
 // ============================================
 
 /**
- * Get featured products
+ * Get smart picks products from the database
  */
-function getFeaturedProducts($limit = 8) {
+function getSmartPicks($limit = 8) {
     global $pdo;
     
     try {
         $stmt = $pdo->prepare("
             SELECT p.*, c.name as category_name 
             FROM products p
-            INNER JOIN featured_products fp ON p.id = fp.product_id
             LEFT JOIN categories c ON p.category_id = c.id
             WHERE p.status = 'active' OR p.status IS NULL
-            ORDER BY fp.display_order ASC, p.created_at DESC
+            ORDER BY p.created_at DESC, p.id DESC
             LIMIT ?
         ");
         $stmt->execute([$limit]);
         return $stmt->fetchAll();
     } catch (PDOException $e) {
-        error_log('Get featured products error: ' . $e->getMessage());
+        error_log('Get smart picks error: ' . $e->getMessage());
         return [];
     }
 }
 
 /**
- * Get testimonials
+ * Get a specific product by ID
  */
-function getTestimonials($limit = 10) {
+function getProductById($product_id) {
     global $pdo;
     
     try {
         $stmt = $pdo->prepare("
-            SELECT * FROM testimonials 
-            WHERE status = 'active' 
-            ORDER BY display_order ASC, created_at DESC
-            LIMIT ?
+            SELECT p.*, c.name as category_name 
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            WHERE p.id = ?
         ");
-        $stmt->execute([$limit]);
-        return $stmt->fetchAll();
+        $stmt->execute([$product_id]);
+        return $stmt->fetch();
     } catch (PDOException $e) {
-        error_log('Get testimonials error: ' . $e->getMessage());
-        return [];
+        error_log('Get product by ID error: ' . $e->getMessage());
+        return null;
     }
 }
 
-// ============================================
-// PRODUCT IMAGE HELPER FUNCTIONS
-
+/**
+ * Get product image URL
+ */
+function getProductImage($image_name) {
+    if (empty($image_name) || !file_exists(UPLOAD_DIR . $image_name)) {
+        return UPLOAD_URL . 'no-image.png';
+    }
+    return UPLOAD_URL . $image_name;
+}
 
 // ============================================
 // CART FUNCTIONS
 // ============================================
 
-/**
- * Get cart items for current user
- */
 function getCartItems() {
     global $pdo;
     
@@ -239,9 +224,6 @@ function getCartItems() {
     }
 }
 
-/**
- * Add item to cart
- */
 function addToCart($product_id, $quantity = 1) {
     global $pdo;
     
@@ -250,18 +232,15 @@ function addToCart($product_id, $quantity = 1) {
     }
     
     try {
-        // Check if product already in cart
         $stmt = $pdo->prepare("SELECT id, quantity FROM cart WHERE user_id = ? AND product_id = ?");
         $stmt->execute([$_SESSION['user_id'], $product_id]);
         $existing = $stmt->fetch();
         
         if ($existing) {
-            // Update quantity
             $new_quantity = $existing['quantity'] + $quantity;
             $stmt = $pdo->prepare("UPDATE cart SET quantity = ? WHERE id = ?");
             return $stmt->execute([$new_quantity, $existing['id']]);
         } else {
-            // Insert new item
             $stmt = $pdo->prepare("INSERT INTO cart (user_id, product_id, quantity) VALUES (?, ?, ?)");
             return $stmt->execute([$_SESSION['user_id'], $product_id, $quantity]);
         }
@@ -275,14 +254,10 @@ function addToCart($product_id, $quantity = 1) {
 // NEWSLETTER FUNCTIONS
 // ============================================
 
-/**
- * Subscribe to newsletter
- */
 function subscribeNewsletter($email) {
     global $pdo;
     
     try {
-        // Check if already subscribed
         $stmt = $pdo->prepare("SELECT id FROM newsletter_subscribers WHERE email = ?");
         $stmt->execute([$email]);
         if ($stmt->fetch()) {
@@ -297,6 +272,125 @@ function subscribeNewsletter($email) {
     } catch (PDOException $e) {
         error_log('Subscribe newsletter error: ' . $e->getMessage());
         return ['success' => false, 'message' => 'Database error'];
+    }
+}
+
+// ============================================
+// ADMIN PRODUCT FUNCTIONS
+// ============================================
+
+/**
+ * Insert a new product into the database
+ */
+function insertProduct($name, $description, $price, $category_id, $image = null, $status = 'active') {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO products (name, description, price, category_id, image, status, created_at) 
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
+        ");
+        return $stmt->execute([$name, $description, $price, $category_id, $image, $status]);
+    } catch (PDOException $e) {
+        error_log('Insert product error: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Update an existing product
+ */
+function updateProduct($id, $name, $description, $price, $category_id, $image = null, $status = 'active') {
+    global $pdo;
+    
+    try {
+        if ($image) {
+            $stmt = $pdo->prepare("
+                UPDATE products 
+                SET name = ?, description = ?, price = ?, category_id = ?, image = ?, status = ?, updated_at = NOW() 
+                WHERE id = ?
+            ");
+            return $stmt->execute([$name, $description, $price, $category_id, $image, $status, $id]);
+        } else {
+            $stmt = $pdo->prepare("
+                UPDATE products 
+                SET name = ?, description = ?, price = ?, category_id = ?, status = ?, updated_at = NOW() 
+                WHERE id = ?
+            ");
+            return $stmt->execute([$name, $description, $price, $category_id, $status, $id]);
+        }
+    } catch (PDOException $e) {
+        error_log('Update product error: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Delete a product
+ */
+function deleteProduct($id) {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->prepare("DELETE FROM products WHERE id = ?");
+        return $stmt->execute([$id]);
+    } catch (PDOException $e) {
+        error_log('Delete product error: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Get all products with pagination
+ */
+function getAllProducts($page = 1, $per_page = 20) {
+    global $pdo;
+    
+    try {
+        $offset = ($page - 1) * $per_page;
+        $stmt = $pdo->prepare("
+            SELECT p.*, c.name as category_name 
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            ORDER BY p.created_at DESC
+            LIMIT ? OFFSET ?
+        ");
+        $stmt->execute([$per_page, $offset]);
+        return $stmt->fetchAll();
+    } catch (PDOException $e) {
+        error_log('Get all products error: ' . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Get total product count
+ */
+function getProductCount() {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->query("SELECT COUNT(*) as count FROM products");
+        $result = $stmt->fetch();
+        return $result['count'] ?? 0;
+    } catch (PDOException $e) {
+        error_log('Get product count error: ' . $e->getMessage());
+        return 0;
+    }
+}
+
+/**
+ * Get categories for dropdown
+ */
+function getCategories() {
+    global $pdo;
+    
+    try {
+        $stmt = $pdo->query("SELECT * FROM categories ORDER BY name ASC");
+        return $stmt->fetchAll();
+    } catch (PDOException $e) {
+        error_log('Get categories error: ' . $e->getMessage());
+        return [];
     }
 }
 ?>
