@@ -14,7 +14,7 @@
     <header>
         <div class="header-container">
             <div class="logo">
-                <img src="images/Witty Mart.png" alt="WittyMart Logo">
+                <img src="images/logo.png" alt="WittyMart Logo">
                 <h1>WittyMart Shop</h1>
             </div>
             
