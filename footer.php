@@ -1,12 +1,4 @@
-<?php
-// Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 
-$isLoggedIn = isset($_SESSION['user_id']);
-$userName = $_SESSION['user_name'] ?? 'User';
-?>
     <!-- Footer -->
     <footer class="footer">
         <div class="footer-row">
