@@ -213,6 +213,11 @@ $user_avatar = $_SESSION['user_avatar'] ?? 'default.jpg';
                         <i class="fas fa-user"></i> My Profile
                     </a>
                 </li>
+                 <li>
+                    <a class="dropdown-item" href="profile.php">
+                        <i class="fa-solid fa-sliders"></i> Slider
+                    </a>
+                </li>
                 <li>
                     <a class="dropdown-item" href="settings.php">
                         <i class="fas fa-cog"></i> Settings
