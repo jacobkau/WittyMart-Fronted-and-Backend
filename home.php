@@ -1,4 +1,11 @@
 <?php
+// ===== TURN OFF ERROR DISPLAY FOR PRODUCTION =====
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+
+// ===== CLEAN OUTPUT BUFFER =====
+ob_clean();
+
 // Include config for database connection and functions
 require_once 'includes/config.php';
 
@@ -13,14 +20,23 @@ if ($isLoggedIn) {
     exit();
 }
 
-// Handle AJAX requests
+// ===== HANDLE AJAX REQUESTS =====
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
+    // Set JSON header before any output
     header('Content-Type: application/json');
+    
+    // Clean output buffer again
+    ob_clean();
     
     $action = $_POST['ajax_action'];
     $response = ['success' => false, 'message' => 'Invalid action'];
     
     try {
+        // Check if PDO is available
+        if (!isset($pdo)) {
+            throw new Exception('Database connection not available');
+        }
+        
         switch ($action) {
             case 'register':
                 // Get and sanitize input
@@ -93,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
                     $response = [
                         'success' => true, 
                         'message' => 'Registration successful! Welcome ' . $name . '!',
-                        'redirect' => 'index.php'
+                        'redirect' => 'welcome.php'
                     ];
                 } else {
                     $response = ['success' => false, 'message' => 'Registration failed. Please try again.'];
@@ -134,7 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
                         $response = [
                             'success' => true,
                             'message' => 'Login successful! Welcome back ' . $user['name'] . '!',
-                            'redirect' => ($user['role'] === 'admin') ? 'admin/dashboard.php' : 'index.php'
+                            'redirect' => ($user['role'] === 'admin') ? 'admin/dashboard.php' : 'welcome.php'
                         ];
                     } else {
                         $response = ['success' => false, 'message' => 'Invalid email or password'];
@@ -150,8 +166,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
     } catch (PDOException $e) {
         error_log('Auth error: ' . $e->getMessage());
         $response = ['success' => false, 'message' => 'Database error. Please try again.'];
+    } catch (Exception $e) {
+        error_log('Auth error: ' . $e->getMessage());
+        $response = ['success' => false, 'message' => 'Server error. Please try again.'];
     }
     
+    // Clean buffer and output JSON
+    ob_clean();
     echo json_encode($response);
     exit();
 }
@@ -705,9 +726,9 @@ $isLoggedIn = isset($_SESSION['user_id']);
         // SHOW MESSAGE
         // ============================================
         function showMessage(text, type) {
-            messageDiv.textContent = text;
             messageDiv.className = 'message ' + type;
             messageDiv.innerHTML = '<i class="fas fa-' + (type === 'success' ? 'check-circle' : 'exclamation-circle') + '"></i> ' + text;
+            messageDiv.style.display = 'block';
             
             // Auto-hide after 5 seconds
             setTimeout(() => {
@@ -722,7 +743,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
         function clearMessage() {
             messageDiv.className = 'message';
             messageDiv.style.display = 'none';
-            messageDiv.textContent = '';
+            messageDiv.innerHTML = '';
         }
 
         // ============================================
@@ -762,7 +783,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
             showProgress();
             
             // Send AJAX request
-            fetch('login-register.php', {
+            fetch('home.php', {
                 method: 'POST',
                 body: formData
             })
@@ -773,7 +794,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
                     showMessage(data.message, 'success');
                     // Redirect after short delay
                     setTimeout(() => {
-                        window.location.href = data.redirect || 'index.php';
+                        window.location.href = data.redirect || 'welcome.php';
                     }, 1500);
                 } else {
                     showMessage(data.message, 'error');
@@ -811,7 +832,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
             
             showProgress();
             
-            fetch('login-register.php', {
+            fetch('home.php', {
                 method: 'POST',
                 body: formData
             })
@@ -821,7 +842,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
                 if (data.success) {
                     showMessage(data.message, 'success');
                     setTimeout(() => {
-                        window.location.href = data.redirect || 'index.php';
+                        window.location.href = data.redirect || 'welcome.php';
                     }, 1500);
                 } else {
                     showMessage(data.message, 'error');
