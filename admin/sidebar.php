@@ -49,7 +49,9 @@ function isActive($page) {
         <a href="testimonials.php" class="<?php echo isActive('testimonials.php'); ?>">
             <i class="fas fa-comment-dots"></i> Testimonials
         </a>
-        
+        <a href="manage_products.php" class="<?php echo isActive('manage_products.php'); ?>">
+            <i class="fas fa-star"></i> SmartPicks 
+        </a>        
         <hr class="sidebar-divider">
      
         <div class="sidebar-label">Account</div>
