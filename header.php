@@ -129,10 +129,6 @@ if ($isLoggedIn) {
         .menu-toggle:hover {
             background: rgba(0,0,0,0.05);
         }
-        
-        .nav-links.active {
-            display: flex !important;
-        }
 
         /* Dark mode */
         body.dark-mode .header-cart {
@@ -166,18 +162,22 @@ if ($isLoggedIn) {
                 background: #fff;
                 flex-direction: column;
                 padding: 20px;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                box-shadow: 0 10px 30px rgba(0,0,0,0.15);
                 z-index: 1000;
                 border-radius: 0 0 12px 12px;
+                gap: 0;
+                max-height: 80vh;
+                overflow-y: auto;
             }
             
-            .nav-links.active {
+            .nav-links.open {
                 display: flex !important;
             }
             
             .nav-links li {
-                margin: 5px 0;
+                margin: 2px 0;
                 width: 100%;
+                list-style: none;
             }
             
             .nav-links li a {
@@ -185,18 +185,50 @@ if ($isLoggedIn) {
                 padding: 12px 15px;
                 border-radius: 6px;
                 transition: all 0.3s ease;
+                width: 100%;
+                font-size: 16px;
             }
             
             .nav-links li a:hover {
                 background: #f5f5f5;
             }
             
+            .nav-links li a.active {
+                background: #05573c;
+                color: #fff !important;
+            }
+            
+            .nav-links li a i {
+                margin-right: 10px;
+                width: 20px;
+                text-align: center;
+            }
+            
             body.dark-mode .nav-links {
                 background: #1a1a2e;
+                border-top: 1px solid #2a2a3e;
             }
             
             body.dark-mode .nav-links li a:hover {
                 background: #2a2a3e;
+            }
+            
+            body.dark-mode .nav-links li a.active {
+                background: #0a7a55;
+                color: #fff !important;
+            }
+            
+            /* Header container should be relative for absolute positioning */
+            .header-container {
+                position: relative;
+            }
+        }
+
+        /* Small screens */
+        @media (max-width: 480px) {
+            .nav-links li a {
+                padding: 10px 12px;
+                font-size: 14px;
             }
         }
     </style>
@@ -216,19 +248,21 @@ if ($isLoggedIn) {
                     // Get the current page filename
                     $current_page = basename($_SERVER['PHP_SELF']);
                     
-                    // Define navigation links (removed 'cart.php' from here)
+                    // Define navigation links
                     $nav_links = [
-                        'index.php' => 'Home',
-                        'shop.php' => 'Shop',
-                        'about.php' => 'About',
-                        'contact.php' => 'Contact',
-                        'terms.php' => 'Terms'
+                        'index.php' => ['label' => 'Home', 'icon' => 'fa-home'],
+                        'shop.php' => ['label' => 'Shop', 'icon' => 'fa-store'],
+                        'about.php' => ['label' => 'About', 'icon' => 'fa-info-circle'],
+                        'contact.php' => ['label' => 'Contact', 'icon' => 'fa-envelope'],
+                        'terms.php' => ['label' => 'Terms', 'icon' => 'fa-file-contract']
                     ];
                     
-                    foreach ($nav_links as $page => $label):
+                    foreach ($nav_links as $page => $data):
                         $active_class = ($current_page == $page) ? 'active' : '';
                     ?>
-                        <li><a href="<?php echo $page; ?>" class="<?php echo $active_class; ?>"><?php echo $label; ?></a></li>
+                        <li><a href="<?php echo $page; ?>" class="<?php echo $active_class; ?>">
+                            <i class="fas <?php echo $data['icon']; ?>"></i> <?php echo $data['label']; ?>
+                        </a></li>
                     <?php endforeach; ?>
                     
                     <!-- Account / Login/Register link -->
@@ -256,7 +290,7 @@ if ($isLoggedIn) {
             </nav>
             
             <div class="header-actions">
-                <!-- Cart icon with badge in header actions (always visible for logged in users) -->
+                <!-- Cart icon with badge -->
                 <?php if ($isLoggedIn): ?>
                     <a href="cart.php" class="header-cart" title="View Cart">
                         <i class="fas fa-shopping-cart cart-icon"></i>
@@ -269,7 +303,6 @@ if ($isLoggedIn) {
                         <i class="fas fa-sign-out-alt"></i>
                     </button>
                 <?php else: ?>
-                    <!-- Show cart icon for guests too, but without badge -->
                     <a href="cart.php" class="header-cart" title="View Cart">
                         <i class="fas fa-shopping-cart cart-icon"></i>
                     </a>
@@ -279,8 +312,8 @@ if ($isLoggedIn) {
                     <i class="fas fa-th-list"></i>
                     <span>Categories</span>
                 </button>
-                <button class="menu-toggle" onclick="toggleMenu()" aria-label="Toggle Menu">
-                    <i class="fas fa-bars"></i>
+                <button class="menu-toggle" onclick="toggleMenu()" aria-label="Toggle Menu" id="menuToggleBtn">
+                    <i class="fas fa-bars" id="menuIcon"></i>
                 </button>
             </div>
         </div>
@@ -428,118 +461,28 @@ if ($isLoggedIn) {
             margin-right: 5px;
         }
 
-        /* Mobile Menu Toggle Button */
-        .menu-toggle {
-            display: none;
+        /* Theme toggle button */
+        .theme-toggle {
             background: none;
             border: none;
-            font-size: 24px;
+            font-size: 18px;
             cursor: pointer;
-            color: #333;
-            padding: 5px 10px;
+            padding: 8px 12px;
             border-radius: 6px;
             transition: all 0.3s ease;
+            color: #555;
         }
         
-        .menu-toggle:hover {
+        .theme-toggle:hover {
             background: rgba(0,0,0,0.05);
         }
         
-        .nav-links {
-            display: flex;
-            align-items: center;
-            gap: 5px;
+        body.dark-mode .theme-toggle {
+            color: #ddd;
         }
         
-        .nav-links.active {
-            display: flex !important;
-        }
-
-        /* Dark mode */
-        body.dark-mode .menu-toggle {
-            color: #eee;
-        }
-        
-        body.dark-mode .menu-toggle:hover {
+        body.dark-mode .theme-toggle:hover {
             background: rgba(255,255,255,0.1);
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-            .menu-toggle {
-                display: block;
-            }
-            
-            .nav-links {
-                display: none !important;
-                position: absolute;
-                top: 100%;
-                left: 0;
-                right: 0;
-                background: #fff;
-                flex-direction: column;
-                padding: 20px;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-                z-index: 1000;
-                border-radius: 0 0 12px 12px;
-                gap: 0;
-            }
-            
-            .nav-links.active {
-                display: flex !important;
-            }
-            
-            .nav-links li {
-                margin: 2px 0;
-                width: 100%;
-                list-style: none;
-            }
-            
-            .nav-links li a {
-                display: block;
-                padding: 12px 15px;
-                border-radius: 6px;
-                transition: all 0.3s ease;
-                width: 100%;
-            }
-            
-            .nav-links li a:hover {
-                background: #f5f5f5;
-            }
-            
-            .nav-links li a.active {
-                background: #05573c;
-                color: #fff !important;
-            }
-            
-            body.dark-mode .nav-links {
-                background: #1a1a2e;
-            }
-            
-            body.dark-mode .nav-links li a:hover {
-                background: #2a2a3e;
-            }
-            
-            body.dark-mode .nav-links li a.active {
-                background: #0a7a55;
-                color: #fff !important;
-            }
-            
-            /* Close menu when clicking outside */
-            .nav-overlay {
-                display: none;
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0,0,0,0.3);
-                z-index: 999;
-            }
-            
-            .nav-overlay.active {
-                display: block;
-            }
         }
     </style>
 
@@ -549,33 +492,30 @@ if ($isLoggedIn) {
         // ============================================
         function toggleMenu() {
             const navLinks = document.getElementById('nav-links');
-            navLinks.classList.toggle('active');
+            const menuIcon = document.getElementById('menuIcon');
             
-            // Toggle menu icon
-            const menuToggle = document.querySelector('.menu-toggle');
-            if (menuToggle) {
-                const icon = menuToggle.querySelector('i');
-                if (navLinks.classList.contains('active')) {
-                    icon.className = 'fas fa-times';
-                } else {
-                    icon.className = 'fas fa-bars';
-                }
+            navLinks.classList.toggle('open');
+            
+            if (navLinks.classList.contains('open')) {
+                menuIcon.className = 'fas fa-times';
+            } else {
+                menuIcon.className = 'fas fa-bars';
             }
         }
 
         // Close menu when clicking outside
         document.addEventListener('click', function(event) {
             const nav = document.getElementById('main-nav');
-            const menuToggle = document.querySelector('.menu-toggle');
+            const menuToggle = document.getElementById('menuToggleBtn');
             const navLinks = document.getElementById('nav-links');
             
             // If click is outside the nav and menu is open, close it
-            if (navLinks && navLinks.classList.contains('active')) {
+            if (navLinks && navLinks.classList.contains('open')) {
                 if (!nav.contains(event.target) && !menuToggle.contains(event.target)) {
-                    navLinks.classList.remove('active');
-                    const icon = menuToggle.querySelector('i');
-                    if (icon) {
-                        icon.className = 'fas fa-bars';
+                    navLinks.classList.remove('open');
+                    const menuIcon = document.getElementById('menuIcon');
+                    if (menuIcon) {
+                        menuIcon.className = 'fas fa-bars';
                     }
                 }
             }
@@ -585,14 +525,11 @@ if ($isLoggedIn) {
         document.querySelectorAll('.nav-links a').forEach(function(link) {
             link.addEventListener('click', function() {
                 const navLinks = document.getElementById('nav-links');
-                if (navLinks.classList.contains('active')) {
-                    navLinks.classList.remove('active');
-                    const menuToggle = document.querySelector('.menu-toggle');
-                    if (menuToggle) {
-                        const icon = menuToggle.querySelector('i');
-                        if (icon) {
-                            icon.className = 'fas fa-bars';
-                        }
+                if (navLinks.classList.contains('open')) {
+                    navLinks.classList.remove('open');
+                    const menuIcon = document.getElementById('menuIcon');
+                    if (menuIcon) {
+                        menuIcon.className = 'fas fa-bars';
                     }
                 }
             });
