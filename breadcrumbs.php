@@ -129,6 +129,11 @@ foreach ($categories as $category) {
             button.addEventListener('click', function() {
                 const productId = this.dataset.productId;
                 const productName = this.dataset.productName;
+                const originalText = this.textContent;
+                
+                // Show loading state
+                this.textContent = 'Adding...';
+                this.disabled = true;
                 
                 // Send AJAX request to add to cart
                 const formData = new FormData();
@@ -144,18 +149,40 @@ foreach ($categories as $category) {
                 .then(data => {
                     if (data.success) {
                         // Show success message
-                        this.textContent = 'Added!';
+                        this.textContent = '✓ Added!';
                         this.style.background = '#28a745';
+                        this.style.color = '#fff';
                         setTimeout(() => {
-                            this.textContent = 'Add to Cart';
+                            this.textContent = originalText;
                             this.style.background = '';
-                        }, 1500);
+                            this.style.color = '';
+                            this.disabled = false;
+                        }, 2000);
                     } else {
+                        // Show error
+                        this.textContent = 'Failed!';
+                        this.style.background = '#dc3545';
+                        this.style.color = '#fff';
+                        setTimeout(() => {
+                            this.textContent = originalText;
+                            this.style.background = '';
+                            this.style.color = '';
+                            this.disabled = false;
+                        }, 2000);
                         alert(data.message || 'Failed to add to cart. Please try again.');
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
+                    this.textContent = 'Error!';
+                    this.style.background = '#dc3545';
+                    this.style.color = '#fff';
+                    setTimeout(() => {
+                        this.textContent = originalText;
+                        this.style.background = '';
+                        this.style.color = '';
+                        this.disabled = false;
+                    }, 2000);
                     alert('An error occurred. Please try again.');
                 });
             });
