@@ -205,60 +205,72 @@ $isLoggedIn = isset($_SESSION['user_id']);
             border-radius: 16px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.1);
             padding: 40px;
-            max-width: 450px;
+            max-width: 550px;
             width: 100%;
             transition: all 0.3s ease;
         }
         
         .logo-container {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 25px;
         }
         
         .logo-container img {
-            max-width: 120px;
+            max-width: 100px;
             height: auto;
         }
         
         .logo-container h1 {
             color: #05573c;
-            font-size: 28px;
-            margin: 10px 0 5px;
+            font-size: 24px;
+            margin: 8px 0 3px;
         }
         
         .logo-container p {
             color: #666;
-            font-size: 14px;
+            font-size: 13px;
             margin: 0;
         }
         
         .auth-container h2 {
             text-align: center;
             color: #333;
-            font-size: 22px;
-            margin-bottom: 25px;
+            font-size: 20px;
+            margin-bottom: 20px;
         }
         
         .auth-container h2 i {
             color: #05573c;
         }
         
+        /* Two column layout for registration */
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .form-row .form-group {
+            margin-bottom: 0;
+        }
+        
         .form-group {
-            margin-bottom: 18px;
+            margin-bottom: 15px;
         }
         
         .form-group label {
             display: block;
             font-weight: 600;
             color: #555;
-            margin-bottom: 5px;
-            font-size: 14px;
+            margin-bottom: 4px;
+            font-size: 13px;
         }
         
         .form-group label i {
             margin-right: 8px;
             color: #05573c;
             width: 18px;
+            font-size: 13px;
         }
         
         .input-wrapper {
@@ -267,7 +279,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
         
         .input-wrapper input {
             width: 100%;
-            padding: 12px 15px;
+            padding: 10px 12px;
             border: 2px solid #e0e0e0;
             border-radius: 8px;
             font-size: 14px;
@@ -283,15 +295,15 @@ $isLoggedIn = isset($_SESSION['user_id']);
         
         .toggle-password {
             position: absolute;
-            right: 12px;
+            right: 10px;
             top: 50%;
             transform: translateY(-50%);
             background: none;
             border: none;
             color: #888;
             cursor: pointer;
-            font-size: 13px;
-            padding: 5px 10px;
+            font-size: 12px;
+            padding: 4px 8px;
             border-radius: 4px;
             transition: all 0.3s ease;
         }
@@ -303,16 +315,16 @@ $isLoggedIn = isset($_SESSION['user_id']);
         
         .btn-submit {
             width: 100%;
-            padding: 14px;
+            padding: 12px;
             background: #05573c;
             color: #fff;
             border: none;
             border-radius: 8px;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
-            margin-top: 10px;
+            margin-top: 8px;
         }
         
         .btn-submit:hover {
@@ -335,10 +347,10 @@ $isLoggedIn = isset($_SESSION['user_id']);
         
         .progress-bar {
             width: 100%;
-            height: 4px;
+            height: 3px;
             background: #e0e0e0;
             border-radius: 2px;
-            margin: 15px 0;
+            margin: 12px 0;
             overflow: hidden;
         }
         
@@ -351,11 +363,11 @@ $isLoggedIn = isset($_SESSION['user_id']);
         }
         
         .message {
-            padding: 12px 15px;
+            padding: 10px 15px;
             border-radius: 8px;
-            margin: 10px 0;
+            margin: 8px 0;
             display: none;
-            font-size: 14px;
+            font-size: 13px;
         }
         
         .message.success {
@@ -378,7 +390,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
         
         .switch-form {
             text-align: center;
-            margin-top: 20px;
+            margin-top: 15px;
         }
         
         .switch-form button {
@@ -386,7 +398,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
             border: none;
             color: #05573c;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 600;
             transition: all 0.3s ease;
         }
@@ -402,7 +414,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
         
         .theme-toggle-container {
             text-align: center;
-            margin-top: 15px;
+            margin-top: 12px;
         }
         
         .theme-toggle-container button {
@@ -410,9 +422,9 @@ $isLoggedIn = isset($_SESSION['user_id']);
             border: none;
             color: #888;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 12px;
             transition: all 0.3s ease;
-            padding: 5px 15px;
+            padding: 4px 15px;
             border-radius: 20px;
             border: 1px solid #e0e0e0;
         }
@@ -549,6 +561,36 @@ $isLoggedIn = isset($_SESSION['user_id']);
             cursor: not-allowed;
             transform: none !important;
         }
+        
+        /* Full width for login form */
+        #loginForm .form-group {
+            margin-bottom: 15px;
+        }
+        
+        /* Responsive */
+        @media (max-width: 500px) {
+            .form-row {
+                grid-template-columns: 1fr;
+                gap: 0;
+            }
+            
+            .form-row .form-group {
+                margin-bottom: 15px;
+            }
+            
+            .auth-container {
+                padding: 25px;
+                max-width: 100%;
+            }
+            
+            .logo-container img {
+                max-width: 80px;
+            }
+            
+            .logo-container h1 {
+                font-size: 20px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -582,47 +624,57 @@ $isLoggedIn = isset($_SESSION['user_id']);
             </form>
             
 
-            <!-- Register Form -->
+            <!-- Register Form - Two Columns -->
             <form id="signupForm" method="POST">
-                <div class="form-group">
-                    <label><i class="fas fa-user"></i> Username</label>
-                    <div class="input-wrapper">
-                        <input type="text" id="username" name="username" required placeholder="Enter username" minlength="3" maxlength="50">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-user"></i> Username</label>
+                        <div class="input-wrapper">
+                            <input type="text" id="username" name="username" required placeholder="Enter username" minlength="3" maxlength="50">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-user-circle"></i> Full Name</label>
+                        <div class="input-wrapper">
+                            <input type="text" id="name" name="name" required placeholder="Enter full name" minlength="2" maxlength="100">
+                        </div>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label><i class="fas fa-user-circle"></i> Full Name</label>
-                    <div class="input-wrapper">
-                        <input type="text" id="name" name="name" required placeholder="Enter full name" minlength="2" maxlength="100">
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-phone"></i> Phone Number</label>
+                        <div class="input-wrapper">
+                            <input type="tel" id="phone" name="phone" required placeholder="Enter phone number">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-envelope"></i> Email</label>
+                        <div class="input-wrapper">
+                            <input type="email" id="email" name="email" required placeholder="Enter email">
+                        </div>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label><i class="fas fa-phone"></i> Phone Number</label>
-                    <div class="input-wrapper">
-                        <input type="tel" id="phone" name="phone" required placeholder="Enter phone number">
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-lock"></i> Password</label>
+                        <div class="input-wrapper">
+                            <input type="password" id="password" name="password" required placeholder="Enter password" minlength="6">
+                            <button type="button" class="toggle-password" id="togglePassword">Show</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-check-circle"></i> Confirm Password</label>
+                        <div class="input-wrapper">
+                            <input type="password" id="confirmPassword" name="confirmPassword" required placeholder="Confirm password" minlength="6">
+                        </div>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label><i class="fas fa-envelope"></i> Email</label>
-                    <div class="input-wrapper">
-                        <input type="email" id="email" name="email" required placeholder="Enter email">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label><i class="fas fa-lock"></i> Password</label>
-                    <div class="input-wrapper">
-                        <input type="password" id="password" name="password" required placeholder="Enter password" minlength="6">
-                        <button type="button" class="toggle-password" id="togglePassword">Show</button>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label><i class="fas fa-check-circle"></i> Confirm Password</label>
-                    <div class="input-wrapper">
-                        <input type="password" id="confirmPassword" name="confirmPassword" required placeholder="Confirm password" minlength="6">
-                    </div>
-                </div>
+                
                 <button type="submit" class="btn-submit" id="registerBtn"><i class="fas fa-user-plus"></i> Register</button>
             </form>
+            
             <div class="progress-bar" id="progressBar">
                 <div class="progress-fill" id="progressFill"></div>
             </div>
