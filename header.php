@@ -58,7 +58,7 @@ $isAdmin = isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true;
                                 <i class="fas fa-user-circle"></i> <?php echo htmlspecialchars($userName); ?>
                             </a>
                         <?php else: ?>
-                            <a href="login-register.php" class="<?php echo ($current_page == 'login-register.php') ? 'active' : ''; ?>">
+                            <a href="login-register.php" class="<?php echo ($current_page == 'home.php') ? 'active' : ''; ?>">
                                 <i class="fas fa-sign-in-alt"></i> Login
                             </a>
                         <?php endif; ?>
