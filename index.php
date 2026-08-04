@@ -171,12 +171,25 @@ function renderStars($rating) {
             border-radius: 6px;
             cursor: pointer;
             font-weight: 600;
-            transition: background 0.3s ease;
+            transition: all 0.3s ease;
             margin-top: 10px;
         }
 
-        .product-card .add-to-cart:hover {
+        .product-card .add-to-cart:hover:not(:disabled) {
             background: #03402c;
+        }
+
+        .product-card .add-to-cart:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .product-card .add-to-cart.added {
+            background: #28a745;
+        }
+
+        .product-card .add-to-cart.error {
+            background: #dc3545;
         }
 
         .product-card .stock-badge {
@@ -481,11 +494,47 @@ function renderStars($rating) {
                 padding: 20px;
             }
         }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 8px;
+            color: #fff;
+            font-weight: 600;
+            z-index: 9999;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.success {
+            background: #28a745;
+        }
+
+        .toast.error {
+            background: #dc3545;
+        }
+
+        .toast.info {
+            background: #17a2b8;
+        }
     </style>
 </head>
 <body>
     <?php include "header.php"; ?>
     <?php include "sidebar.php"; ?>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
 
     <!-- Main Content -->
     <main>
@@ -571,8 +620,12 @@ function renderStars($rating) {
                             <span class="stock-badge <?php echo ($product['stock'] ?? 0) > 0 ? 'in-stock' : 'out-of-stock'; ?>">
                                 <?php echo ($product['stock'] ?? 0) > 0 ? 'In Stock' : 'Out of Stock'; ?>
                             </span>
-                            <button class="add-to-cart" onclick="addToCart(<?php echo $product['id']; ?>)">
-                                <i class="fas fa-shopping-cart"></i> Add to Cart
+                            <button class="add-to-cart" 
+                                    data-product-id="<?php echo $product['id']; ?>"
+                                    data-product-name="<?php echo htmlspecialchars($product['name']); ?>"
+                                    <?php echo ($product['stock'] ?? 0) <= 0 ? 'disabled' : ''; ?>>
+                                <i class="fas fa-shopping-cart"></i> 
+                                <?php echo ($product['stock'] ?? 0) > 0 ? 'Add to Cart' : 'Out of Stock'; ?>
                             </button>
                         </div>
                     <?php endforeach; ?>
@@ -646,12 +699,108 @@ function renderStars($rating) {
     <?php include "footer.php"; ?>
     <script src="script.js"></script>
     <script>
-        // ===== ADD TO CART FUNCTION =====
-        function addToCart(productId) {
-            alert('Product ' + productId + ' added to cart!');
+        // ============================================
+        // TOAST NOTIFICATION
+        // ============================================
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast ' + type;
+            
+            // Trigger reflow
+            void toast.offsetWidth;
+            
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
         }
 
-        // ===== HERO SLIDER =====
+        // ============================================
+        // ADD TO CART FUNCTION (Prevents Double Click)
+        // ============================================
+        document.querySelectorAll('.add-to-cart').forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                // Prevent double click
+                if (this.disabled) {
+                    return;
+                }
+                
+                const productId = this.dataset.productId;
+                const productName = this.dataset.productName;
+                const originalText = this.innerHTML;
+                const originalClass = this.className;
+                
+                // Disable button and show loading state
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+                
+                // Send AJAX request
+                const formData = new FormData();
+                formData.append('ajax_action', 'add_to_cart');
+                formData.append('product_id', productId);
+                formData.append('quantity', 1);
+                
+                fetch('cart.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Success state
+                        this.innerHTML = '<i class="fas fa-check"></i> Added!';
+                        this.className = originalClass + ' added';
+                        showToast(productName + ' added to cart!', 'success');
+                        
+                        // Update cart count if available
+                        if (data.cart_count !== undefined) {
+                            const cartBadge = document.querySelector('.cart-count');
+                            if (cartBadge) {
+                                cartBadge.textContent = data.cart_count;
+                            }
+                        }
+                        
+                        // Reset after 2 seconds
+                        setTimeout(() => {
+                            this.innerHTML = originalText;
+                            this.className = originalClass;
+                            this.disabled = false;
+                        }, 2000);
+                    } else {
+                        // Error state
+                        this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Failed!';
+                        this.className = originalClass + ' error';
+                        showToast(data.message || 'Failed to add to cart', 'error');
+                        
+                        setTimeout(() => {
+                            this.innerHTML = originalText;
+                            this.className = originalClass;
+                            this.disabled = false;
+                        }, 2000);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error!';
+                    this.className = originalClass + ' error';
+                    showToast('An error occurred. Please try again.', 'error');
+                    
+                    setTimeout(() => {
+                        this.innerHTML = originalText;
+                        this.className = originalClass;
+                        this.disabled = false;
+                    }, 2000);
+                });
+            });
+        });
+
+        // ============================================
+        // HERO SLIDER
+        // ============================================
         let currentSlide = 0;
         const slides = document.querySelectorAll('#heroSlides .slide');
         const totalSlides = slides.length;
