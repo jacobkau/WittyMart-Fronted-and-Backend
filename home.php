@@ -561,7 +561,26 @@ $isLoggedIn = isset($_SESSION['user_id']);
                 <p>Smart Shopping for Witty Minds!</p>
             </div>
 
-            <h2 id="formTitle"><i class="fas fa-user-plus"></i> Create Account</h2>
+            <h2 id="formTitle"><i class="fas fa-user-plus"></i> Create Account</h2>  
+            
+            <!-- Login Form -->
+            <form id="loginForm" class="hidden" method="POST">
+                <div class="form-group">
+                    <label><i class="fas fa-envelope"></i> Email</label>
+                    <div class="input-wrapper">
+                        <input type="email" id="loginEmail" name="email" required placeholder="Enter email">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label><i class="fas fa-lock"></i> Password</label>
+                    <div class="input-wrapper">
+                        <input type="password" id="loginPassword" name="password" required placeholder="Enter password">
+                        <button type="button" class="toggle-password" id="toggleLoginPassword">Show</button>
+                    </div>
+                </div>
+                <button type="submit" class="btn-submit" id="loginBtn"><i class="fas fa-sign-in-alt"></i> Login</button>
+            </form>
+            
 
             <!-- Register Form -->
             <form id="signupForm" method="POST">
@@ -604,25 +623,6 @@ $isLoggedIn = isset($_SESSION['user_id']);
                 </div>
                 <button type="submit" class="btn-submit" id="registerBtn"><i class="fas fa-user-plus"></i> Register</button>
             </form>
-
-            <!-- Login Form -->
-            <form id="loginForm" class="hidden" method="POST">
-                <div class="form-group">
-                    <label><i class="fas fa-envelope"></i> Email</label>
-                    <div class="input-wrapper">
-                        <input type="email" id="loginEmail" name="email" required placeholder="Enter email">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label><i class="fas fa-lock"></i> Password</label>
-                    <div class="input-wrapper">
-                        <input type="password" id="loginPassword" name="password" required placeholder="Enter password">
-                        <button type="button" class="toggle-password" id="toggleLoginPassword">Show</button>
-                    </div>
-                </div>
-                <button type="submit" class="btn-submit" id="loginBtn"><i class="fas fa-sign-in-alt"></i> Login</button>
-            </form>
-
             <div class="progress-bar" id="progressBar">
                 <div class="progress-fill" id="progressFill"></div>
             </div>
