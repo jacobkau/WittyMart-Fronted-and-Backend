@@ -1,82 +1,140 @@
 <?php
-require_once 'includes/config.php';
+// ===== IMPORTANT: Include config first =====
+require_once __DIR__ . '/includes/config.php';
 
-// Check if user is logged in
+// ===== CHECK IF PDO IS AVAILABLE =====
+if (!isset($pdo)) {
+    error_log('PDO not available in index.php');
+    die('Database connection error. Please try again later.');
+}
+
+// ===== CHECK IF USER IS LOGGED IN =====
 $isLoggedIn = isset($_SESSION['user_id']);
-$userName = $_SESSION['user_name'] ?? 'Guest';
-$userEmail = $_SESSION['user_email'] ?? '';
+$userName = $_SESSION['user_name'] ?? '';
 
-// Handle testimonial submission
-$message = '';
-$messageType = '';
+// ===== FETCH SLIDER IMAGES =====
+try {
+    $stmt = $pdo->prepare("
+        SELECT * FROM slider_images 
+        WHERE status = 'active' 
+        ORDER BY display_order ASC, created_at DESC
+    ");
+    $stmt->execute();
+    $slider_images = $stmt->fetchAll();
+} catch (PDOException $e) {
+    error_log('Slider images error: ' . $e->getMessage());
+    $slider_images = [];
+}
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_testimonial'])) {
-    if (!$isLoggedIn) {
-        $message = 'You must be logged in to submit a testimonial.';
-        $messageType = 'error';
-    } else {
-        $content = sanitize($_POST['content'] ?? '');
-        $rating = intval($_POST['rating'] ?? 5);
-        
-        if (empty($content)) {
-            $message = 'Please write your testimonial.';
-            $messageType = 'error';
-        } else {
-            try {
-                // Check if user already submitted a testimonial
-                $stmt = $pdo->prepare("SELECT id FROM testimonials WHERE user_id = ?");
-                $stmt->execute([$_SESSION['user_id']]);
-                
-                if ($stmt->fetch()) {
-                    $message = 'You have already submitted a testimonial. Thank you!';
-                    $messageType = 'warning';
-                } else {
-                    // Insert testimonial
-                    $stmt = $pdo->prepare("
-                        INSERT INTO testimonials (user_id, customer_name, content, rating, status) 
-                        VALUES (?, ?, ?, ?, 'pending')
-                    ");
-                    $stmt->execute([$_SESSION['user_id'], $userName, $content, $rating]);
-                    
-                    $message = 'Thank you for your testimonial! It will be reviewed and published soon.';
-                    $messageType = 'success';
-                }
-            } catch (PDOException $e) {
-                error_log('Testimonial error: ' . $e->getMessage());
-                $message = 'Failed to submit testimonial. Please try again.';
-                $messageType = 'error';
-            }
-        }
+// ===== FETCH FEATURED PRODUCTS =====
+try {
+    $stmt = $pdo->prepare("
+        SELECT p.*, c.name as category_name 
+        FROM products p
+        INNER JOIN featured_products fp ON p.id = fp.product_id
+        LEFT JOIN categories c ON p.category_id = c.id
+        WHERE p.status = 'active' OR p.status IS NULL
+        ORDER BY fp.display_order ASC, p.created_at DESC
+        LIMIT 8
+    ");
+    $stmt->execute();
+    $featured_products = $stmt->fetchAll();
+} catch (PDOException $e) {
+    error_log('Featured products error: ' . $e->getMessage());
+    $featured_products = [];
+}
+
+// If no featured products, fallback to regular products
+if (empty($featured_products)) {
+    try {
+        $stmt = $pdo->prepare("
+            SELECT p.*, c.name as category_name 
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            WHERE p.status = 'active' OR p.status IS NULL
+            ORDER BY p.created_at DESC
+            LIMIT 8
+        ");
+        $stmt->execute();
+        $featured_products = $stmt->fetchAll();
+    } catch (PDOException $e) {
+        error_log('Fallback products error: ' . $e->getMessage());
+        $featured_products = [];
     }
 }
 
-// Fetch existing testimonials
+// ===== FETCH TESTIMONIALS =====
 try {
     $stmt = $pdo->prepare("
         SELECT * FROM testimonials 
         WHERE status = 'active' 
         ORDER BY display_order ASC, created_at DESC
-        LIMIT 20
+        LIMIT 10
     ");
     $stmt->execute();
     $testimonials = $stmt->fetchAll();
 } catch (PDOException $e) {
-    error_log('Get testimonials error: ' . $e->getMessage());
+    error_log('Testimonials error: ' . $e->getMessage());
     $testimonials = [];
 }
 
-// Check if user already submitted
-$hasSubmitted = false;
-if ($isLoggedIn) {
-    try {
-        $stmt = $pdo->prepare("SELECT id FROM testimonials WHERE user_id = ?");
-        $stmt->execute([$_SESSION['user_id']]);
-        $hasSubmitted = $stmt->fetch() !== false;
-    } catch (PDOException $e) {
-        // Ignore
+// ===== HANDLE TESTIMONIAL SUBMISSION =====
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_POST['ajax_action'] === 'submit_testimonial') {
+    header('Content-Type: application/json');
+    
+    if (!$isLoggedIn) {
+        echo json_encode(['success' => false, 'message' => 'Please login to submit a testimonial']);
+        exit();
     }
+    
+    $content = sanitize($_POST['content'] ?? '');
+    $rating = intval($_POST['rating'] ?? 5);
+    
+    if (empty($content)) {
+        echo json_encode(['success' => false, 'message' => 'Please write your testimonial']);
+        exit();
+    }
+    
+    if (strlen($content) < 10) {
+        echo json_encode(['success' => false, 'message' => 'Testimonial must be at least 10 characters']);
+        exit();
+    }
+    
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO testimonials (customer_name, content, rating, status, display_order, created_at) 
+            VALUES (?, ?, ?, 'pending', 0, NOW())
+        ");
+        $stmt->execute([$userName, $content, $rating]);
+        
+        echo json_encode([
+            'success' => true, 
+            'message' => 'Thank you for your testimonial! It will be reviewed and published soon.'
+        ]);
+    } catch (PDOException $e) {
+        error_log('Testimonial submission error: ' . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => 'Database error. Please try again.']);
+    }
+    exit();
 }
 
+// ===== HELPER FUNCTION FOR PRODUCT IMAGE =====
+function getProductImageUrl($image_path) {
+    if (empty($image_path)) {
+        return 'uploads/products/no-image.png';
+    }
+    return $image_path;
+}
+
+// ===== HELPER FUNCTION FOR SLIDER IMAGE =====
+function getSliderImageUrl($image_path) {
+    if (empty($image_path)) {
+        return 'images/default-slide.jpg';
+    }
+    return $image_path;
+}
+
+// ===== HELPER FUNCTION FOR STAR RATING =====
 function renderStars($rating) {
     $html = '';
     for ($i = 1; $i <= 5; $i++) {
@@ -94,155 +152,148 @@ function renderStars($rating) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Testimonials - WittyMart</title>
+    <title>WittyMart – Smart Shopping for Witty Minds</title>
     <link rel="icon" type="image/png" href="images/logo.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
     <style>
-        .testimonials-page {
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 20px;
+        /* Product Grid Styles */
+        .product-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
         }
-        
-        .testimonial-form-container {
-            background: #f8f9fa;
-            border-radius: 12px;
-            padding: 30px;
-            margin-bottom: 40px;
-            border: 1px solid #e9ecef;
+
+        .product-card {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            text-align: center;
+            padding: 15px;
         }
-        
-        .testimonial-form-container h2 {
-            color: #333;
-            margin-bottom: 20px;
+
+        .product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
         }
-        
-        .testimonial-form-container h2 i {
-            color: #05573c;
-        }
-        
-        .form-group {
-            margin-bottom: 18px;
-        }
-        
-        .form-group label {
-            display: block;
-            font-weight: 600;
-            color: #555;
-            margin-bottom: 5px;
-        }
-        
-        .form-group label i {
-            margin-right: 8px;
-            color: #05573c;
-        }
-        
-        .form-group textarea {
+
+        .product-card img {
             width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
+            height: 180px;
+            object-fit: cover;
             border-radius: 8px;
-            font-size: 14px;
-            transition: border-color 0.3s ease;
-            min-height: 120px;
-            resize: vertical;
-            font-family: inherit;
         }
-        
-        .form-group textarea:focus {
-            outline: none;
-            border-color: #05573c;
+
+        .product-card h3 {
+            font-size: 16px;
+            margin: 10px 0 5px;
+            color: #333;
         }
-        
-        .star-rating {
-            display: flex;
-            gap: 5px;
-            font-size: 30px;
-            cursor: pointer;
+
+        .product-card .price {
+            font-size: 18px;
+            font-weight: 700;
+            color: #05573c;
+            margin: 5px 0;
         }
-        
-        .star-rating i {
-            color: #ddd;
-            transition: color 0.3s ease;
+
+        .product-card .category {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
-        
-        .star-rating i.active {
-            color: #ffc107;
-        }
-        
-        .star-rating i:hover {
-            transform: scale(1.1);
-        }
-        
-        .btn-submit {
+
+        .product-card .add-to-cart {
             background: #05573c;
             color: #fff;
             border: none;
-            padding: 12px 30px;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
+            padding: 8px 20px;
+            border-radius: 6px;
             cursor: pointer;
+            font-weight: 600;
             transition: all 0.3s ease;
+            margin-top: 10px;
         }
-        
-        .btn-submit:hover:not(:disabled) {
+
+        .product-card .add-to-cart:hover:not(:disabled) {
             background: #03402c;
-            transform: translateY(-2px);
         }
-        
-        .btn-submit:disabled {
+
+        .product-card .add-to-cart:disabled {
             opacity: 0.7;
             cursor: not-allowed;
         }
-        
-        .btn-submit i {
-            margin-right: 8px;
+
+        .product-card .add-to-cart.added {
+            background: #28a745;
         }
-        
-        .testimonials-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 25px;
+
+        .product-card .add-to-cart.error {
+            background: #dc3545;
         }
-        
-        .testimonial-item {
-            background: #fff;
-            padding: 25px;
+
+        .product-card .stock-badge {
+            display: inline-block;
+            padding: 2px 10px;
             border-radius: 12px;
-            box-shadow: 0 2px 15px rgba(0,0,0,0.08);
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 5px;
+        }
+
+        .stock-badge.in-stock {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .stock-badge.out-of-stock {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        /* Testimonial Styles */
+        .testimonials-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .testimonial-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
             border-left: 4px solid #05573c;
             transition: transform 0.3s ease;
         }
-        
-        .testimonial-item:hover {
-            transform: translateY(-5px);
+
+        .testimonial-card:hover {
+            transform: translateY(-3px);
         }
-        
-        .testimonial-item .stars {
-            margin-bottom: 10px;
-        }
-        
-        .testimonial-item .stars i {
-            font-size: 16px;
-        }
-        
-        .testimonial-item .content {
-            font-size: 15px;
-            line-height: 1.6;
-            color: #555;
-            margin-bottom: 15px;
+
+        .testimonial-card blockquote {
+            margin: 0;
             font-style: italic;
+            color: #555;
         }
-        
-        .testimonial-item .author {
+
+        .testimonial-card blockquote p {
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .testimonial-card .customer-info {
             display: flex;
             align-items: center;
             gap: 12px;
+            margin-top: 12px;
         }
-        
-        .testimonial-item .avatar {
+
+        .testimonial-card .customer-avatar {
             width: 45px;
             height: 45px;
             border-radius: 50%;
@@ -254,136 +305,354 @@ function renderStars($rating) {
             font-weight: 700;
             font-size: 18px;
         }
-        
-        .testimonial-item .author-name {
+
+        .testimonial-card .customer-name {
             font-weight: 600;
             color: #333;
-            font-size: 16px;
         }
-        
-        .testimonial-item .author-date {
-            font-size: 12px;
-            color: #999;
+
+        .testimonial-card .customer-stars {
+            margin-top: 5px;
         }
-        
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #999;
-        }
-        
-        .empty-state i {
-            font-size: 60px;
-            display: block;
-            margin-bottom: 20px;
-            opacity: 0.3;
-        }
-        
-        .message {
-            padding: 12px 18px;
-            border-radius: 8px;
-            margin-bottom: 20px;
+
+        .testimonial-card .customer-stars i {
             font-size: 14px;
         }
-        
-        .message.success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        
-        .message.error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        
-        .message.warning {
-            background: #fff3cd;
-            color: #856404;
-            border: 1px solid #ffc107;
-        }
-        
-        .message i {
-            margin-right: 8px;
-        }
-        
-        .login-prompt {
+
+        .empty-state {
             text-align: center;
-            padding: 40px;
-            background: #f8f9fa;
-            border-radius: 12px;
+            padding: 40px 20px;
+            color: #888;
         }
-        
-        .login-prompt i {
+
+        .empty-state i {
             font-size: 48px;
-            color: #ccc;
             display: block;
             margin-bottom: 15px;
+            opacity: 0.3;
         }
-        
-        .login-prompt a {
-            color: #05573c;
+
+        /* Testimonial Form Styles */
+        .testimonial-form-container {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 12px;
+            margin-top: 30px;
+        }
+
+        .testimonial-form-container h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .testimonial-form-container .rating-select {
+            margin-bottom: 15px;
+        }
+
+        .testimonial-form-container .rating-select label {
+            display: block;
+            margin-bottom: 5px;
             font-weight: 600;
-            text-decoration: none;
         }
-        
-        .login-prompt a:hover {
-            text-decoration: underline;
+
+        .testimonial-form-container .star-rating {
+            display: flex;
+            gap: 8px;
+            font-size: 28px;
+            cursor: pointer;
         }
-        
-        /* Dark mode */
-        body.dark-mode .testimonial-form-container {
-            background: #1a1a2e;
-            border-color: #2a2a3e;
+
+        .testimonial-form-container .star-rating i {
+            color: #ddd;
+            transition: color 0.2s ease;
         }
-        
-        body.dark-mode .testimonial-form-container h2 {
-            color: #eee;
+
+        .testimonial-form-container .star-rating i.active {
+            color: #ffc107;
         }
-        
-        body.dark-mode .form-group label {
-            color: #bbb;
+
+        .testimonial-form-container .star-rating i:hover {
+            color: #ffc107;
+            transform: scale(1.1);
         }
-        
-        body.dark-mode .form-group textarea {
-            background: #2a2a3e;
-            border-color: #3a3a5e;
-            color: #eee;
+
+        .testimonial-form-container textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            resize: vertical;
+            min-height: 100px;
+            font-family: inherit;
+            transition: border-color 0.3s ease;
         }
-        
-        body.dark-mode .form-group textarea:focus {
+
+        .testimonial-form-container textarea:focus {
+            outline: none;
             border-color: #05573c;
         }
-        
-        body.dark-mode .testimonial-item {
-            background: #1a1a2e;
+
+        .testimonial-form-container .btn-submit {
+            background: #05573c;
+            color: #fff;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
         }
-        
-        body.dark-mode .testimonial-item .content {
-            color: #bbb;
+
+        .testimonial-form-container .btn-submit:hover:not(:disabled) {
+            background: #03402c;
         }
-        
-        body.dark-mode .testimonial-item .author-name {
-            color: #eee;
+
+        .testimonial-form-container .btn-submit:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
         }
-        
-        body.dark-mode .login-prompt {
-            background: #1a1a2e;
+
+        /* Hero Slider Styles */
+        .hero {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+            align-items: stretch;
         }
-        
-        @media (max-width: 768px) {
-            .testimonials-list {
+
+        .about-shop {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .about-shop h1 {
+            font-size: 28px;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .about-shop h1 span {
+            color: #05573c;
+        }
+
+        .about-shop p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+
+        .hero-slider {
+            position: relative;
+            overflow: hidden;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            background: #000;
+            min-height: 300px;
+        }
+
+        .slides {
+            display: flex;
+            transition: transform 0.5s ease-in-out;
+            height: 100%;
+        }
+
+        .slide {
+            min-width: 100%;
+            position: relative;
+            height: 100%;
+        }
+
+        .slide img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            min-height: 300px;
+            max-height: 400px;
+        }
+
+        .slide .caption {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 30px;
+            background: linear-gradient(transparent, rgba(0,0,0,0.7));
+            color: #fff;
+        }
+
+        .slide .caption h2 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .slide .caption p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .slide .caption .slider-btn {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 20px;
+            background: #05573c;
+            color: #fff;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background 0.3s ease;
+        }
+
+        .slide .caption .slider-btn:hover {
+            background: #03402c;
+        }
+
+        .slider-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255,255,255,0.3);
+            color: #fff;
+            border: none;
+            padding: 12px 18px;
+            cursor: pointer;
+            font-size: 24px;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+            z-index: 10;
+            backdrop-filter: blur(5px);
+        }
+
+        .slider-nav:hover {
+            background: rgba(255,255,255,0.6);
+            color: #333;
+        }
+
+        .slider-nav.prev {
+            left: 15px;
+        }
+
+        .slider-nav.next {
+            right: 15px;
+        }
+
+        /* Slider Dots */
+        .slider-dots {
+            position: absolute;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+            z-index: 10;
+        }
+
+        .slider-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.5);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+            padding: 0;
+        }
+
+        .slider-dot.active {
+            background: #fff;
+            transform: scale(1.2);
+        }
+
+        /* Responsive */
+        @media (max-width: 992px) {
+            .hero {
                 grid-template-columns: 1fr;
             }
-            
-            .testimonial-form-container {
+
+            .about-shop {
+                order: 2;
+            }
+
+            .hero-slider {
+                order: 1;
+                min-height: 250px;
+            }
+
+            .slide img {
+                min-height: 250px;
+                max-height: 300px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .product-grid {
+                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+                gap: 15px;
+            }
+
+            .testimonials-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .product-card img {
+                height: 140px;
+            }
+
+            .about-shop h1 {
+                font-size: 22px;
+            }
+
+            .slide .caption h2 {
+                font-size: 18px;
+            }
+
+            .slide .caption p {
+                font-size: 12px;
+            }
+
+            .slide .caption {
                 padding: 20px;
             }
-            
-            .star-rating {
-                font-size: 24px;
-            }
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 8px;
+            color: #fff;
+            font-weight: 600;
+            z-index: 9999;
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.success {
+            background: #28a745;
+        }
+
+        .toast.error {
+            background: #dc3545;
+        }
+
+        .toast.info {
+            background: #17a2b8;
         }
     </style>
 </head>
@@ -391,73 +660,139 @@ function renderStars($rating) {
     <?php include "header.php"; ?>
     <?php include "sidebar.php"; ?>
 
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Main Content -->
     <main>
-        <div class="testimonials-page">
-            <h1><i class="fas fa-comment-dots" style="color:#05573c;"></i> Customer <span>Testimonials</span></h1>
-            <p style="color: #888; margin-bottom: 30px;">See what our customers are saying about WittyMart</p>
-            
-            <?php if ($message): ?>
-                <div class="message <?php echo $messageType; ?>">
-                    <i class="fas fa-<?php echo $messageType === 'success' ? 'check-circle' : ($messageType === 'warning' ? 'exclamation-triangle' : 'exclamation-circle'); ?>"></i>
-                    <?php echo htmlspecialchars($message); ?>
-                </div>
-            <?php endif; ?>
-            
-            <!-- Testimonial Form -->
-            <?php if ($isLoggedIn): ?>
-                <?php if ($hasSubmitted): ?>
-                    <div class="message warning">
-                        <i class="fas fa-check-circle"></i> You have already submitted a testimonial. Thank you for your feedback!
-                    </div>
-                <?php else: ?>
-                    <div class="testimonial-form-container">
-                        <h2><i class="fas fa-pen"></i> Share Your Experience</h2>
-                        <form method="POST">
-                            <div class="form-group">
-                                <label><i class="fas fa-star"></i> Your Rating</label>
-                                <div class="star-rating" id="starRating">
-                                    <i class="fas fa-star" data-value="1"></i>
-                                    <i class="fas fa-star" data-value="2"></i>
-                                    <i class="fas fa-star" data-value="3"></i>
-                                    <i class="fas fa-star" data-value="4"></i>
-                                    <i class="fas fa-star" data-value="5"></i>
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="about-shop">
+                <h1>About <span>WittyMart</span> Shop</h1>
+                <p>Welcome to WittyMart, your one-stop destination for smart shopping! At WittyMart, we believe in providing our customers with the best products at unbeatable prices. Our mission is to make shopping convenient, enjoyable, and rewarding for everyone.</p>
+                <p>We offer a wide range of products across various categories, including electronics, fashion, home & living, beauty & health, sports & outdoors, and much more. Whether you're looking for the latest gadgets, trendy apparel, or everyday essentials, we've got you covered.</p>
+            </div>
+          
+            <div class="hero-slider">
+                <div class="slides" id="heroSlides">
+                    <?php if (!empty($slider_images)): ?>
+                        <?php foreach ($slider_images as $index => $slide): ?>
+                            <div class="slide" data-index="<?php echo $index; ?>">
+                                <img src="<?php echo htmlspecialchars(getSliderImageUrl($slide['image_path'])); ?>" 
+                                     alt="<?php echo htmlspecialchars($slide['title']); ?>">
+                                <div class="caption">
+                                    <h2><?php echo htmlspecialchars($slide['title']); ?></h2>
+                                    <p><?php echo htmlspecialchars($slide['subtitle'] ?? ''); ?></p>
+                                    <?php if (!empty($slide['link']) && !empty($slide['button_text'])): ?>
+                                        <a href="<?php echo htmlspecialchars($slide['link']); ?>" class="slider-btn">
+                                            <?php echo htmlspecialchars($slide['button_text']); ?>
+                                        </a>
+                                    <?php endif; ?>
                                 </div>
-                                <input type="hidden" name="rating" id="ratingInput" value="5">
                             </div>
-                            
-                            <div class="form-group">
-                                <label><i class="fas fa-comment"></i> Your Testimonial</label>
-                                <textarea name="content" placeholder="Share your experience with WittyMart... What did you love? How was the service?" required></textarea>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <!-- Default fallback slides -->
+                        <div class="slide">
+                            <img src="images/smart.jpg" alt="Deal 1">
+                            <div class="caption">
+                                <h2>Smartphone Pro X</h2>
+                                <p>Grab the latest smartphone at 20% off!</p>
                             </div>
-                            
-                            <button type="submit" name="submit_testimonial" class="btn-submit">
-                                <i class="fas fa-paper-plane"></i> Submit Testimonial
-                            </button>
-                        </form>
+                        </div>
+                        <div class="slide">
+                            <img src="images/head1.jpeg" alt="Deal 2">
+                            <div class="caption">
+                                <h2>Noise Cancelling Headphones</h2>
+                                <p>Experience sound like never before.</p>
+                            </div>
+                        </div>
+                        <div class="slide">
+                            <img src="images/watch5.jpg" alt="Deal 3">
+                            <div class="caption">
+                                <h2>Fitness Smartwatch</h2>
+                                <p>Track your health goals in style.</p>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                </div>
+                
+                <?php if (count($slider_images) > 1): ?>
+                    <button class="slider-nav prev" onclick="prevSlide()">‹</button>
+                    <button class="slider-nav next" onclick="nextSlide()">›</button>
+                    <div class="slider-dots" id="sliderDots">
+                        <?php foreach ($slider_images as $index => $slide): ?>
+                            <button class="slider-dot <?php echo $index === 0 ? 'active' : ''; ?>" 
+                                    onclick="goToSlide(<?php echo $index; ?>)"></button>
+                        <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
+            </div>
+        </section>
+
+        <!-- Featured Products -->
+        <section>
+            <h2>Featured <span>Products</span></h2>
+            
+            <?php if (!empty($featured_products)): ?>
+                <div class="product-grid">
+                    <?php foreach ($featured_products as $product): ?>
+                        <div class="product-card">
+                            <img src="<?php echo htmlspecialchars(getProductImageUrl($product['image'] ?? '')); ?>" 
+                                 alt="<?php echo htmlspecialchars($product['name']); ?>"
+                                 onerror="this.src='uploads/products/no-image.png'">
+                            <span class="category"><?php echo htmlspecialchars($product['category_name'] ?? 'Uncategorized'); ?></span>
+                            <h3><?php echo htmlspecialchars($product['name']); ?></h3>
+                            <div class="price">Ksh <?php echo number_format($product['price'], 2); ?></div>
+                            <span class="stock-badge <?php echo ($product['stock'] ?? 0) > 0 ? 'in-stock' : 'out-of-stock'; ?>">
+                                <?php echo ($product['stock'] ?? 0) > 0 ? 'In Stock' : 'Out of Stock'; ?>
+                            </span>
+                            <button class="add-to-cart" 
+                                    data-product-id="<?php echo $product['id']; ?>"
+                                    data-product-name="<?php echo htmlspecialchars($product['name']); ?>"
+                                    <?php echo ($product['stock'] ?? 0) <= 0 ? 'disabled' : ''; ?>>
+                                <i class="fas fa-shopping-cart"></i> 
+                                <?php echo ($product['stock'] ?? 0) > 0 ? 'Add to Cart' : 'Out of Stock'; ?>
+                            </button>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
             <?php else: ?>
-                <div class="login-prompt">
-                    <i class="fas fa-lock"></i>
-                    <h3>Please Login to Submit a Testimonial</h3>
-                    <p>Share your experience with our community!</p>
-                    <a href="home.php">Login / Register</a>
+                <div class="empty-state">
+                    <i class="fas fa-box-open"></i>
+                    <h3>No Featured Products</h3>
+                    <p>Featured products will appear here soon.</p>
                 </div>
             <?php endif; ?>
-            
-            <!-- Existing Testimonials -->
-            <h2 style="margin-top: 40px;"><i class="fas fa-comments" style="color:#05573c;"></i> What Our Customers Say</h2>
+        </section>
+
+        <!-- About Section -->
+        <section class="about-shop-section">
+            <h2>Why Choose <span>WittyMart</span>?</h2>
+            <p>We offer a wide range of products across various categories, including electronics, fashion, home & living, beauty & health, sports & outdoors, and much more. Whether you're looking for the latest gadgets, trendy apparel, or everyday essentials, we've got you covered.</p>
+            <ul>
+                <li>High-quality products from trusted brands</li>
+                <li>Exclusive deals and discounts</li>
+                <li>Fast and reliable delivery</li>
+                <li>Exceptional customer service</li>
+                <li>Secure and hassle-free shopping experience</li>
+            </ul>
+            <p>Join thousands of satisfied customers who have made WittyMart their preferred shopping destination. Shop smart, shop WittyMart!</p>
+        </section>
+
+        <!-- Testimonials -->
+        <section class="testimonials-slider">
+            <h2>What Our <span>Customers Say</span></h2>
             
             <?php if (!empty($testimonials)): ?>
-                <div class="testimonials-list">
+                <div class="testimonials-grid">
                     <?php foreach ($testimonials as $testimonial): ?>
-                        <div class="testimonial-item">
-                            <div class="stars">
-                                <?php echo renderStars($testimonial['rating'] ?? 5); ?>
-                            </div>
-                            <div class="content">"<?php echo htmlspecialchars($testimonial['content']); ?>"</div>
-                            <div class="author">
-                                <div class="avatar">
+                        <div class="testimonial-card">
+                            <blockquote>
+                                <p>"<?php echo htmlspecialchars($testimonial['content']); ?>"</p>
+                            </blockquote>
+                            <div class="customer-info">
+                                <div class="customer-avatar">
                                     <?php 
                                     $name = $testimonial['customer_name'];
                                     $initials = '';
@@ -469,8 +804,10 @@ function renderStars($rating) {
                                     ?>
                                 </div>
                                 <div>
-                                    <div class="author-name"><?php echo htmlspecialchars($testimonial['customer_name']); ?></div>
-                                    <div class="author-date"><?php echo date('M d, Y', strtotime($testimonial['created_at'] ?? 'now')); ?></div>
+                                    <div class="customer-name"><?php echo htmlspecialchars($testimonial['customer_name']); ?></div>
+                                    <div class="customer-stars">
+                                        <?php echo renderStars($testimonial['rating'] ?? 5); ?>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -480,52 +817,341 @@ function renderStars($rating) {
                 <div class="empty-state">
                     <i class="fas fa-comment-dots"></i>
                     <h3>No Testimonials Yet</h3>
-                    <p>Be the first to share your experience with WittyMart!</p>
+                    <p>Customer testimonials will appear here soon.</p>
                 </div>
             <?php endif; ?>
-        </div>
+
+            <!-- Testimonial Submission Form (Only for Logged-in Users) -->
+            <?php if ($isLoggedIn): ?>
+                <div class="testimonial-form-container">
+                    <h3><i class="fas fa-pen"></i> Share Your Experience</h3>
+                    <p style="color: #666; margin-bottom: 15px;">We'd love to hear about your experience with WittyMart!</p>
+                    
+                    <form id="testimonialForm">
+                        <div class="rating-select">
+                            <label>Your Rating</label>
+                            <div class="star-rating" id="starRating">
+                                <i class="fas fa-star" data-value="1"></i>
+                                <i class="fas fa-star" data-value="2"></i>
+                                <i class="fas fa-star" data-value="3"></i>
+                                <i class="fas fa-star" data-value="4"></i>
+                                <i class="fas fa-star" data-value="5"></i>
+                            </div>
+                            <input type="hidden" id="ratingValue" name="rating" value="5">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="testimonialContent">Your Testimonial</label>
+                            <textarea id="testimonialContent" name="content" placeholder="Write your testimonial here..." required minlength="10"></textarea>
+                        </div>
+                        
+                        <button type="submit" class="btn-submit" id="submitTestimonial">
+                            <i class="fas fa-paper-plane"></i> Submit Testimonial
+                        </button>
+                    </form>
+                    <div id="testimonialMessage" style="margin-top: 10px; display: none;"></div>
+                </div>
+            <?php else: ?>
+                <div style="text-align: center; margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                    <p style="margin: 0;">
+                        <i class="fas fa-lock" style="color: #888;"></i> 
+                        <a href="home.php" style="color: #05573c; font-weight: 600;">Login</a> to share your experience
+                    </p>
+                </div>
+            <?php endif; ?>
+        </section>
     </main>
     
     <?php include "footer.php"; ?>
-    
+    <script src="script.js"></script>
     <script>
         // ============================================
-        // STAR RATING
+        // TOAST NOTIFICATION
         // ============================================
-        const stars = document.querySelectorAll('.star-rating i');
-        const ratingInput = document.getElementById('ratingInput');
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast ' + type;
+            
+            // Trigger reflow
+            void toast.offsetWidth;
+            
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // ============================================
+        // STAR RATING FOR TESTIMONIAL
+        // ============================================
+        const stars = document.querySelectorAll('#starRating i');
+        const ratingInput = document.getElementById('ratingValue');
         let selectedRating = 5;
-        
+
         stars.forEach(star => {
-            star.addEventListener('mouseenter', function() {
-                const value = parseInt(this.dataset.value);
-                highlightStars(value);
-            });
-            
-            star.addEventListener('mouseleave', function() {
-                highlightStars(selectedRating);
-            });
-            
             star.addEventListener('click', function() {
                 selectedRating = parseInt(this.dataset.value);
                 ratingInput.value = selectedRating;
-                highlightStars(selectedRating);
+                
+                stars.forEach(s => {
+                    s.classList.toggle('active', parseInt(s.dataset.value) <= selectedRating);
+                });
+            });
+            
+            star.addEventListener('mouseenter', function() {
+                const value = parseInt(this.dataset.value);
+                stars.forEach(s => {
+                    s.classList.toggle('active', parseInt(s.dataset.value) <= value);
+                });
+            });
+            
+            star.addEventListener('mouseleave', function() {
+                stars.forEach(s => {
+                    s.classList.toggle('active', parseInt(s.dataset.value) <= selectedRating);
+                });
             });
         });
-        
-        function highlightStars(value) {
-            stars.forEach(star => {
-                const starValue = parseInt(star.dataset.value);
-                if (starValue <= value) {
-                    star.classList.add('active');
+
+        // ============================================
+        // TESTIMONIAL SUBMISSION
+        // ============================================
+        document.getElementById('testimonialForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const content = document.getElementById('testimonialContent');
+            const submitBtn = document.getElementById('submitTestimonial');
+            const messageDiv = document.getElementById('testimonialMessage');
+            
+            if (content.value.trim().length < 10) {
+                messageDiv.style.display = 'block';
+                messageDiv.style.color = '#dc3545';
+                messageDiv.textContent = 'Please write at least 10 characters.';
+                return;
+            }
+            
+            // Disable button
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+            
+            const formData = new FormData();
+            formData.append('ajax_action', 'submit_testimonial');
+            formData.append('content', content.value.trim());
+            formData.append('rating', selectedRating);
+            
+            fetch('index.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                messageDiv.style.display = 'block';
+                if (data.success) {
+                    messageDiv.style.color = '#28a745';
+                    messageDiv.textContent = data.message;
+                    content.value = '';
+                    // Reset stars
+                    stars.forEach(s => s.classList.remove('active'));
+                    selectedRating = 5;
+                    ratingInput.value = 5;
+                    stars.forEach(s => {
+                        if (parseInt(s.dataset.value) <= 5) s.classList.add('active');
+                    });
+                    showToast(data.message, 'success');
                 } else {
-                    star.classList.remove('active');
+                    messageDiv.style.color = '#dc3545';
+                    messageDiv.textContent = data.message;
+                    showToast(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                messageDiv.style.display = 'block';
+                messageDiv.style.color = '#dc3545';
+                messageDiv.textContent = 'An error occurred. Please try again.';
+                showToast('An error occurred. Please try again.', 'error');
+            })
+            .finally(() => {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Testimonial';
+            });
+        });
+
+        // ============================================
+        // ADD TO CART FUNCTION (Prevents Double Click)
+        // ============================================
+        document.querySelectorAll('.add-to-cart').forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                // Prevent double click
+                if (this.disabled) {
+                    return;
+                }
+                
+                const productId = this.dataset.productId;
+                const productName = this.dataset.productName;
+                const originalText = this.innerHTML;
+                const originalClass = this.className;
+                
+                // Disable button and show loading state
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+                
+                // Send AJAX request
+                const formData = new FormData();
+                formData.append('ajax_action', 'add_to_cart');
+                formData.append('product_id', productId);
+                formData.append('quantity', 1);
+                
+                fetch('cart.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Success state
+                        this.innerHTML = '<i class="fas fa-check"></i> Added!';
+                        this.className = originalClass + ' added';
+                        showToast(productName + ' added to cart!', 'success');
+                        
+                        // Update cart count if available
+                        if (data.cart_count !== undefined) {
+                            const cartBadge = document.querySelector('.cart-badge');
+                            if (cartBadge) {
+                                cartBadge.textContent = data.cart_count;
+                            }
+                        }
+                        
+                        // Reset after 2 seconds
+                        setTimeout(() => {
+                            this.innerHTML = originalText;
+                            this.className = originalClass;
+                            this.disabled = false;
+                        }, 2000);
+                    } else {
+                        // Error state
+                        this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Failed!';
+                        this.className = originalClass + ' error';
+                        showToast(data.message || 'Failed to add to cart', 'error');
+                        
+                        setTimeout(() => {
+                            this.innerHTML = originalText;
+                            this.className = originalClass;
+                            this.disabled = false;
+                        }, 2000);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error!';
+                    this.className = originalClass + ' error';
+                    showToast('An error occurred. Please try again.', 'error');
+                    
+                    setTimeout(() => {
+                        this.innerHTML = originalText;
+                        this.className = originalClass;
+                        this.disabled = false;
+                    }, 2000);
+                });
+            });
+        });
+
+        // ============================================
+        // HERO SLIDER
+        // ============================================
+        let currentSlide = 0;
+        const slides = document.querySelectorAll('#heroSlides .slide');
+        const totalSlides = slides.length;
+        let autoSlideInterval;
+
+        function showSlide(index) {
+            if (index >= totalSlides) currentSlide = 0;
+            if (index < 0) currentSlide = totalSlides - 1;
+            
+            const offset = -currentSlide * 100;
+            const slider = document.getElementById('heroSlides');
+            if (slider) {
+                slider.style.transform = `translateX(${offset}%)`;
+            }
+            
+            // Update dots
+            document.querySelectorAll('.slider-dot').forEach((dot, i) => {
+                dot.classList.toggle('active', i === currentSlide);
+            });
+        }
+
+        function nextSlide() {
+            currentSlide++;
+            showSlide(currentSlide);
+            resetAutoSlide();
+        }
+
+        function prevSlide() {
+            currentSlide--;
+            showSlide(currentSlide);
+            resetAutoSlide();
+        }
+
+        function goToSlide(index) {
+            currentSlide = index;
+            showSlide(currentSlide);
+            resetAutoSlide();
+        }
+
+        function resetAutoSlide() {
+            clearInterval(autoSlideInterval);
+            if (totalSlides > 1) {
+                autoSlideInterval = setInterval(nextSlide, 5000);
+            }
+        }
+
+        // Initialize slider
+        if (totalSlides > 0) {
+            showSlide(0);
+            if (totalSlides > 1) {
+                autoSlideInterval = setInterval(nextSlide, 5000);
+            }
+        }
+
+        // Pause auto-slide on hover
+        const sliderContainer = document.querySelector('.hero-slider');
+        if (sliderContainer) {
+            sliderContainer.addEventListener('mouseenter', () => {
+                clearInterval(autoSlideInterval);
+            });
+            
+            sliderContainer.addEventListener('mouseleave', () => {
+                if (totalSlides > 1) {
+                    autoSlideInterval = setInterval(nextSlide, 5000);
                 }
             });
         }
-        
-        // Initialize with 5 stars
-        highlightStars(5);
+
+        // ===== TOUCH SUPPORT FOR MOBILE =====
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        const sliderElement = document.getElementById('heroSlides');
+        if (sliderElement) {
+            sliderElement.addEventListener('touchstart', (e) => {
+                touchStartX = e.changedTouches[0].screenX;
+            }, { passive: true });
+            
+            sliderElement.addEventListener('touchend', (e) => {
+                touchEndX = e.changedTouches[0].screenX;
+                const diff = touchStartX - touchEndX;
+                if (Math.abs(diff) > 50) {
+                    if (diff > 0) {
+                        nextSlide();
+                    } else {
+                        prevSlide();
+                    }
+                }
+            }, { passive: true });
+        }
     </script>
 </body>
 </html>
