@@ -1,7 +1,24 @@
 <?php
+// Include config to get cart count
+require_once 'includes/config.php';
+
 $isLoggedIn = isset($_SESSION['user_id']);
 $userName = $_SESSION['user_name'] ?? 'User';
 $isAdmin = isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true;
+
+// Get cart count
+$cartCount = 0;
+if ($isLoggedIn) {
+    try {
+        $stmt = $pdo->prepare("SELECT SUM(quantity) as total FROM cart WHERE user_id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $result = $stmt->fetch();
+        $cartCount = intval($result['total'] ?? 0);
+    } catch (PDOException $e) {
+        error_log('Get cart count error: ' . $e->getMessage());
+        $cartCount = 0;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -12,7 +29,99 @@ $isAdmin = isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true;
     <link rel="icon" type="image/png" href="images/logo.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* Cart badge styles */
+        .nav-links .cart-link {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+        }
+        
+        .cart-badge {
+            position: absolute;
+            top: -8px;
+            right: -12px;
+            background: #dc3545;
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            min-width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 4px;
+            box-shadow: 0 2px 5px rgba(220, 53, 69, 0.3);
+            transition: transform 0.3s ease;
+        }
+        
+        .cart-badge.pulse {
+            animation: pulse 0.5s ease;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.4); }
+            100% { transform: scale(1); }
+        }
+        
+        .cart-badge.empty {
+            display: none;
+        }
+        
+        /* Header actions cart icon with badge */
+        .header-cart {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
+            color: #333;
+            text-decoration: none;
+            padding: 5px 10px;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+        
+        .header-cart:hover {
+            background: rgba(5, 87, 60, 0.1);
+        }
+        
+        .header-cart .cart-icon {
+            font-size: 20px;
+        }
+        
+        .header-cart .cart-badge-sm {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #dc3545;
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            min-width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 4px;
+            box-shadow: 0 2px 5px rgba(220, 53, 69, 0.3);
+        }
+        
+        .header-cart .cart-badge-sm.empty {
+            display: none;
+        }
 
+        /* Dark mode */
+        body.dark-mode .header-cart {
+            color: #eee;
+        }
+        
+        body.dark-mode .header-cart:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+    </style>
 </head>
 <body>
     <!-- Header -->
@@ -41,8 +150,16 @@ $isAdmin = isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true;
                     
                     foreach ($nav_links as $page => $label):
                         $active_class = ($current_page == $page) ? 'active' : '';
+                        $is_cart = ($page == 'cart.php');
                     ?>
-                        <li><a href="<?php echo $page; ?>" class="<?php echo $active_class; ?>"><?php echo $label; ?></a></li>
+                        <li>
+                            <a href="<?php echo $page; ?>" class="<?php echo $active_class; ?> <?php echo $is_cart ? 'cart-link' : ''; ?>">
+                                <?php echo $label; ?>
+                                <?php if ($is_cart && $cartCount > 0): ?>
+                                    <span class="cart-badge" id="cartBadge"><?php echo $cartCount; ?></span>
+                                <?php endif; ?>
+                            </a>
+                        </li>
                     <?php endforeach; ?>
                     
                     <!-- Account / Login/Register link -->
@@ -71,6 +188,14 @@ $isAdmin = isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true;
             
             <div class="header-actions">
                 <?php if ($isLoggedIn): ?>
+                    <!-- Cart icon with badge in header actions -->
+                    <a href="cart.php" class="header-cart" title="View Cart">
+                        <i class="fas fa-shopping-cart cart-icon"></i>
+                        <span class="cart-badge-sm <?php echo $cartCount > 0 ? '' : 'empty'; ?>" id="headerCartBadge">
+                            <?php echo $cartCount > 0 ? $cartCount : ''; ?>
+                        </span>
+                    </a>
+                    
                     <button class="logout-btn" onclick="logoutUser()" title="Logout">
                         <i class="fas fa-sign-out-alt"></i>
                     </button>
@@ -230,12 +355,121 @@ $isAdmin = isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true;
     </style>
 
     <script>
-        // Logout function
+        // ============================================
+        // CART COUNT REFRESH FUNCTION
+        // ============================================
+        function refreshCartCount() {
+            if (!<?php echo json_encode($isLoggedIn); ?>) return;
+            
+            fetch('cart.php?action=get_cart_count')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const count = data.count;
+                        
+                        // Update badge in nav
+                        const badge = document.getElementById('cartBadge');
+                        if (badge) {
+                            if (count > 0) {
+                                badge.textContent = count;
+                                badge.classList.remove('empty');
+                                badge.classList.add('pulse');
+                                setTimeout(() => badge.classList.remove('pulse'), 500);
+                            } else {
+                                badge.classList.add('empty');
+                            }
+                        }
+                        
+                        // Update header cart badge
+                        const headerBadge = document.getElementById('headerCartBadge');
+                        if (headerBadge) {
+                            if (count > 0) {
+                                headerBadge.textContent = count;
+                                headerBadge.classList.remove('empty');
+                            } else {
+                                headerBadge.classList.add('empty');
+                            }
+                        }
+                    }
+                })
+                .catch(error => console.error('Error refreshing cart count:', error));
+        }
+
+        // ============================================
+        // LOGOUT FUNCTION
+        // ============================================
         function logoutUser() {
             if (confirm('Are you sure you want to logout?')) {
                 window.location.href = 'logout.php';
             }
         }
+
+        // ============================================
+        // AUTO-REFRESH CART COUNT
+        // ============================================
+        // Refresh cart count every 30 seconds
+        setInterval(refreshCartCount, 30000);
+
+        // Refresh cart count when page becomes visible again
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) {
+                refreshCartCount();
+            }
+        });
+
+        // ============================================
+        // THEME TOGGLE
+        // ============================================
+        function toggleTheme() {
+            document.body.classList.toggle('dark-mode');
+            const isDark = document.body.classList.contains('dark-mode');
+            const icon = document.getElementById('theme-icon');
+            if (icon) {
+                icon.innerHTML = isDark ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
+                icon.title = isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+            }
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        }
+
+        // Load saved theme
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') {
+            document.body.classList.add('dark-mode');
+            const icon = document.getElementById('theme-icon');
+            if (icon) {
+                icon.innerHTML = '<i class="fas fa-moon"></i>';
+                icon.title = 'Switch to Light Mode';
+            }
+        }
+
+        // ============================================
+        // MOBILE MENU TOGGLE
+        // ============================================
+        function toggleMenu() {
+            const navLinks = document.getElementById('nav-links');
+            navLinks.classList.toggle('active');
+        }
+
+        // ============================================
+        // SIDEBAR TOGGLE
+        // ============================================
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+            document.body.classList.toggle('sidebar-open');
+        }
+
+        // Close sidebar when clicking overlay
+        document.addEventListener('DOMContentLoaded', function() {
+            const overlay = document.getElementById('sidebarOverlay');
+            if (overlay) {
+                overlay.addEventListener('click', function() {
+                    toggleSidebar();
+                });
+            }
+        });
     </script>
 </body>
 </html>
