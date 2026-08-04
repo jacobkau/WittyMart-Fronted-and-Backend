@@ -844,11 +844,11 @@ function renderStars($rating) {
                         <div class="rating-select">
                             <label>Your Rating</label>
                             <div class="star-rating" id="starRating">
-                                <i class="fas fa-star" data-value="1"></i>
-                                <i class="fas fa-star" data-value="2"></i>
-                                <i class="fas fa-star" data-value="3"></i>
-                                <i class="fas fa-star" data-value="4"></i>
-                                <i class="fas fa-star" data-value="5" style="color: #ffc107;"></i>
+                                <i class="fas fa-star" data-value="1" onclick="setRating(1)"></i>
+                                <i class="fas fa-star" data-value="2" onclick="setRating(2)"></i>
+                                <i class="fas fa-star" data-value="3" onclick="setRating(3)"></i>
+                                <i class="fas fa-star" data-value="4" onclick="setRating(4)"></i>
+                                <i class="fas fa-star" data-value="5" onclick="setRating(5)" style="color: #ffc107;"></i>
                             </div>
                             <input type="hidden" id="ratingValue" name="rating" value="5">
                             <span style="font-size: 14px; color: #888;">Selected: <span id="ratingDisplay">5</span> stars</span>
@@ -877,65 +877,34 @@ function renderStars($rating) {
     </main>
     
     <?php include "footer.php"; ?>
-    <script src="script.js"></script>
+    
     <script>
         // ============================================
-        // WAIT FOR DOM TO LOAD
+        // STAR RATING FUNCTION
         // ============================================
-        document.addEventListener('DOMContentLoaded', function() {
+        function setRating(value) {
+            // Update hidden input
+            document.getElementById('ratingValue').value = value;
+            document.getElementById('ratingDisplay').textContent = value;
             
-            // ============================================
-            // STAR RATING FOR TESTIMONIAL
-            // ============================================
+            // Update star colors
             const stars = document.querySelectorAll('#starRating i');
-            const ratingInput = document.getElementById('ratingValue');
-            const ratingDisplay = document.getElementById('ratingDisplay');
-            let selectedRating = 5;
-
-            // Set initial state
             stars.forEach(star => {
-                const value = parseInt(star.dataset.value);
-                if (value <= 5) {
+                const starValue = parseInt(star.dataset.value);
+                if (starValue <= value) {
                     star.style.color = '#ffc107';
+                    star.classList.add('active');
+                } else {
+                    star.style.color = '#ddd';
+                    star.classList.remove('active');
                 }
             });
+        }
 
-            stars.forEach(star => {
-                // Click event
-                star.addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    selectedRating = parseInt(this.dataset.value);
-                    ratingInput.value = selectedRating;
-                    ratingDisplay.textContent = selectedRating;
-                    
-                    stars.forEach(s => {
-                        const val = parseInt(s.dataset.value);
-                        s.style.color = val <= selectedRating ? '#ffc107' : '#ddd';
-                        s.classList.toggle('active', val <= selectedRating);
-                    });
-                });
-                
-                // Hover event
-                star.addEventListener('mouseenter', function() {
-                    const value = parseInt(this.dataset.value);
-                    stars.forEach(s => {
-                        const val = parseInt(s.dataset.value);
-                        s.style.color = val <= value ? '#ffc107' : '#ddd';
-                    });
-                });
-                
-                // Mouse leave event
-                star.addEventListener('mouseleave', function() {
-                    stars.forEach(s => {
-                        const val = parseInt(s.dataset.value);
-                        s.style.color = val <= selectedRating ? '#ffc107' : '#ddd';
-                    });
-                });
-            });
-
-            // ============================================
-            // TESTIMONIAL SUBMISSION
-            // ============================================
+        // ============================================
+        // TESTIMONIAL SUBMISSION
+        // ============================================
+        document.addEventListener('DOMContentLoaded', function() {
             const testimonialForm = document.getElementById('testimonialForm');
             if (testimonialForm) {
                 testimonialForm.addEventListener('submit', function(e) {
@@ -944,6 +913,7 @@ function renderStars($rating) {
                     const content = document.getElementById('testimonialContent');
                     const submitBtn = document.getElementById('submitTestimonial');
                     const messageDiv = document.getElementById('testimonialMessage');
+                    const rating = document.getElementById('ratingValue').value;
                     
                     if (content.value.trim().length < 10) {
                         messageDiv.style.display = 'block';
@@ -959,7 +929,7 @@ function renderStars($rating) {
                     const formData = new FormData();
                     formData.append('ajax_action', 'submit_testimonial');
                     formData.append('content', content.value.trim());
-                    formData.append('rating', selectedRating);
+                    formData.append('rating', rating);
                     
                     fetch('index.php', {
                         method: 'POST',
@@ -972,16 +942,8 @@ function renderStars($rating) {
                             messageDiv.style.color = '#28a745';
                             messageDiv.textContent = data.message;
                             content.value = '';
-                            // Reset stars
-                            stars.forEach(s => s.style.color = '#ddd');
-                            selectedRating = 5;
-                            ratingInput.value = 5;
-                            ratingDisplay.textContent = '5';
-                            stars.forEach(s => {
-                                if (parseInt(s.dataset.value) <= 5) {
-                                    s.style.color = '#ffc107';
-                                }
-                            });
+                            // Reset stars to 5
+                            setRating(5);
                             showToast(data.message, 'success');
                         } else {
                             messageDiv.style.color = '#dc3545';
@@ -1006,7 +968,7 @@ function renderStars($rating) {
             // ============================================
             // TOAST NOTIFICATION
             // ============================================
-            function showToast(message, type = 'success') {
+            window.showToast = function(message, type = 'success') {
                 const toast = document.getElementById('toast');
                 toast.textContent = message;
                 toast.className = 'toast ' + type;
@@ -1019,7 +981,7 @@ function renderStars($rating) {
                 setTimeout(() => {
                     toast.classList.remove('show');
                 }, 3000);
-            }
+            };
 
             // ============================================
             // ADD TO CART FUNCTION (Prevents Double Click)
@@ -1101,11 +1063,10 @@ function renderStars($rating) {
                     });
                 });
             });
-
-        }); // End DOMContentLoaded
+        });
 
         // ============================================
-        // HERO SLIDER (Outside DOMContentLoaded)
+        // HERO SLIDER
         // ============================================
         let currentSlide = 0;
         const slides = document.querySelectorAll('#heroSlides .slide');
