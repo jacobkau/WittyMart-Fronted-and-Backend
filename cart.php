@@ -95,6 +95,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
                     ];
                 }
                 break;
+
+// ===== UPDATE CART QUANTITY BY PRODUCT ID =====
+case 'update_cart_quantity':
+    $product_id = intval($_POST['product_id'] ?? 0);
+    $quantity = intval($_POST['quantity'] ?? 1);
+    
+    if (!$product_id) {
+        $response = ['success' => false, 'message' => 'Invalid product ID'];
+        break;
+    }
+    
+    if ($quantity <= 0) {
+        // Remove item if quantity is 0 or less
+        $stmt = $pdo->prepare("DELETE FROM cart WHERE user_id = ? AND product_id = ?");
+        $stmt->execute([$_SESSION['user_id'], $product_id]);
+        $response = [
+            'success' => true, 
+            'message' => 'Item removed',
+            'cart_count' => getCartCount()
+        ];
+    } else {
+        // Check if product exists in cart
+        $stmt = $pdo->prepare("SELECT id FROM cart WHERE user_id = ? AND product_id = ?");
+        $stmt->execute([$_SESSION['user_id'], $product_id]);
+        if ($stmt->fetch()) {
+            $stmt = $pdo->prepare("UPDATE cart SET quantity = ? WHERE user_id = ? AND product_id = ?");
+            $stmt->execute([$quantity, $_SESSION['user_id'], $product_id]);
+            $response = [
+                'success' => true, 
+                'message' => 'Quantity updated',
+                'cart_count' => getCartCount()
+            ];
+        } else {
+            // Insert new item if not exists (shouldn't happen, but just in case)
+            $stmt = $pdo->prepare("INSERT INTO cart (user_id, product_id, quantity) VALUES (?, ?, ?)");
+            $stmt->execute([$_SESSION['user_id'], $product_id, $quantity]);
+            $response = [
+                'success' => true, 
+                'message' => 'Item added to cart',
+                'cart_count' => getCartCount()
+            ];
+        }
+    }
+    break;
+
+// ===== REMOVE FROM CART BY PRODUCT ID =====
+case 'remove_from_cart':
+    $product_id = intval($_POST['product_id'] ?? 0);
+    
+    if (!$product_id) {
+        $response = ['success' => false, 'message' => 'Invalid product ID'];
+        break;
+    }
+    
+    $stmt = $pdo->prepare("DELETE FROM cart WHERE user_id = ? AND product_id = ?");
+    $stmt->execute([$_SESSION['user_id'], $product_id]);
+    $response = [
+        'success' => true, 
+        'message' => 'Item removed from cart',
+        'cart_count' => getCartCount()
+    ];
+    break;
                 
             // ===== UPDATE QUANTITY =====
             case 'update_quantity':
