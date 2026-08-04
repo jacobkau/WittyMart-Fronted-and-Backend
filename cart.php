@@ -1,5 +1,4 @@
 <?php
-// Include config first to start session
 require_once 'includes/config.php';
 ?>
 <!DOCTYPE html>
