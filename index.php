@@ -359,13 +359,15 @@ function renderStars($rating) {
         .testimonial-form-container .star-rating {
             display: flex;
             gap: 8px;
-            font-size: 28px;
+            font-size: 32px;
             cursor: pointer;
+            user-select: none;
         }
 
         .testimonial-form-container .star-rating i {
             color: #ddd;
-            transition: color 0.2s ease;
+            transition: all 0.2s ease;
+            cursor: pointer;
         }
 
         .testimonial-form-container .star-rating i.active {
@@ -374,7 +376,18 @@ function renderStars($rating) {
 
         .testimonial-form-container .star-rating i:hover {
             color: #ffc107;
-            transform: scale(1.1);
+            transform: scale(1.15);
+        }
+
+        .testimonial-form-container .form-group {
+            margin-bottom: 15px;
+        }
+
+        .testimonial-form-container .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #333;
         }
 
         .testimonial-form-container textarea {
@@ -835,9 +848,10 @@ function renderStars($rating) {
                                 <i class="fas fa-star" data-value="2"></i>
                                 <i class="fas fa-star" data-value="3"></i>
                                 <i class="fas fa-star" data-value="4"></i>
-                                <i class="fas fa-star" data-value="5"></i>
+                                <i class="fas fa-star" data-value="5" style="color: #ffc107;"></i>
                             </div>
                             <input type="hidden" id="ratingValue" name="rating" value="5">
+                            <span style="font-size: 14px; color: #888;">Selected: <span id="ratingDisplay">5</span> stars</span>
                         </div>
                         
                         <div class="form-group">
@@ -866,201 +880,232 @@ function renderStars($rating) {
     <script src="script.js"></script>
     <script>
         // ============================================
-        // TOAST NOTIFICATION
+        // WAIT FOR DOM TO LOAD
         // ============================================
-        function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.className = 'toast ' + type;
+        document.addEventListener('DOMContentLoaded', function() {
             
-            // Trigger reflow
-            void toast.offsetWidth;
-            
-            toast.classList.add('show');
-            
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
-        }
+            // ============================================
+            // STAR RATING FOR TESTIMONIAL
+            // ============================================
+            const stars = document.querySelectorAll('#starRating i');
+            const ratingInput = document.getElementById('ratingValue');
+            const ratingDisplay = document.getElementById('ratingDisplay');
+            let selectedRating = 5;
 
-        // ============================================
-        // STAR RATING FOR TESTIMONIAL
-        // ============================================
-        const stars = document.querySelectorAll('#starRating i');
-        const ratingInput = document.getElementById('ratingValue');
-        let selectedRating = 5;
-
-        stars.forEach(star => {
-            star.addEventListener('click', function() {
-                selectedRating = parseInt(this.dataset.value);
-                ratingInput.value = selectedRating;
-                
-                stars.forEach(s => {
-                    s.classList.toggle('active', parseInt(s.dataset.value) <= selectedRating);
-                });
-            });
-            
-            star.addEventListener('mouseenter', function() {
-                const value = parseInt(this.dataset.value);
-                stars.forEach(s => {
-                    s.classList.toggle('active', parseInt(s.dataset.value) <= value);
-                });
-            });
-            
-            star.addEventListener('mouseleave', function() {
-                stars.forEach(s => {
-                    s.classList.toggle('active', parseInt(s.dataset.value) <= selectedRating);
-                });
-            });
-        });
-
-        // ============================================
-        // TESTIMONIAL SUBMISSION
-        // ============================================
-        document.getElementById('testimonialForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const content = document.getElementById('testimonialContent');
-            const submitBtn = document.getElementById('submitTestimonial');
-            const messageDiv = document.getElementById('testimonialMessage');
-            
-            if (content.value.trim().length < 10) {
-                messageDiv.style.display = 'block';
-                messageDiv.style.color = '#dc3545';
-                messageDiv.textContent = 'Please write at least 10 characters.';
-                return;
-            }
-            
-            // Disable button
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
-            
-            const formData = new FormData();
-            formData.append('ajax_action', 'submit_testimonial');
-            formData.append('content', content.value.trim());
-            formData.append('rating', selectedRating);
-            
-            fetch('index.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                messageDiv.style.display = 'block';
-                if (data.success) {
-                    messageDiv.style.color = '#28a745';
-                    messageDiv.textContent = data.message;
-                    content.value = '';
-                    // Reset stars
-                    stars.forEach(s => s.classList.remove('active'));
-                    selectedRating = 5;
-                    ratingInput.value = 5;
-                    stars.forEach(s => {
-                        if (parseInt(s.dataset.value) <= 5) s.classList.add('active');
-                    });
-                    showToast(data.message, 'success');
-                } else {
-                    messageDiv.style.color = '#dc3545';
-                    messageDiv.textContent = data.message;
-                    showToast(data.message, 'error');
+            // Set initial state
+            stars.forEach(star => {
+                const value = parseInt(star.dataset.value);
+                if (value <= 5) {
+                    star.style.color = '#ffc107';
                 }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                messageDiv.style.display = 'block';
-                messageDiv.style.color = '#dc3545';
-                messageDiv.textContent = 'An error occurred. Please try again.';
-                showToast('An error occurred. Please try again.', 'error');
-            })
-            .finally(() => {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Testimonial';
             });
-        });
 
-        // ============================================
-        // ADD TO CART FUNCTION (Prevents Double Click)
-        // ============================================
-        document.querySelectorAll('.add-to-cart').forEach(button => {
-            button.addEventListener('click', function(e) {
-                e.preventDefault();
-                
-                // Prevent double click
-                if (this.disabled) {
-                    return;
-                }
-                
-                const productId = this.dataset.productId;
-                const productName = this.dataset.productName;
-                const originalText = this.innerHTML;
-                const originalClass = this.className;
-                
-                // Disable button and show loading state
-                this.disabled = true;
-                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
-                
-                // Send AJAX request
-                const formData = new FormData();
-                formData.append('ajax_action', 'add_to_cart');
-                formData.append('product_id', productId);
-                formData.append('quantity', 1);
-                
-                fetch('cart.php', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Success state
-                        this.innerHTML = '<i class="fas fa-check"></i> Added!';
-                        this.className = originalClass + ' added';
-                        showToast(productName + ' added to cart!', 'success');
-                        
-                        // Update cart count if available
-                        if (data.cart_count !== undefined) {
-                            const cartBadge = document.querySelector('.cart-badge');
-                            if (cartBadge) {
-                                cartBadge.textContent = data.cart_count;
-                            }
-                        }
-                        
-                        // Reset after 2 seconds
-                        setTimeout(() => {
-                            this.innerHTML = originalText;
-                            this.className = originalClass;
-                            this.disabled = false;
-                        }, 2000);
-                    } else {
-                        // Error state
-                        this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Failed!';
-                        this.className = originalClass + ' error';
-                        showToast(data.message || 'Failed to add to cart', 'error');
-                        
-                        setTimeout(() => {
-                            this.innerHTML = originalText;
-                            this.className = originalClass;
-                            this.disabled = false;
-                        }, 2000);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error!';
-                    this.className = originalClass + ' error';
-                    showToast('An error occurred. Please try again.', 'error');
+            stars.forEach(star => {
+                // Click event
+                star.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    selectedRating = parseInt(this.dataset.value);
+                    ratingInput.value = selectedRating;
+                    ratingDisplay.textContent = selectedRating;
                     
-                    setTimeout(() => {
-                        this.innerHTML = originalText;
-                        this.className = originalClass;
-                        this.disabled = false;
-                    }, 2000);
+                    stars.forEach(s => {
+                        const val = parseInt(s.dataset.value);
+                        s.style.color = val <= selectedRating ? '#ffc107' : '#ddd';
+                        s.classList.toggle('active', val <= selectedRating);
+                    });
+                });
+                
+                // Hover event
+                star.addEventListener('mouseenter', function() {
+                    const value = parseInt(this.dataset.value);
+                    stars.forEach(s => {
+                        const val = parseInt(s.dataset.value);
+                        s.style.color = val <= value ? '#ffc107' : '#ddd';
+                    });
+                });
+                
+                // Mouse leave event
+                star.addEventListener('mouseleave', function() {
+                    stars.forEach(s => {
+                        const val = parseInt(s.dataset.value);
+                        s.style.color = val <= selectedRating ? '#ffc107' : '#ddd';
+                    });
                 });
             });
-        });
+
+            // ============================================
+            // TESTIMONIAL SUBMISSION
+            // ============================================
+            const testimonialForm = document.getElementById('testimonialForm');
+            if (testimonialForm) {
+                testimonialForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    const content = document.getElementById('testimonialContent');
+                    const submitBtn = document.getElementById('submitTestimonial');
+                    const messageDiv = document.getElementById('testimonialMessage');
+                    
+                    if (content.value.trim().length < 10) {
+                        messageDiv.style.display = 'block';
+                        messageDiv.style.color = '#dc3545';
+                        messageDiv.textContent = 'Please write at least 10 characters.';
+                        return;
+                    }
+                    
+                    // Disable button
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+                    
+                    const formData = new FormData();
+                    formData.append('ajax_action', 'submit_testimonial');
+                    formData.append('content', content.value.trim());
+                    formData.append('rating', selectedRating);
+                    
+                    fetch('index.php', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        messageDiv.style.display = 'block';
+                        if (data.success) {
+                            messageDiv.style.color = '#28a745';
+                            messageDiv.textContent = data.message;
+                            content.value = '';
+                            // Reset stars
+                            stars.forEach(s => s.style.color = '#ddd');
+                            selectedRating = 5;
+                            ratingInput.value = 5;
+                            ratingDisplay.textContent = '5';
+                            stars.forEach(s => {
+                                if (parseInt(s.dataset.value) <= 5) {
+                                    s.style.color = '#ffc107';
+                                }
+                            });
+                            showToast(data.message, 'success');
+                        } else {
+                            messageDiv.style.color = '#dc3545';
+                            messageDiv.textContent = data.message;
+                            showToast(data.message, 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        messageDiv.style.display = 'block';
+                        messageDiv.style.color = '#dc3545';
+                        messageDiv.textContent = 'An error occurred. Please try again.';
+                        showToast('An error occurred. Please try again.', 'error');
+                    })
+                    .finally(() => {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Testimonial';
+                    });
+                });
+            }
+
+            // ============================================
+            // TOAST NOTIFICATION
+            // ============================================
+            function showToast(message, type = 'success') {
+                const toast = document.getElementById('toast');
+                toast.textContent = message;
+                toast.className = 'toast ' + type;
+                
+                // Trigger reflow
+                void toast.offsetWidth;
+                
+                toast.classList.add('show');
+                
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000);
+            }
+
+            // ============================================
+            // ADD TO CART FUNCTION (Prevents Double Click)
+            // ============================================
+            document.querySelectorAll('.add-to-cart').forEach(button => {
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    
+                    // Prevent double click
+                    if (this.disabled) {
+                        return;
+                    }
+                    
+                    const productId = this.dataset.productId;
+                    const productName = this.dataset.productName;
+                    const originalText = this.innerHTML;
+                    const originalClass = this.className;
+                    
+                    // Disable button and show loading state
+                    this.disabled = true;
+                    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+                    
+                    // Send AJAX request
+                    const formData = new FormData();
+                    formData.append('ajax_action', 'add_to_cart');
+                    formData.append('product_id', productId);
+                    formData.append('quantity', 1);
+                    
+                    fetch('cart.php', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // Success state
+                            this.innerHTML = '<i class="fas fa-check"></i> Added!';
+                            this.className = originalClass + ' added';
+                            showToast(productName + ' added to cart!', 'success');
+                            
+                            // Update cart count if available
+                            if (data.cart_count !== undefined) {
+                                const cartBadge = document.querySelector('.cart-badge');
+                                if (cartBadge) {
+                                    cartBadge.textContent = data.cart_count;
+                                }
+                            }
+                            
+                            // Reset after 2 seconds
+                            setTimeout(() => {
+                                this.innerHTML = originalText;
+                                this.className = originalClass;
+                                this.disabled = false;
+                            }, 2000);
+                        } else {
+                            // Error state
+                            this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Failed!';
+                            this.className = originalClass + ' error';
+                            showToast(data.message || 'Failed to add to cart', 'error');
+                            
+                            setTimeout(() => {
+                                this.innerHTML = originalText;
+                                this.className = originalClass;
+                                this.disabled = false;
+                            }, 2000);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error!';
+                        this.className = originalClass + ' error';
+                        showToast('An error occurred. Please try again.', 'error');
+                        
+                        setTimeout(() => {
+                            this.innerHTML = originalText;
+                            this.className = originalClass;
+                            this.disabled = false;
+                        }, 2000);
+                    });
+                });
+            });
+
+        }); // End DOMContentLoaded
 
         // ============================================
-        // HERO SLIDER
+        // HERO SLIDER (Outside DOMContentLoaded)
         // ============================================
         let currentSlide = 0;
         const slides = document.querySelectorAll('#heroSlides .slide');
