@@ -33,6 +33,7 @@ try {
     error_log('Cart error: ' . $e->getMessage());
     $cartItems = [];
 }
+
 // Handle GET requests for cart count
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_cart_count') {
     header('Content-Type: application/json');
@@ -42,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['act
     ]);
     exit();
 }
+
 // Handle AJAX requests for cart operations
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
     header('Content-Type: application/json');
@@ -103,80 +105,86 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
                     ];
                 }
                 break;
-            // ===== GET CART COUNT =====
-case 'get_cart_count':
-    $response = [
-        'success' => true,
-        'count' => getCartCount()
-    ];
-    break;
-
-// ===== UPDATE CART QUANTITY BY PRODUCT ID =====
-case 'update_cart_quantity':
-    $product_id = intval($_POST['product_id'] ?? 0);
-    $quantity = intval($_POST['quantity'] ?? 1);
-    
-    if (!$product_id) {
-        $response = ['success' => false, 'message' => 'Invalid product ID'];
-        break;
-    }
-    
-    if ($quantity <= 0) {
-        // Remove item if quantity is 0 or less
-        $stmt = $pdo->prepare("DELETE FROM cart WHERE user_id = ? AND product_id = ?");
-        $stmt->execute([$_SESSION['user_id'], $product_id]);
-        $response = [
-            'success' => true, 
-            'message' => 'Item removed',
-            'cart_count' => getCartCount()
-        ];
-    } else {
-        // Check if product exists in cart
-        $stmt = $pdo->prepare("SELECT id FROM cart WHERE user_id = ? AND product_id = ?");
-        $stmt->execute([$_SESSION['user_id'], $product_id]);
-        if ($stmt->fetch()) {
-            $stmt = $pdo->prepare("UPDATE cart SET quantity = ? WHERE user_id = ? AND product_id = ?");
-            $stmt->execute([$quantity, $_SESSION['user_id'], $product_id]);
-            $response = [
-                'success' => true, 
-                'message' => 'Quantity updated',
-                'cart_count' => getCartCount()
-            ];
-        } else {
-            // Insert new item if not exists (shouldn't happen, but just in case)
-            $stmt = $pdo->prepare("INSERT INTO cart (user_id, product_id, quantity) VALUES (?, ?, ?)");
-            $stmt->execute([$_SESSION['user_id'], $product_id, $quantity]);
-            $response = [
-                'success' => true, 
-                'message' => 'Item added to cart',
-                'cart_count' => getCartCount()
-            ];
-        }
-    }
-    break;
-
-// ===== REMOVE FROM CART BY PRODUCT ID =====
-case 'remove_from_cart':
-    $product_id = intval($_POST['product_id'] ?? 0);
-    
-    if (!$product_id) {
-        $response = ['success' => false, 'message' => 'Invalid product ID'];
-        break;
-    }
-    
-    $stmt = $pdo->prepare("DELETE FROM cart WHERE user_id = ? AND product_id = ?");
-    $stmt->execute([$_SESSION['user_id'], $product_id]);
-    $response = [
-        'success' => true, 
-        'message' => 'Item removed from cart',
-        'cart_count' => getCartCount()
-    ];
-    break;
                 
-            // ===== UPDATE QUANTITY =====
+            // ===== GET CART COUNT =====
+            case 'get_cart_count':
+                $response = [
+                    'success' => true,
+                    'count' => getCartCount()
+                ];
+                break;
+
+            // ===== UPDATE CART QUANTITY BY PRODUCT ID =====
+            case 'update_cart_quantity':
+                $product_id = intval($_POST['product_id'] ?? 0);
+                $quantity = intval($_POST['quantity'] ?? 1);
+                
+                if (!$product_id) {
+                    $response = ['success' => false, 'message' => 'Invalid product ID'];
+                    break;
+                }
+                
+                if ($quantity <= 0) {
+                    // Remove item if quantity is 0 or less
+                    $stmt = $pdo->prepare("DELETE FROM cart WHERE user_id = ? AND product_id = ?");
+                    $stmt->execute([$_SESSION['user_id'], $product_id]);
+                    $response = [
+                        'success' => true, 
+                        'message' => 'Item removed',
+                        'cart_count' => getCartCount()
+                    ];
+                } else {
+                    // Check if product exists in cart
+                    $stmt = $pdo->prepare("SELECT id FROM cart WHERE user_id = ? AND product_id = ?");
+                    $stmt->execute([$_SESSION['user_id'], $product_id]);
+                    if ($stmt->fetch()) {
+                        $stmt = $pdo->prepare("UPDATE cart SET quantity = ? WHERE user_id = ? AND product_id = ?");
+                        $stmt->execute([$quantity, $_SESSION['user_id'], $product_id]);
+                        $response = [
+                            'success' => true, 
+                            'message' => 'Quantity updated',
+                            'cart_count' => getCartCount()
+                        ];
+                    } else {
+                        // Insert new item if not exists (shouldn't happen, but just in case)
+                        $stmt = $pdo->prepare("INSERT INTO cart (user_id, product_id, quantity) VALUES (?, ?, ?)");
+                        $stmt->execute([$_SESSION['user_id'], $product_id, $quantity]);
+                        $response = [
+                            'success' => true, 
+                            'message' => 'Item added to cart',
+                            'cart_count' => getCartCount()
+                        ];
+                    }
+                }
+                break;
+
+            // ===== REMOVE FROM CART BY PRODUCT ID =====
+            case 'remove_from_cart':
+                $product_id = intval($_POST['product_id'] ?? 0);
+                
+                if (!$product_id) {
+                    $response = ['success' => false, 'message' => 'Invalid product ID'];
+                    break;
+                }
+                
+                $stmt = $pdo->prepare("DELETE FROM cart WHERE user_id = ? AND product_id = ?");
+                $stmt->execute([$_SESSION['user_id'], $product_id]);
+                $response = [
+                    'success' => true, 
+                    'message' => 'Item removed from cart',
+                    'cart_count' => getCartCount()
+                ];
+                break;
+                
+            // ===== UPDATE QUANTITY (by cart_id) =====
             case 'update_quantity':
                 $cart_id = intval($_POST['cart_id'] ?? 0);
                 $quantity = intval($_POST['quantity'] ?? 1);
+                
+                if (!$cart_id) {
+                    $response = ['success' => false, 'message' => 'Invalid cart ID'];
+                    break;
+                }
                 
                 if ($quantity <= 0) {
                     // Remove item if quantity is 0 or less
@@ -198,7 +206,7 @@ case 'remove_from_cart':
                 }
                 break;
                 
-            // ===== REMOVE ITEM =====
+            // ===== REMOVE ITEM (by cart_id) =====
             case 'remove_item':
                 $cart_id = intval($_POST['cart_id'] ?? 0);
                 $stmt = $pdo->prepare("DELETE FROM cart WHERE id = ? AND user_id = ?");
@@ -306,6 +314,42 @@ function getCartCount() {
 
     <script>
         // ============================================
+        // REFRESH CART COUNT IN HEADER
+        // ============================================
+        function refreshCartCount() {
+            fetch('cart.php?action=get_cart_count')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const count = data.count;
+                        
+                        // Update badge in nav
+                        const badge = document.getElementById('cartBadge');
+                        if (badge) {
+                            if (count > 0) {
+                                badge.textContent = count;
+                                badge.classList.remove('empty');
+                            } else {
+                                badge.classList.add('empty');
+                            }
+                        }
+                        
+                        // Update header cart badge
+                        const headerBadge = document.getElementById('headerCartBadge');
+                        if (headerBadge) {
+                            if (count > 0) {
+                                headerBadge.textContent = count;
+                                headerBadge.classList.remove('empty');
+                            } else {
+                                headerBadge.classList.add('empty');
+                            }
+                        }
+                    }
+                })
+                .catch(error => console.error('Error refreshing cart count:', error));
+        }
+
+        // ============================================
         // CART FUNCTIONS
         // ============================================
         
@@ -334,6 +378,8 @@ function getCartCount() {
                 if (data.success) {
                     // Update total
                     updateTotal();
+                    // Refresh cart count in header
+                    refreshCartCount();
                 } else {
                     // Revert on error
                     quantitySpan.textContent = currentQty;
@@ -371,6 +417,7 @@ function getCartCount() {
                         setTimeout(() => {
                             cartItem.remove();
                             updateTotal();
+                            refreshCartCount();
                             // Check if cart is empty
                             const remainingItems = document.querySelectorAll('.cart-item');
                             if (remainingItems.length === 0) {
@@ -403,6 +450,7 @@ function getCartCount() {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
+                    refreshCartCount();
                     location.reload();
                 } else {
                     alert('Failed to clear cart. Please try again.');
