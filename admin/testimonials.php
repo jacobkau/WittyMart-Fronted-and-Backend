@@ -7,6 +7,24 @@ global $pdo;
 $message = '';
 $messageType = '';
 
+// ===== HANDLE AJAX REQUESTS FIRST =====
+if (isset($_GET['action']) && $_GET['action'] === 'get' && isset($_GET['id'])) {
+    header('Content-Type: application/json');
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM testimonials WHERE id = ?");
+        $stmt->execute([$_GET['id']]);
+        $testimonial = $stmt->fetch();
+        if ($testimonial) {
+            echo json_encode(['success' => true, 'testimonial' => $testimonial]);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Testimonial not found']);
+        }
+    } catch (PDOException $e) {
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    }
+    exit();
+}
+
 // ===== HANDLE FORM SUBMISSIONS =====
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -87,18 +105,6 @@ try {
     $testimonials = [];
 }
 
-// ===== GET SINGLE TESTIMONIAL FOR EDITING =====
-$edit_testimonial = null;
-if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
-    try {
-        $stmt = $pdo->prepare("SELECT * FROM testimonials WHERE id = ?");
-        $stmt->execute([$_GET['edit']]);
-        $edit_testimonial = $stmt->fetch();
-    } catch (PDOException $e) {
-        error_log('Get testimonial for edit error: ' . $e->getMessage());
-    }
-}
-
 $page_title = 'Manage Testimonials';
 ?>
 <!DOCTYPE html>
@@ -137,6 +143,7 @@ $page_title = 'Manage Testimonials';
             border: none;
             border-radius: 4px;
             cursor: pointer;
+            margin: 2px;
         }
         .btn-edit {
             background-color: #28a745;
@@ -215,7 +222,6 @@ $page_title = 'Manage Testimonials';
         .admin-table tr:hover {
             background: #f8f9fa;
         }
-        /* Modal Styles */
         .modal {
             display: none;
             position: fixed;
@@ -283,6 +289,41 @@ $page_title = 'Manage Testimonials';
             gap: 5px;
             flex-wrap: wrap;
         }
+        .action-buttons form {
+            display: inline;
+        }
+        /* Dark mode support */
+        body.dark-mode .admin-card {
+            background: #1a1a2e;
+        }
+        body.dark-mode .card-header {
+            border-bottom-color: #2a2a3e;
+        }
+        body.dark-mode .admin-table th {
+            background: #2a2a3e;
+            color: #eee;
+        }
+        body.dark-mode .admin-table td {
+            border-bottom-color: #2a2a3e;
+            color: #eee;
+        }
+        body.dark-mode .admin-table tr:hover {
+            background: #2a2a3e;
+        }
+        body.dark-mode .modal-content {
+            background: #1a1a2e;
+            color: #eee;
+        }
+        body.dark-mode .form-group label {
+            color: #ddd;
+        }
+        body.dark-mode .form-group input,
+        body.dark-mode .form-group select,
+        body.dark-mode .form-group textarea {
+            background: #2a2a3e;
+            border-color: #3a3a5e;
+            color: #eee;
+        }
     </style>
 </head>
 <body>
@@ -337,14 +378,14 @@ $page_title = 'Manage Testimonials';
                                                 <button class="btn-sm btn-edit" onclick="editTestimonial(<?php echo $testimonial['id']; ?>)">
                                                     <i class="fas fa-edit"></i>
                                                 </button>
-                                                <form method="POST" style="display:inline;">
+                                                <form method="POST" onsubmit="return confirm('Delete this testimonial?')">
                                                     <input type="hidden" name="action" value="delete">
                                                     <input type="hidden" name="id" value="<?php echo $testimonial['id']; ?>">
-                                                    <button type="submit" class="btn-sm btn-delete" onclick="return confirm('Delete this testimonial?')">
+                                                    <button type="submit" class="btn-sm btn-delete">
                                                         <i class="fas fa-trash"></i>
                                                     </button>
                                                 </form>
-                                                <form method="POST" style="display:inline;">
+                                                <form method="POST">
                                                     <input type="hidden" name="action" value="toggle_status">
                                                     <input type="hidden" name="id" value="<?php echo $testimonial['id']; ?>">
                                                     <input type="hidden" name="status" value="<?php echo $testimonial['status'] === 'active' ? 'inactive' : 'active'; ?>">
@@ -413,7 +454,7 @@ $page_title = 'Manage Testimonials';
                 <h2><i class="fas fa-edit"></i> Edit Testimonial</h2>
                 <span class="close" onclick="closeModal('editTestimonialModal')">&times;</span>
             </div>
-            <form method="POST">
+            <form method="POST" id="editForm">
                 <input type="hidden" name="action" value="update">
                 <input type="hidden" name="id" id="edit_id">
                 <div class="form-group">
@@ -445,7 +486,9 @@ $page_title = 'Manage Testimonials';
     </div>
 
     <script>
-        // ===== MODAL FUNCTIONS =====
+        // ============================================
+        // MODAL FUNCTIONS
+        // ============================================
         function openModal(id) {
             document.getElementById(id).style.display = 'block';
             document.body.style.overflow = 'hidden';
@@ -474,49 +517,49 @@ $page_title = 'Manage Testimonials';
             }
         });
 
-        // ===== EDIT TESTIMONIAL =====
+        // ============================================
+        // EDIT TESTIMONIAL FUNCTION
+        // ============================================
         function editTestimonial(id) {
-            // Fetch testimonial data via AJAX
+            // Show loading state
+            const editBtn = event ? event.target.closest('.btn-edit') : null;
+            if (editBtn) {
+                editBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                editBtn.disabled = true;
+            }
+            
+            // Fetch testimonial data
             fetch('testimonials.php?action=get&id=' + id)
-                .then(response => response.json())
-                .then(data => {
+                .then(function(response) {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(function(data) {
                     if (data.success) {
                         const testimonial = data.testimonial;
                         document.getElementById('edit_id').value = testimonial.id;
-                        document.getElementById('edit_name').value = testimonial.customer_name;
-                        document.getElementById('edit_content').value = testimonial.content;
-                        document.getElementById('edit_rating').value = testimonial.rating;
-                        document.getElementById('edit_status').value = testimonial.status;
+                        document.getElementById('edit_name').value = testimonial.customer_name || '';
+                        document.getElementById('edit_content').value = testimonial.content || '';
+                        document.getElementById('edit_rating').value = testimonial.rating || 5;
+                        document.getElementById('edit_status').value = testimonial.status || 'active';
                         openModal('editTestimonialModal');
                     } else {
-                        alert('Failed to load testimonial data');
+                        alert('Failed to load testimonial data: ' + (data.message || 'Unknown error'));
                     }
                 })
-                .catch(error => {
+                .catch(function(error) {
                     console.error('Error:', error);
-                    alert('Error loading testimonial data');
+                    alert('Error loading testimonial data. Please try again.');
+                })
+                .finally(function() {
+                    if (editBtn) {
+                        editBtn.innerHTML = '<i class="fas fa-edit"></i>';
+                        editBtn.disabled = false;
+                    }
                 });
         }
     </script>
-
-    <?php
-    // Handle AJAX request for getting single testimonial
-    if (isset($_GET['action']) && $_GET['action'] === 'get' && isset($_GET['id'])) {
-        header('Content-Type: application/json');
-        try {
-            $stmt = $pdo->prepare("SELECT * FROM testimonials WHERE id = ?");
-            $stmt->execute([$_GET['id']]);
-            $testimonial = $stmt->fetch();
-            if ($testimonial) {
-                echo json_encode(['success' => true, 'testimonial' => $testimonial]);
-            } else {
-                echo json_encode(['success' => false, 'message' => 'Testimonial not found']);
-            }
-        } catch (PDOException $e) {
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
-        }
-        exit();
-    }
-    ?>
 </body>
 </html>
