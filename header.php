@@ -1,10 +1,6 @@
 <?php
-// Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-// Check if user is logged in
+// Session is already started in config.php
+// Check if user is logged in using session variables
 $isLoggedIn = isset($_SESSION['user_id']);
 $userName = $_SESSION['user_name'] ?? 'User';
 $isAdmin = isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true;
@@ -54,11 +50,11 @@ $isAdmin = isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true;
                     <!-- Account / Login/Register link -->
                     <li>
                         <?php if ($isLoggedIn): ?>
-                            <a href="home.php" class="<?php echo ($current_page == 'home.php') ? 'active' : ''; ?>">
+                            <a href="dashboard.php" class="<?php echo ($current_page == 'dashboard.php') ? 'active' : ''; ?>">
                                 <i class="fas fa-user-circle"></i> <?php echo htmlspecialchars($userName); ?>
                             </a>
                         <?php else: ?>
-                            <a href="home.php" class="<?php echo ($current_page == 'home.php') ? 'active' : ''; ?>">
+                            <a href="login-register.php" class="<?php echo ($current_page == 'login-register.php') ? 'active' : ''; ?>">
                                 <i class="fas fa-sign-in-alt"></i> Login
                             </a>
                         <?php endif; ?>
