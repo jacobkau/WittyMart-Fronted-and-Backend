@@ -1,3 +1,7 @@
+<?php
+// Include config first to start session
+require_once 'includes/config.php';
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,9 +13,8 @@
     <link rel="stylesheet" href="style.css">  
 </head>
 <body>
- <?php include "header.php"; ?>
+    <?php include "header.php"; ?>
     <?php include "sidebar.php"; ?>
-
 
     <!-- Main Content -->
     <main>
@@ -70,8 +73,8 @@
         </section>
     </main>
 
- <?php include "footer.php"; ?>
+    <?php include "footer.php"; ?>
 
-<script src="script.js" defer></script>
+    <script src="script.js" defer></script>
 </body>
 </html>
