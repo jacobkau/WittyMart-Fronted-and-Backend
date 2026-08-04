@@ -915,7 +915,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
         themeToggleBtn.addEventListener('click', function() {
             document.body.classList.toggle('dark-mode');
             const isDark = document.body.classList.contains('dark-mode');
-            this.innerHTML = isDark ? '<i class="fas fa-sun"></i> Light Mode' : '<i class="fas fa-moon"></i> Dark Mode';
+            this.innerHTML = isDark ? '<i class="fas fa-sun"></i> Light Mode' : '<i class="fas fa-moon"></i>';
             
             // Save preference
             localStorage.setItem('theme', isDark ? 'dark' : 'light');
@@ -925,7 +925,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
         const savedTheme = localStorage.getItem('theme');
         if (savedTheme === 'dark') {
             document.body.classList.add('dark-mode');
-            themeToggleBtn.innerHTML = '<i class="fas fa-sun"></i> Light Mode';
+            themeToggleBtn.innerHTML = '<i class="fas fa-sun"></i>';
         }
 
         // ============================================
