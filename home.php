@@ -596,10 +596,11 @@ $isLoggedIn = isset($_SESSION['user_id']);
 </head>
 <body>
     <div class="auth-wrapper">
-        <div class="auth-container">
-            <div class="theme-toggle-container">
+         <div class="theme-toggle-container">
                 <button id="themeToggleBtn"><i class="fas fa-moon"></i></button>
             </div>
+        <div class="auth-container">
+           
             <!-- Logo -->
             <div class="logo-container">
                 <img src="images/logo.png" alt="WittyMart Logo">
