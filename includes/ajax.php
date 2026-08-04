@@ -1,8 +1,6 @@
 <?php
 require_once 'config.php';
 require_once 'db.php';
-require_once 'auth.php';
-
 header('Content-Type: application/json');
 
 $action = $_GET['action'] ?? '';
