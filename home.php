@@ -208,16 +208,50 @@ $isLoggedIn = isset($_SESSION['user_id']);
             max-width: 550px;
             width: 100%;
             transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        /* Theme toggle at top right */
+        .theme-toggle-container {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+        }
+        
+        .theme-toggle-container button {
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 18px;
+            transition: all 0.3s ease;
+            padding: 8px;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .theme-toggle-container button:hover {
+            color: #05573c;
+            border-color: #05573c;
+            background: #f5f5f5;
+            transform: rotate(20deg);
         }
         
         .logo-container {
             text-align: center;
             margin-bottom: 25px;
+            margin-top: 5px;
         }
         
         .logo-container img {
             max-width: 100px;
             height: auto;
+            border-radius: 8px;
         }
         
         .logo-container h1 {
@@ -325,16 +359,50 @@ $isLoggedIn = isset($_SESSION['user_id']);
             cursor: pointer;
             transition: all 0.3s ease;
             margin-top: 8px;
+            position: relative;
         }
         
-        .btn-submit:hover {
+        .btn-submit:hover:not(:disabled) {
             background: #03402c;
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(5, 87, 60, 0.3);
         }
         
-        .btn-submit:active {
+        .btn-submit:active:not(:disabled) {
             transform: translateY(0);
+        }
+        
+        .btn-submit:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        .btn-submit .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top: 2px solid #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        .btn-submit.loading .spinner {
+            display: block;
+        }
+        
+        .btn-submit.loading .btn-text {
+            visibility: hidden;
+        }
+        
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
         }
         
         .btn-submit i {
@@ -410,30 +478,6 @@ $isLoggedIn = isset($_SESSION['user_id']);
         
         .switch-form button i {
             margin-right: 6px;
-        }
-        
-        .theme-toggle-container {
-            text-align:right;
-            margin-top: 12px;
-            margin-bottom:12px;
-        }
-        
-        .theme-toggle-container button {
-            background: none;
-            border: none;
-            color: #888;
-            cursor: pointer;
-            font-size: 12px;
-            transition: all 0.3s ease;
-            padding: 4px 15px;
-            border-radius: 20px;
-            border: 1px solid #e0e0e0;
-        }
-        
-        .theme-toggle-container button:hover {
-            color: #05573c;
-            border-color: #05573c;
-            background: #f5f5f5;
         }
         
         .auth-modal {
@@ -543,6 +587,11 @@ $isLoggedIn = isset($_SESSION['user_id']);
             border-color: #3a3a5e;
         }
         
+        body.dark-mode .theme-toggle-container button:hover {
+            color: #4a8a6a;
+            border-color: #4a8a6a;
+        }
+        
         body.dark-mode .auth-modal .modal-content {
             background: #1a1a2e;
             color: #eee;
@@ -555,12 +604,6 @@ $isLoggedIn = isset($_SESSION['user_id']);
         
         body.dark-mode .auth-wrapper {
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-        }
-        
-        .btn-submit:disabled {
-            opacity: 0.7;
-            cursor: not-allowed;
-            transform: none !important;
         }
         
         /* Full width for login form */
@@ -591,6 +634,17 @@ $isLoggedIn = isset($_SESSION['user_id']);
             .logo-container h1 {
                 font-size: 20px;
             }
+            
+            .theme-toggle-container {
+                top: 10px;
+                right: 10px;
+            }
+            
+            .theme-toggle-container button {
+                width: 32px;
+                height: 32px;
+                font-size: 14px;
+            }
         }
     </style>
 </head>
@@ -601,10 +655,10 @@ $isLoggedIn = isset($_SESSION['user_id']);
             <div class="theme-toggle-container">
                 <button id="themeToggleBtn"><i class="fas fa-moon"></i></button>
             </div>
-            <br>
+            
             <!-- Logo -->
             <div class="logo-container">
-                <img src="images/logo.png" style="border:1px solid #000" alt="WittyMart Logo">
+                <img src="images/logo.png" alt="WittyMart Logo">
                 <h1>WittyMart</h1>
                 <p>Smart Shopping for Witty Minds!</p>
             </div>
@@ -626,7 +680,10 @@ $isLoggedIn = isset($_SESSION['user_id']);
                         <button type="button" class="toggle-password" id="toggleLoginPassword">Show</button>
                     </div>
                 </div>
-                <button type="submit" class="btn-submit" id="loginBtn"><i class="fas fa-sign-in-alt"></i> Login</button>
+                <button type="submit" class="btn-submit" id="loginBtn">
+                    <span class="btn-text"><i class="fas fa-sign-in-alt"></i> Login</span>
+                    <span class="spinner"></span>
+                </button>
             </form>
             
 
@@ -678,15 +735,16 @@ $isLoggedIn = isset($_SESSION['user_id']);
                     </div>
                 </div>
                 
-                <button type="submit" class="btn-submit" id="registerBtn"><i class="fas fa-user-plus"></i> Register</button>
+                <button type="submit" class="btn-submit" id="registerBtn">
+                    <span class="btn-text"><i class="fas fa-user-plus"></i> Register</span>
+                    <span class="spinner"></span>
+                </button>
             </form>
             
             <div class="progress-bar" id="progressBar">
                 <div class="progress-fill" id="progressFill"></div>
             </div>
             <div id="message" class="message"></div>
-
-            
 
             <div class="switch-form">
                 <button id="switchToLogin"><i class="fas fa-sign-in-alt"></i> Already have an account? Login</button>
@@ -722,6 +780,21 @@ $isLoggedIn = isset($_SESSION['user_id']);
         const confirmModal = document.getElementById('confirmModal');
         const confirmBtn = document.getElementById('confirmBtn');
         const cancelBtn = document.getElementById('cancelBtn');
+        const registerBtn = document.getElementById('registerBtn');
+        const loginBtn = document.getElementById('loginBtn');
+
+        // ============================================
+        // PREVENT DOUBLE CLICK ON BUTTONS
+        // ============================================
+        function setButtonLoading(button, loading) {
+            if (loading) {
+                button.disabled = true;
+                button.classList.add('loading');
+            } else {
+                button.disabled = false;
+                button.classList.remove('loading');
+            }
+        }
 
         // Toggle password visibility
         document.getElementById('togglePassword').addEventListener('click', function() {
@@ -832,6 +905,9 @@ $isLoggedIn = isset($_SESSION['user_id']);
         confirmBtn.addEventListener('click', function() {
             confirmModal.style.display = 'none';
             
+            // Prevent double click
+            setButtonLoading(registerBtn, true);
+            
             // Get form data
             const formData = new FormData(signupForm);
             formData.append('ajax_action', 'register');
@@ -846,6 +922,8 @@ $isLoggedIn = isset($_SESSION['user_id']);
             .then(response => response.json())
             .then(data => {
                 hideProgress();
+                setButtonLoading(registerBtn, false);
+                
                 if (data.success) {
                     showMessage(data.message, 'success');
                     // Redirect after short delay
@@ -858,6 +936,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
             })
             .catch(error => {
                 hideProgress();
+                setButtonLoading(registerBtn, false);
                 console.error('Error:', error);
                 showMessage('An error occurred. Please try again.', 'error');
             });
@@ -883,6 +962,9 @@ $isLoggedIn = isset($_SESSION['user_id']);
         loginForm.addEventListener('submit', function(e) {
             e.preventDefault();
             
+            // Prevent double click
+            setButtonLoading(loginBtn, true);
+            
             const formData = new FormData(loginForm);
             formData.append('ajax_action', 'login');
             
@@ -895,6 +977,8 @@ $isLoggedIn = isset($_SESSION['user_id']);
             .then(response => response.json())
             .then(data => {
                 hideProgress();
+                setButtonLoading(loginBtn, false);
+                
                 if (data.success) {
                     showMessage(data.message, 'success');
                     setTimeout(() => {
@@ -906,6 +990,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
             })
             .catch(error => {
                 hideProgress();
+                setButtonLoading(loginBtn, false);
                 console.error('Error:', error);
                 showMessage('An error occurred. Please try again.', 'error');
             });
