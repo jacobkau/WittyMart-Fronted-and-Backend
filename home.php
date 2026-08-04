@@ -413,8 +413,9 @@ $isLoggedIn = isset($_SESSION['user_id']);
         }
         
         .theme-toggle-container {
-            text-align: center;
+            text-align:right;
             margin-top: 12px;
+            margin-bottom:12px;
         }
         
         .theme-toggle-container button {
