@@ -1,12 +1,6 @@
 <?php
 require_once 'includes/config.php';
 
-// Check if user is logged in
-if (!isset($_SESSION['user_id'])) {
-    header('Location: home.php');
-    exit();
-}
-
 // Get all categories
 try {
     $stmt = $pdo->query("SELECT * FROM categories ORDER BY name ASC");
