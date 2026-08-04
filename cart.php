@@ -33,7 +33,15 @@ try {
     error_log('Cart error: ' . $e->getMessage());
     $cartItems = [];
 }
-
+// Handle GET requests for cart count
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_cart_count') {
+    header('Content-Type: application/json');
+    echo json_encode([
+        'success' => true,
+        'count' => getCartCount()
+    ]);
+    exit();
+}
 // Handle AJAX requests for cart operations
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
     header('Content-Type: application/json');
@@ -95,6 +103,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
                     ];
                 }
                 break;
+            // ===== GET CART COUNT =====
+case 'get_cart_count':
+    $response = [
+        'success' => true,
+        'count' => getCartCount()
+    ];
+    break;
 
 // ===== UPDATE CART QUANTITY BY PRODUCT ID =====
 case 'update_cart_quantity':
