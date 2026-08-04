@@ -596,6 +596,9 @@ $isLoggedIn = isset($_SESSION['user_id']);
 <body>
     <div class="auth-wrapper">
         <div class="auth-container">
+            <div class="theme-toggle-container">
+                <button id="themeToggleBtn"><i class="fas fa-moon"></i></button>
+            </div>
             <!-- Logo -->
             <div class="logo-container">
                 <img src="images/logo.png" alt="WittyMart Logo">
@@ -680,9 +683,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
             </div>
             <div id="message" class="message"></div>
 
-            <div class="theme-toggle-container">
-                <button id="themeToggleBtn"><i class="fas fa-moon"></i> Dark Mode</button>
-            </div>
+            
 
             <div class="switch-form">
                 <button id="switchToLogin"><i class="fas fa-sign-in-alt"></i> Already have an account? Login</button>
