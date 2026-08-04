@@ -1,9 +1,45 @@
 <?php
 require_once 'includes/config.php';
 
+// Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
     header('Location: home.php');
     exit();
+}
+
+// Get all categories
+try {
+    $stmt = $pdo->query("SELECT * FROM categories ORDER BY name ASC");
+    $categories = $stmt->fetchAll();
+} catch (PDOException $e) {
+    error_log('Get categories error: ' . $e->getMessage());
+    $categories = [];
+}
+
+// Function to get products by category
+function getProductsByCategory($category_id, $limit = 6) {
+    global $pdo;
+    try {
+        $stmt = $pdo->prepare("
+            SELECT p.*, c.name as category_name 
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            WHERE p.category_id = ? AND (p.status = 'active' OR p.status IS NULL)
+            ORDER BY p.created_at DESC
+            LIMIT ?
+        ");
+        $stmt->execute([$category_id, $limit]);
+        return $stmt->fetchAll();
+    } catch (PDOException $e) {
+        error_log('Get products by category error: ' . $e->getMessage());
+        return [];
+    }
+}
+
+// Get products for each category
+$categoryProducts = [];
+foreach ($categories as $category) {
+    $categoryProducts[$category['id']] = getProductsByCategory($category['id'], 6);
 }
 ?>
 <!DOCTYPE html>
@@ -17,546 +53,113 @@ if (!isset($_SESSION['user_id'])) {
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
- <?php include "header.php"; ?>
+    <?php include "header.php"; ?>
     <?php include "sidebar.php"; ?>
-
 
     <!-- Main Content -->
     <main>
         <div class="products-section">
-            <!-- Deals -->
-            <section id="deals">
-                <h2><i class="fas fa-fire" style="color:var(--primary-color);"></i> Hot Deals</h2>
-                <div class="products-grid">
-                    <div class="product">
-                        <img src="images/watch1.jpeg" alt="Smart Watch">
-                        <h3>Smart Watch</h3>
-                        <p>Keep track of time and health.</p>
-                        <span class="price">Ksh 4,500</span>
-                        <button class="add-to-cart" data-product="Smart Watch">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/smart.jpg" alt="Smartphone">
-                        <h3>Smartphone</h3>
-                        <p>Stay connected with the world.</p>
-                        <span class="price">Ksh 25,000</span>
-                        <button class="add-to-cart" data-product="Smartphone">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/a-hp-laptop-BP08X6.jpg" alt="Laptop">
-                        <h3>Laptop</h3>
-                        <p>Powerful performance for work and play.</p>
-                        <span class="price">Ksh 80,000</span>
-                        <button class="add-to-cart" data-product="Laptop">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/head1.jpeg" alt="Bluetooth Headphones">
-                        <h3>Bluetooth Headphones</h3>
-                        <p>Immersive sound experience.</p>
-                        <span class="price">Ksh 3,000</span>
-                        <button class="add-to-cart" data-product="Bluetooth Headphones">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/mouse.avif" alt="Wireless Mouse">
-                        <h3>Wireless Mouse</h3>
-                        <p>Ergonomic and smooth control.</p>
-                        <span class="price">Ksh 1,200</span>
-                        <button class="add-to-cart" data-product="Wireless Mouse">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/tv.webp" alt="Smart TV">
-                        <h3>Smart TV</h3>
-                        <p>Experience entertainment like never before.</p>
-                        <span class="price">Ksh 60,000</span>
-                        <button class="add-to-cart" data-product="Smart TV">Add to Cart</button>
-                    </div>
-                </div>
-                <div class="linker">
-                    <a href="#" class="linkerbtn">See more</a>
-                </div>
-                <hr class="divider">
-            </section>
-
-            <!-- Electronics -->
-            <section id="electronics">
-                <h2><i class="fas fa-mobile-alt" style="color:var(--primary-color);"></i> Electronics</h2>
-                <div class="products-grid">
-                    <div class="product">
-                        <img src="images/watch2.jpg" alt="Smart Watch">
-                        <h3>Smart Watch</h3>
-                        <p>Keep track of time and health.</p>
-                        <span class="price">Ksh 4,500</span>
-                        <button class="add-to-cart" data-product="Smart Watch">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/phone.jpeg" alt="Smartphone">
-                        <h3>Smartphone</h3>
-                        <p>Stay connected with the world.</p>
-                        <span class="price">Ksh 25,000</span>
-                        <button class="add-to-cart" data-product="Smartphone">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/tv1.webp" alt="Smart TV">
-                        <h3>Smart TV</h3>
-                        <p>Experience entertainment like never before.</p>
-                        <span class="price">Ksh 80,000</span>
-                        <button class="add-to-cart" data-product="Smart TV">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/head1.jpeg" alt="Bluetooth Headphones">
-                        <h3>Bluetooth Headphones</h3>
-                        <p>Immersive sound experience.</p>
-                        <span class="price">Ksh 3,000</span>
-                        <button class="add-to-cart" data-product="Bluetooth Headphones">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/mouse1.avif" alt="Wireless Mouse">
-                        <h3>Wireless Mouse</h3>
-                        <p>Ergonomic and smooth control.</p>
-                        <span class="price">Ksh 1,200</span>
-                        <button class="add-to-cart" data-product="Wireless Mouse">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/tv2.jpg" alt="Smart TV">
-                        <h3>Smart TV</h3>
-                        <p>Experience entertainment like never before.</p>
-                        <span class="price">Ksh 60,000</span>
-                        <button class="add-to-cart" data-product="Smart TV">Add to Cart</button>
-                    </div>
-                </div>
-                <div class="linker">
-                    <a href="#" class="linkerbtn">See more</a>
-                </div>
-                <hr class="divider">
-            </section>
-
-            <!-- Fashion -->
-            <section id="fashion">
-                <h2><i class="fas fa-tshirt" style="color:var(--primary-color);"></i> Fashion</h2>
-                <div class="products-grid">
-                    <div class="product">
-                        <img src="images/sh.jpg" alt="Shirt">
-                        <h3>Shirt</h3>
-                        <p>Stylish and comfortable.</p>
-                        <span class="price">Ksh 1,500</span>
-                        <button class="add-to-cart" data-product="Shirt">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/jn.jpg" alt="Jeans">
-                        <h3>Jeans</h3>
-                        <p>Perfect fit for every occasion.</p>
-                        <span class="price">Ksh 2,500</span>
-                        <button class="add-to-cart" data-product="Jeans">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/sn.jpg" alt="Sneakers">
-                        <h3>Sneakers</h3>
-                        <p>Comfortable and trendy.</p>
-                        <span class="price">Ksh 4,000</span>
-                        <button class="add-to-cart" data-product="Sneakers">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/dr.jpg" alt="Dress">
-                        <h3>Dress</h3>
-                        <p>Elegant and stylish.</p>
-                        <span class="price">Ksh 3,500</span>
-                        <button class="add-to-cart" data-product="Dress">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/jc.jpg" alt="Jacket">
-                        <h3>Jacket</h3>
-                        <p>Warm and fashionable.</p>
-                        <span class="price">Ksh 5,000</span>
-                        <button class="add-to-cart" data-product="Jacket">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/ht.jpg" alt="Hat">
-                        <h3>Hat</h3>
-                        <p>Stylish and protective.</p>
-                        <span class="price">Ksh 1,000</span>
-                        <button class="add-to-cart" data-product="Hat">Add to Cart</button>
-                    </div>
-                </div>
-                <div class="linker">
-                    <a href="#" class="linkerbtn">See more</a>
-                </div>
-                <hr class="divider">
-            </section>
-
-            <!-- Home & Living -->
-            <section id="home-living">
-                <h2><i class="fas fa-home" style="color:var(--primary-color);"></i> Home & Living</h2>
-                <div class="products-grid">
-                    <div class="product">
-                        <img src="images/ch.jpg" alt="Couch">
-                        <h3>Couch</h3>
-                        <p>Comfortable and stylish.</p>
-                        <span class="price">Ksh 30,000</span>
-                        <button class="add-to-cart" data-product="Couch">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/dt.jpg" alt="Dining Table">
-                        <h3>Dining Table</h3>
-                        <p>Perfect for family meals.</p>
-                        <span class="price">Ksh 20,000</span>
-                        <button class="add-to-cart" data-product="Dining Table">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/bd.jpg" alt="Bed">
-                        <h3>Bed</h3>
-                        <p>Comfortable and stylish.</p>
-                        <span class="price">Ksh 40,000</span>
-                        <button class="add-to-cart" data-product="Bed">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/wd1.jpg" alt="Wardrobe">
-                        <h3>Wardrobe</h3>
-                        <p>Spacious and stylish.</p>
-                        <span class="price">Ksh 15,000</span>
-                        <button class="add-to-cart" data-product="Wardrobe">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/rg.jpg" alt="Refrigerator">
-                        <h3>Refrigerator</h3>
-                        <p>Keep your food fresh.</p>
-                        <span class="price">Ksh 50,000</span>
-                        <button class="add-to-cart" data-product="Refrigerator">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/wm.jpg" alt="Washing Machine">
-                        <h3>Washing Machine</h3>
-                        <p>Effortless laundry.</p>
-                        <span class="price">Ksh 25,000</span>
-                        <button class="add-to-cart" data-product="Washing Machine">Add to Cart</button>
-                    </div>
-                </div>
-                <div class="linker">
-                    <a href="#" class="linkerbtn">See more</a>
-                </div>
-                <hr class="divider">
-            </section>
-
-            <!-- Beauty & Health -->
-            <section id="beauty-health">
-                <h2><i class="fas fa-spa" style="color:var(--primary-color);"></i> Beauty & Health</h2>
-                <div class="products-grid">
-                    <div class="product">
-                        <img src="images/pf.jpg" alt="Perfume">
-                        <h3>Perfume</h3>
-                        <p>Long-lasting fragrance.</p>
-                        <span class="price">Ksh 3,000</span>
-                        <button class="add-to-cart" data-product="Perfume">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/mk.jpg" alt="Makeup Kit">
-                        <h3>Makeup Kit</h3>
-                        <p>All-in-one beauty solution.</p>
-                        <span class="price">Ksh 4,500</span>
-                        <button class="add-to-cart" data-product="Makeup Kit">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/ss.jpg" alt="Skincare Set">
-                        <h3>Skincare Set</h3>
-                        <p>Glow and nourish your skin.</p>
-                        <span class="price">Ksh 5,000</span>
-                        <button class="add-to-cart" data-product="Skincare Set">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/hd.jpg" alt="Hair Dryer">
-                        <h3>Hair Dryer</h3>
-                        <p>Fast and efficient drying.</p>
-                        <span class="price">Ksh 2,500</span>
-                        <button class="add-to-cart" data-product="Hair Dryer">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/sp.jpg" alt="Shampoo">
-                        <h3>Shampoo</h3>
-                        <p>Gentle and nourishing.</p>
-                        <span class="price">Ksh 1,200</span>
-                        <button class="add-to-cart" data-product="Shampoo">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/c.jpg" alt="Conditioner">
-                        <h3>Conditioner</h3>
-                        <p>Soft and manageable hair.</p>
-                        <span class="price">Ksh 1,500</span>
-                        <button class="add-to-cart" data-product="Conditioner">Add to Cart</button>
-                    </div>
-                </div>
-                <div class="linker">
-                    <a href="#" class="linkerbtn">See more</a>
-                </div>
-                <hr class="divider">
-            </section>
-
-            <!-- Sports & Outdoors -->
-            <section id="sports-outdoors">
-                <h2><i class="fas fa-running" style="color:var(--primary-color);"></i> Sports & Outdoors</h2>
-                <div class="products-grid">
-                    <div class="product">
-                        <img src="images/tr.jpg" alt="Tennis Racket">
-                        <h3>Tennis Racket</h3>
-                        <p>Perfect for your next match.</p>
-                        <span class="price">Ksh 4,000</span>
-                        <button class="add-to-cart" data-product="Tennis Racket">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/ym.jpg" alt="Yoga Mat">
-                        <h3>Yoga Mat</h3>
-                        <p>Comfortable and non-slip.</p>
-                        <span class="price">Ksh 1,500</span>
-                        <button class="add-to-cart" data-product="Yoga Mat">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/rs.jpg" alt="Running Shoes">
-                        <h3>Running Shoes</h3>
-                        <p>Lightweight and comfortable.</p>
-                        <span class="price">Ksh 5,000</span>
-                        <button class="add-to-cart" data-product="Running Shoes">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/bc.jpg" alt="Bicycle">
-                        <h3>Bicycle</h3>
-                        <p>Explore the outdoors.</p>
-                        <span class="price">Ksh 15,000</span>
-                        <button class="add-to-cart" data-product="Bicycle">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/ct.jpg" alt="Camping Tent">
-                        <h3>Camping Tent</h3>
-                        <p>Durable and waterproof.</p>
-                        <span class="price">Ksh 8,000</span>
-                        <button class="add-to-cart" data-product="Camping Tent">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/fr.jpg" alt="Fishing Rod">
-                        <h3>Fishing Rod</h3>
-                        <p>Perfect for your next fishing trip.</p>
-                        <span class="price">Ksh 2,500</span>
-                        <button class="add-to-cart" data-product="Fishing Rod">Add to Cart</button>
-                    </div>
-                </div>
-                <div class="linker">
-                    <a href="#" class="linkerbtn">See more</a>
-                </div>
-                <hr class="divider">
-            </section>
-
-            <!-- Toys & Hobbies -->
-            <section id="toys-hobbies">
-                <h2><i class="fas fa-gamepad" style="color:var(--primary-color);"></i> Toys & Hobbies</h2>
-                <div class="products-grid">
-                    <div class="product">
-                        <img src="images/af.jpg" alt="Action Figure">
-                        <h3>Action Figure</h3>
-                        <p>Perfect for collectors.</p>
-                        <span class="price">Ksh 1,500</span>
-                        <button class="add-to-cart" data-product="Action Figure">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/bg.jpg" alt="Board Game">
-                        <h3>Board Game</h3>
-                        <p>Fun for the whole family.</p>
-                        <span class="price">Ksh 2,000</span>
-                        <button class="add-to-cart" data-product="Board Game">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/pz.jpg" alt="Puzzle">
-                        <h3>Puzzle</h3>
-                        <p>Challenge your mind.</p>
-                        <span class="price">Ksh 800</span>
-                        <button class="add-to-cart" data-product="Puzzle">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/rc.jpg" alt="Remote Control Car">
-                        <h3>Remote Control Car</h3>
-                        <p>Fun for all ages.</p>
-                        <span class="price">Ksh 3,500</span>
-                        <button class="add-to-cart" data-product="Remote Control Car">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/bg.jpg" alt="Building Blocks">
-                        <h3>Building Blocks</h3>
-                        <p>Encourage creativity.</p>
-                        <span class="price">Ksh 1,200</span>
-                        <button class="add-to-cart" data-product="Building Blocks">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/sa.jpg" alt="Stuffed Animal">
-                        <h3>Stuffed Animal</h3>
-                        <p>Soft and cuddly.</p>
-                        <span class="price">Ksh 1,000</span>
-                        <button class="add-to-cart" data-product="Stuffed Animal">Add to Cart</button>
-                    </div>
-                </div>
-                <div class="linker">
-                    <a href="#" class="linkerbtn">See more</a>
-                </div>
-                <hr class="divider">
-            </section>
-
-            <!-- Books & Stationery -->
-            <section id="books-stationery">
-                <h2><i class="fas fa-book" style="color:var(--primary-color);"></i> Books & Stationery</h2>
-                <div class="products-grid">
-                    <div class="product">
-                        <img src="images/nl.jpg" alt="Novel">
-                        <h3>Novel</h3>
-                        <p>Engaging and thrilling.</p>
-                        <span class="price">Ksh 1,200</span>
-                        <button class="add-to-cart" data-product="Novel">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/nk1.jpg" alt="Notebook">
-                        <h3>Notebook</h3>
-                        <p>Perfect for notes and sketches.</p>
-                        <span class="price">Ksh 500</span>
-                        <button class="add-to-cart" data-product="Notebook">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/ps.jpg" alt="Pens Set">
-                        <h3>Pens Set</h3>
-                        <p>Write smoothly and effortlessly.</p>
-                        <span class="price">Ksh 300</span>
-                        <button class="add-to-cart" data-product="Pens Set">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/as.jpg" alt="Art Supplies">
-                        <h3>Art Supplies</h3>
-                        <p>Unleash your creativity.</p>
-                        <span class="price">Ksh 2,000</span>
-                        <button class="add-to-cart" data-product="Art Supplies">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/tb.jpg" alt="Textbooks">
-                        <h3>Textbooks</h3>
-                        <p>Essential for your studies.</p>
-                        <span class="price">Ksh 1,500</span>
-                        <button class="add-to-cart" data-product="Textbooks">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/pr.jpg" alt="Planner">
-                        <h3>Planner</h3>
-                        <p>Stay organized and productive.</p>
-                        <span class="price">Ksh 800</span>
-                        <button class="add-to-cart" data-product="Planner">Add to Cart</button>
-                    </div>
-                </div>
-                <div class="linker">
-                    <a href="#" class="linkerbtn">See more</a>
-                </div>
-                <hr class="divider">
-            </section>
-
-            <!-- Automotive -->
-            <section id="automotive">
-                <h2><i class="fas fa-car" style="color:var(--primary-color);"></i> Automotive</h2>
-                <div class="products-grid">
-                    <div class="product">
-                        <img src="images/cs.jpg" alt="Car Seat Covers">
-                        <h3>Car Seat Covers</h3>
-                        <p>Protect and style your car.</p>
-                        <span class="price">Ksh 5,000</span>
-                        <button class="add-to-cart" data-product="Car Seat Covers">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/cv.jpg" alt="Car Vacuum Cleaner">
-                        <h3>Car Vacuum Cleaner</h3>
-                        <p>Keep your car clean and tidy.</p>
-                        <span class="price">Ksh 3,000</span>
-                        <button class="add-to-cart" data-product="Car Vacuum Cleaner">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/gps.jpg" alt="GPS Tracker">
-                        <h3>GPS Tracker</h3>
-                        <p>Stay safe and secure.</p>
-                        <span class="price">Ksh 4,500</span>
-                        <button class="add-to-cart" data-product="GPS Tracker">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/cj.jpg" alt="Car Jump Starter">
-                        <h3>Car Jump Starter</h3>
-                        <p>Never get stranded again.</p>
-                        <span class="price">Ksh 2,500</span>
-                        <button class="add-to-cart" data-product="Car Jump Starter">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/cm.jpg" alt="Car Phone Mount">
-                        <h3>Car Phone Mount</h3>
-                        <p>Stay hands-free while driving.</p>
-                        <span class="price">Ksh 1,200</span>
-                        <button class="add-to-cart" data-product="Car Phone Mount">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/cf.jpg" alt="Car Air Freshener">
-                        <h3>Car Air Freshener</h3>
-                        <p>Keep your car smelling fresh.</p>
-                        <span class="price">Ksh 500</span>
-                        <button class="add-to-cart" data-product="Car Air Freshener">Add to Cart</button>
-                    </div>
-                </div>
-                <div class="linker">
-                    <a href="#" class="linkerbtn">See more</a>
-                </div>
-                <hr class="divider">
-            </section>
-
-            <!-- Grocery -->
-            <section id="grocery">
-                <h2><i class="fas fa-shopping-basket" style="color:var(--primary-color);"></i> Grocery</h2>
-                <div class="products-grid">
-                    <div class="product">
-                        <img src="images/rice.jpg" alt="Rice">
-                        <h3>Rice</h3>
-                        <p>High quality and nutritious.</p>
-                        <span class="price">Ksh 2,000</span>
-                        <button class="add-to-cart" data-product="Rice">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/co.jpg" alt="Cooking Oil">
-                        <h3>Cooking Oil</h3>
-                        <p>Healthy and pure.</p>
-                        <span class="price">Ksh 1,500</span>
-                        <button class="add-to-cart" data-product="Cooking Oil">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/flour.jpg" alt="Flour">
-                        <h3>Flour</h3>
-                        <p>Perfect for baking.</p>
-                        <span class="price">Ksh 800</span>
-                        <button class="add-to-cart" data-product="Flour">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/sugar.jpg" alt="Sugar">
-                        <h3>Sugar</h3>
-                        <p>Sweeten your dishes.</p>
-                        <span class="price">Ksh 600</span>
-                        <button class="add-to-cart" data-product="Sugar">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/salt.jpg" alt="Salt">
-                        <h3>Salt</h3>
-                        <p>Essential for cooking.</p>
-                        <span class="price">Ksh 200</span>
-                        <button class="add-to-cart" data-product="Salt">Add to Cart</button>
-                    </div>
-                    <div class="product">
-                        <img src="images/spices.jpg" alt="Spices">
-                        <h3>Spices</h3>
-                        <p>Add flavor to your meals.</p>
-                        <span class="price">Ksh 1,000</span>
-                        <button class="add-to-cart" data-product="Spices">Add to Cart</button>
-                    </div>
-                </div>
-                <div class="linker">
-                    <a href="#" class="linkerbtn">See more</a>
-                </div>
-                <hr class="divider">
-            </section>
+            
+            <!-- Category Sections -->
+            <?php foreach ($categories as $category): ?>
+                <?php 
+                $products = $categoryProducts[$category['id']] ?? [];
+                $category_slug = strtolower(str_replace(' ', '-', $category['name']));
+                ?>
+                <section id="<?php echo $category_slug; ?>">
+                    <h2>
+                        <i class="fas fa-tag" style="color:var(--primary-color);"></i> 
+                        <?php echo htmlspecialchars($category['name']); ?>
+                    </h2>
+                    
+                    <?php if (!empty($products)): ?>
+                        <div class="products-grid">
+                            <?php foreach ($products as $product): ?>
+                                <div class="product">
+                                    <img src="<?php echo htmlspecialchars(getProductImage($product['image'] ?? '')); ?>" 
+                                         alt="<?php echo htmlspecialchars($product['name']); ?>"
+                                         onerror="this.src='uploads/products/no-image.png'">
+                                    <h3><?php echo htmlspecialchars($product['name']); ?></h3>
+                                    <p><?php echo htmlspecialchars(substr($product['description'] ?? '', 0, 50)); ?>...</p>
+                                    <span class="price">Ksh <?php echo number_format($product['price'], 0); ?></span>
+                                    <button class="add-to-cart" 
+                                            data-product-id="<?php echo $product['id']; ?>"
+                                            data-product-name="<?php echo htmlspecialchars($product['name']); ?>">
+                                        Add to Cart
+                                    </button>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                        
+                        <?php if (count($products) >= 6): ?>
+                            <div class="linker">
+                                <a href="category.php?slug=<?php echo $category_slug; ?>&id=<?php echo $category['id']; ?>" class="linkerbtn">See more</a>
+                            </div>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <p style="text-align:center; color:#888; padding:20px 0;">
+                            <i class="fas fa-box-open" style="font-size:24px; display:block; margin-bottom:10px;"></i>
+                            No products in this category yet.
+                        </p>
+                    <?php endif; ?>
+                    
+                    <hr class="divider">
+                </section>
+            <?php endforeach; ?>
+            
+            <!-- Fallback if no categories exist -->
+            <?php if (empty($categories)): ?>
+                <section>
+                    <h2><i class="fas fa-exclamation-circle" style="color:var(--primary-color);"></i> No Categories Found</h2>
+                    <p style="text-align:center; color:#888; padding:20px 0;">
+                        <i class="fas fa-folder-open" style="font-size:48px; display:block; margin-bottom:15px;"></i>
+                        No categories have been created yet. Please check back later.
+                    </p>
+                </section>
+            <?php endif; ?>
+            
         </div>
     </main>
- <?php include "footer.php"; ?>
+    
+    <?php include "footer.php"; ?>
 
-    <script src="script.js"></script>
+    <script>
+        // Add to cart functionality with AJAX
+        document.querySelectorAll('.add-to-cart').forEach(button => {
+            button.addEventListener('click', function() {
+                const productId = this.dataset.productId;
+                const productName = this.dataset.productName;
+                
+                // Send AJAX request to add to cart
+                const formData = new FormData();
+                formData.append('ajax_action', 'add_to_cart');
+                formData.append('product_id', productId);
+                formData.append('quantity', 1);
+                
+                fetch('cart.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Show success message
+                        this.textContent = 'Added!';
+                        this.style.background = '#28a745';
+                        setTimeout(() => {
+                            this.textContent = 'Add to Cart';
+                            this.style.background = '';
+                        }, 1500);
+                    } else {
+                        alert(data.message || 'Failed to add to cart. Please try again.');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred. Please try again.');
+                });
+            });
+        });
+    </script>
 </body>
 </html>
