@@ -147,14 +147,17 @@ if ($isLoggedIn) {
             background: rgba(255,255,255,0.1);
         }
 
-        /* Responsive */
+        /* ============================================
+           FIXED: Responsive styles
+           ============================================ */
         @media (max-width: 768px) {
             .menu-toggle {
                 display: block;
             }
             
-            .nav-links {
-                display: none !important;
+            /* More specific selector to avoid !important conflicts */
+            #nav-links.nav-links {
+                display: none;
                 position: absolute;
                 top: 100%;
                 left: 0;
@@ -170,17 +173,17 @@ if ($isLoggedIn) {
                 overflow-y: auto;
             }
             
-            .nav-links.open {
-                display: flex !important;
+            #nav-links.nav-links.open {
+                display: flex;
             }
             
-            .nav-links li {
+            #nav-links.nav-links li {
                 margin: 2px 0;
                 width: 100%;
                 list-style: none;
             }
             
-            .nav-links li a {
+            #nav-links.nav-links li a {
                 display: block;
                 padding: 12px 15px;
                 border-radius: 6px;
@@ -189,31 +192,31 @@ if ($isLoggedIn) {
                 font-size: 16px;
             }
             
-            .nav-links li a:hover {
+            #nav-links.nav-links li a:hover {
                 background: #f5f5f5;
             }
             
-            .nav-links li a.active {
+            #nav-links.nav-links li a.active {
                 background: #05573c;
                 color: #fff !important;
             }
             
-            .nav-links li a i {
+            #nav-links.nav-links li a i {
                 margin-right: 10px;
                 width: 20px;
                 text-align: center;
             }
             
-            body.dark-mode .nav-links {
+            body.dark-mode #nav-links.nav-links {
                 background: #1a1a2e;
                 border-top: 1px solid #2a2a3e;
             }
             
-            body.dark-mode .nav-links li a:hover {
+            body.dark-mode #nav-links.nav-links li a:hover {
                 background: #2a2a3e;
             }
             
-            body.dark-mode .nav-links li a.active {
+            body.dark-mode #nav-links.nav-links li a.active {
                 background: #0a7a55;
                 color: #fff !important;
             }
@@ -226,7 +229,7 @@ if ($isLoggedIn) {
 
         /* Small screens */
         @media (max-width: 480px) {
-            .nav-links li a {
+            #nav-links.nav-links li a {
                 padding: 10px 12px;
                 font-size: 14px;
             }
@@ -488,18 +491,27 @@ if ($isLoggedIn) {
 
     <script>
         // ============================================
-        // MOBILE MENU TOGGLE
+        // MOBILE MENU TOGGLE - FIXED
         // ============================================
         function toggleMenu() {
             const navLinks = document.getElementById('nav-links');
             const menuIcon = document.getElementById('menuIcon');
             
+            if (!navLinks) {
+                console.error('nav-links element not found');
+                return;
+            }
+            
             navLinks.classList.toggle('open');
             
+            // Debug logging
+            console.log('Menu toggled. Open class:', navLinks.classList.contains('open'));
+            console.log('Current display style:', window.getComputedStyle(navLinks).display);
+            
             if (navLinks.classList.contains('open')) {
-                menuIcon.className = 'fas fa-times';
+                if (menuIcon) menuIcon.className = 'fas fa-times';
             } else {
-                menuIcon.className = 'fas fa-bars';
+                if (menuIcon) menuIcon.className = 'fas fa-bars';
             }
         }
 
@@ -525,7 +537,7 @@ if ($isLoggedIn) {
         document.querySelectorAll('.nav-links a').forEach(function(link) {
             link.addEventListener('click', function() {
                 const navLinks = document.getElementById('nav-links');
-                if (navLinks.classList.contains('open')) {
+                if (navLinks && navLinks.classList.contains('open')) {
                     navLinks.classList.remove('open');
                     const menuIcon = document.getElementById('menuIcon');
                     if (menuIcon) {
@@ -556,6 +568,7 @@ if ($isLoggedIn) {
                                 headerBadge.classList.add('pulse');
                                 setTimeout(() => headerBadge.classList.remove('pulse'), 500);
                             } else {
+                                headerBadge.textContent = '';
                                 headerBadge.classList.add('empty');
                             }
                         }
@@ -617,9 +630,11 @@ if ($isLoggedIn) {
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebarOverlay');
-            sidebar.classList.toggle('active');
-            overlay.classList.toggle('active');
-            document.body.classList.toggle('sidebar-open');
+            if (sidebar && overlay) {
+                sidebar.classList.toggle('active');
+                overlay.classList.toggle('active');
+                document.body.classList.toggle('sidebar-open');
+            }
         }
 
         // Close sidebar when clicking overlay
@@ -629,6 +644,14 @@ if ($isLoggedIn) {
                 overlay.addEventListener('click', function() {
                     toggleSidebar();
                 });
+            }
+            
+            // Debug: Log initial state
+            const navLinks = document.getElementById('nav-links');
+            if (navLinks) {
+                console.log('Nav links found. Initial display:', window.getComputedStyle(navLinks).display);
+            } else {
+                console.error('Nav links element not found on DOM ready');
             }
         });
     </script>
