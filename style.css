@@ -591,15 +591,107 @@ body.dark-mode .theme-toggle:hover {
             color: rgba(255,255,255,0.5);
             font-size: 0.9rem;
         }
-/* ===== RESPONSIVE ===== */
+/* ===== PREVENT OVERFLOW ON MOBILE ===== */
+* {
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+html, body {
+    overflow-x: hidden;
+    width: 100%;
+}
+
+header {
+    width: 100%;
+    max-width: 100%;
+    overflow: visible;
+}
+
+.header-container {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* Fix for header actions on mobile */
 @media (max-width: 768px) {
-    .header-container {
-        flex-wrap: nowrap;
-        position: relative;
+    .header-actions {
+        flex-wrap: nowrap !important;
     }
     
-
-    .nav-links {
+    .header-actions > * {
+        flex-shrink: 0;
+    }
+}
+/* ===== NAVBAR RESPONSIVE ===== */
+@media (max-width: 768px) {
+    .header-container {
+        flex-wrap: wrap !important;
+        position: relative;
+        padding: 10px 15px !important;
+        width: 100%;
+        max-width: 100%;
+        overflow: visible;
+    }
+    
+    .logo {
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .logo h1 {
+        font-size: 0.9rem !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .logo img {
+        width: 40px !important;
+        height: 40px !important;
+        flex-shrink: 0;
+    }
+    
+    .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 5px !important;
+        flex-shrink: 0;
+    }
+    
+    .header-actions .categories-btn span {
+        display: none;
+    }
+    
+    .header-actions .categories-btn {
+        padding: 6px 10px !important;
+        font-size: 14px;
+        min-width: 40px;
+        justify-content: center;
+    }
+    
+    .header-actions .header-cart {
+        padding: 5px 8px !important;
+    }
+    
+    .header-actions .header-cart .cart-icon {
+        font-size: 18px !important;
+    }
+    
+    .header-actions .logout-btn {
+        padding: 5px 8px !important;
+        font-size: 18px !important;
+    }
+    
+    .menu-toggle {
+        display: block !important;
+        padding: 5px 10px !important;
+        font-size: 20px !important;
+        flex-shrink: 0;
+    }
+    
+    #nav-links.nav-links {
         display: none !important;
         flex-direction: column;
         align-items: stretch;
@@ -608,79 +700,98 @@ body.dark-mode .theme-toggle:hover {
         left: 0;
         right: 0;
         background: var(--card-bg);
-        padding: 20px;
-        box-shadow: 0 5px 10px var(--shadow-color);
+        padding: 15px 20px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
         z-index: 999;
         border-radius: 0 0 12px 12px;
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+        box-sizing: border-box;
     }
     
-    .nav-links.open {
+    #nav-links.nav-links.open {
         display: flex !important;
     }
     
-    .nav-links li {
+    #nav-links.nav-links li {
         margin: 2px 0;
         width: 100%;
         list-style: none;
     }
     
-    .nav-links li a {
+    #nav-links.nav-links li a {
         display: block;
-        padding: 12px 15px;
-        text-align: center;
+        padding: 10px 15px;
+        text-align: left;
         width: 100%;
         border-radius: 6px;
         transition: all 0.3s ease;
+        font-size: 14px;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     
-    .nav-links li a:hover {
+    #nav-links.nav-links li a i {
+        margin-right: 10px;
+        width: 20px;
+        text-align: center;
+        flex-shrink: 0;
+    }
+    
+    #nav-links.nav-links li a:hover {
         background: #f5f5f5;
     }
     
-    .nav-links li a.active {
+    #nav-links.nav-links li a.active {
         background: var(--primary-color);
         color: #fff !important;
     }
     
-    .nav-links li a i {
-        margin-right: 10px;
-        width: 20px;
-        text-align: center;
-    }
-    
-    .menu-toggle {
-        display: block;
-    }
-    
-    .categories-btn span {
-        display: none;
-    }
-    .categories-btn {
-        padding: 8px 12px;
-    }
-    .logo h1 {
-        font-size: 1rem;
-    }
-    
-    /* Dark mode for mobile menu */
-    body.dark-mode .nav-links {
+    body.dark-mode #nav-links.nav-links {
         background: #1a1a2e;
         border-top: 1px solid #2a2a3e;
     }
     
-    body.dark-mode .nav-links li a:hover {
+    body.dark-mode #nav-links.nav-links li a:hover {
         background: #2a2a3e;
     }
     
-    body.dark-mode .nav-links li a.active {
+    body.dark-mode #nav-links.nav-links li a.active {
         background: #0a7a55;
         color: #fff !important;
+    }
+    #nav-links.nav-links .theme-toggle {
+        width: 100%;
+        text-align: left;
+        padding: 10px 15px !important;
+        border-radius: 6px;
+        justify-content: flex-start;
+        background: transparent !important;
+        font-size: 14px;
+    }
+    
+    #nav-links.nav-links .theme-toggle:hover {
+        background: #f5f5f5 !important;
+    }
+    
+    body.dark-mode #nav-links.nav-links .theme-toggle:hover {
+        background: #2a2a3e !important;
+    }
+    
+    nav {
+        flex: unset !important;
+        min-width: unset !important;
+        width: auto;
     }
     
     .sidebar {
         width: 280px;
         left: -300px;
     }
+    
     .top-cont {
         padding: 20px;
     }
@@ -717,10 +828,48 @@ body.dark-mode .theme-toggle:hover {
 }
 
 @media (max-width: 480px) {
-    .logo img {
-        width: 40px;
-        height: 40px;
+    .header-container {
+        padding: 8px 10px !important;
     }
+    
+    .logo h1 {
+        font-size: 0.8rem !important;
+    }
+    
+    .logo img {
+        width: 35px !important;
+        height: 35px !important;
+    }
+    
+    .header-actions {
+        gap: 3px !important;
+    }
+    
+    .header-actions .categories-btn {
+        padding: 4px 8px !important;
+        font-size: 12px;
+        min-width: 35px;
+    }
+    
+    .header-actions .header-cart .cart-icon {
+        font-size: 16px !important;
+    }
+    
+    .header-actions .logout-btn {
+        padding: 4px 6px !important;
+        font-size: 16px !important;
+    }
+    
+    .menu-toggle {
+        padding: 4px 8px !important;
+        font-size: 18px !important;
+    }
+    
+    #nav-links.nav-links li a {
+        padding: 8px 12px;
+        font-size: 13px;
+    }
+    
     .logo h1 {
         font-size: 0.9rem;
     }
@@ -748,11 +897,9 @@ body.dark-mode .theme-toggle:hover {
         padding: 10px 0;
         font-size: 0.9rem;
     }
-    .nav-links li a {
-        padding: 10px 12px;
-        font-size: 14px;
-    }
 }
+
+
 /* ==== HOME PAGE + SHOP ====*/
 
         .hero {
