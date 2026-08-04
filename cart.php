@@ -43,6 +43,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
         $action = $_POST['ajax_action'];
         
         switch ($action) {
+            // ===== ADD TO CART =====
+            case 'add_to_cart':
+                $product_id = intval($_POST['product_id'] ?? 0);
+                $quantity = intval($_POST['quantity'] ?? 1);
+                
+                if (!$product_id) {
+                    $response = ['success' => false, 'message' => 'Invalid product ID'];
+                    break;
+                }
+                
+                // Check if product exists
+                $stmt = $pdo->prepare("SELECT id, stock FROM products WHERE id = ?");
+                $stmt->execute([$product_id]);
+                $product = $stmt->fetch();
+                
+                if (!$product) {
+                    $response = ['success' => false, 'message' => 'Product not found'];
+                    break;
+                }
+                
+                // Check stock
+                if (isset($product['stock']) && $product['stock'] <= 0) {
+                    $response = ['success' => false, 'message' => 'Product is out of stock'];
+                    break;
+                }
+                
+                // Check if product already in cart
+                $stmt = $pdo->prepare("SELECT id, quantity FROM cart WHERE user_id = ? AND product_id = ?");
+                $stmt->execute([$_SESSION['user_id'], $product_id]);
+                $existing = $stmt->fetch();
+                
+                if ($existing) {
+                    // Update quantity
+                    $new_quantity = $existing['quantity'] + $quantity;
+                    $stmt = $pdo->prepare("UPDATE cart SET quantity = ? WHERE id = ?");
+                    $stmt->execute([$new_quantity, $existing['id']]);
+                    $response = [
+                        'success' => true, 
+                        'message' => 'Item quantity updated in cart',
+                        'cart_count' => getCartCount()
+                    ];
+                } else {
+                    // Insert new item
+                    $stmt = $pdo->prepare("INSERT INTO cart (user_id, product_id, quantity) VALUES (?, ?, ?)");
+                    $stmt->execute([$_SESSION['user_id'], $product_id, $quantity]);
+                    $response = [
+                        'success' => true, 
+                        'message' => 'Item added to cart successfully',
+                        'cart_count' => getCartCount()
+                    ];
+                }
+                break;
+                
+            // ===== UPDATE QUANTITY =====
             case 'update_quantity':
                 $cart_id = intval($_POST['cart_id'] ?? 0);
                 $quantity = intval($_POST['quantity'] ?? 1);
@@ -51,34 +105,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
                     // Remove item if quantity is 0 or less
                     $stmt = $pdo->prepare("DELETE FROM cart WHERE id = ? AND user_id = ?");
                     $stmt->execute([$cart_id, $_SESSION['user_id']]);
-                    $response = ['success' => true, 'message' => 'Item removed'];
+                    $response = [
+                        'success' => true, 
+                        'message' => 'Item removed',
+                        'cart_count' => getCartCount()
+                    ];
                 } else {
                     $stmt = $pdo->prepare("UPDATE cart SET quantity = ? WHERE id = ? AND user_id = ?");
                     $stmt->execute([$quantity, $cart_id, $_SESSION['user_id']]);
-                    $response = ['success' => true, 'message' => 'Quantity updated'];
+                    $response = [
+                        'success' => true, 
+                        'message' => 'Quantity updated',
+                        'cart_count' => getCartCount()
+                    ];
                 }
                 break;
                 
+            // ===== REMOVE ITEM =====
             case 'remove_item':
                 $cart_id = intval($_POST['cart_id'] ?? 0);
                 $stmt = $pdo->prepare("DELETE FROM cart WHERE id = ? AND user_id = ?");
                 $stmt->execute([$cart_id, $_SESSION['user_id']]);
-                $response = ['success' => true, 'message' => 'Item removed'];
+                $response = [
+                    'success' => true, 
+                    'message' => 'Item removed',
+                    'cart_count' => getCartCount()
+                ];
                 break;
                 
+            // ===== CLEAR CART =====
             case 'clear_cart':
                 $stmt = $pdo->prepare("DELETE FROM cart WHERE user_id = ?");
                 $stmt->execute([$_SESSION['user_id']]);
-                $response = ['success' => true, 'message' => 'Cart cleared'];
+                $response = [
+                    'success' => true, 
+                    'message' => 'Cart cleared',
+                    'cart_count' => 0
+                ];
                 break;
+                
+            default:
+                $response = ['success' => false, 'message' => 'Invalid action'];
         }
     } catch (PDOException $e) {
         error_log('Cart AJAX error: ' . $e->getMessage());
-        $response = ['success' => false, 'message' => 'Database error'];
+        $response = ['success' => false, 'message' => 'Database error: ' . $e->getMessage()];
     }
     
     echo json_encode($response);
     exit();
+}
+
+// Helper function to get cart count
+function getCartCount() {
+    global $pdo;
+    try {
+        $stmt = $pdo->prepare("SELECT SUM(quantity) as total FROM cart WHERE user_id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $result = $stmt->fetch();
+        return intval($result['total'] ?? 0);
+    } catch (PDOException $e) {
+        return 0;
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -101,10 +189,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
             <h1>Your <span>Shopping Cart</span></h1>
             
             <?php if (empty($cartItems)): ?>
-                <div class="empty-cart">
+                <div class="empty-cart" style="text-align:center; padding:40px 0;">
                     <i class="fas fa-shopping-cart" style="font-size: 60px; color: #ccc; margin-bottom: 20px; display: block;"></i>
                     <p style="font-size: 18px; color: #888;">Your cart is empty</p>
-                    <a href="shop.php" class="btn-primary" style="display: inline-block; margin-top: 15px; padding: 10px 30px; background: #05573c; color: #fff; border-radius: 6px; text-decoration: none;">Start Shopping</a>
+                    <a href="breadcrumbs.php" style="display: inline-block; margin-top: 15px; padding: 10px 30px; background: #05573c; color: #fff; border-radius: 6px; text-decoration: none;">Start Shopping</a>
                 </div>
             <?php else: ?>
                 <div class="cart-items" id="cart-items">
