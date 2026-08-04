@@ -596,14 +596,15 @@ $isLoggedIn = isset($_SESSION['user_id']);
 </head>
 <body>
     <div class="auth-wrapper">
-         <div class="theme-toggle-container">
+        
+        <div class="auth-container">
+            <div class="theme-toggle-container">
                 <button id="themeToggleBtn"><i class="fas fa-moon"></i></button>
             </div>
-        <div class="auth-container">
-           
+            <br>
             <!-- Logo -->
             <div class="logo-container">
-                <img src="images/logo.png" alt="WittyMart Logo">
+                <img src="images/logo.png" style="border:1px solid #000" alt="WittyMart Logo">
                 <h1>WittyMart</h1>
                 <p>Smart Shopping for Witty Minds!</p>
             </div>
@@ -916,7 +917,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
         themeToggleBtn.addEventListener('click', function() {
             document.body.classList.toggle('dark-mode');
             const isDark = document.body.classList.contains('dark-mode');
-            this.innerHTML = isDark ? '<i class="fas fa-sun"></i> Light Mode' : '<i class="fas fa-moon"></i>';
+            this.innerHTML = isDark ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
             
             // Save preference
             localStorage.setItem('theme', isDark ? 'dark' : 'light');
