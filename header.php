@@ -1,6 +1,4 @@
 <?php
-// Session is already started in config.php
-// Check if user is logged in using session variables
 $isLoggedIn = isset($_SESSION['user_id']);
 $userName = $_SESSION['user_name'] ?? 'User';
 $isAdmin = isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true;
