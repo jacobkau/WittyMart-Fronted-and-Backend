@@ -138,11 +138,10 @@ if ($isLoggedIn) {
                     // Get the current page filename
                     $current_page = basename($_SERVER['PHP_SELF']);
                     
-                    // Define navigation links
+                    // Define navigation links (removed 'cart.php' from here)
                     $nav_links = [
                         'index.php' => 'Home',
                         'shop.php' => 'Shop',
-                        'cart.php' => 'Cart',
                         'about.php' => 'About',
                         'contact.php' => 'Contact',
                         'terms.php' => 'Terms'
@@ -150,16 +149,8 @@ if ($isLoggedIn) {
                     
                     foreach ($nav_links as $page => $label):
                         $active_class = ($current_page == $page) ? 'active' : '';
-                        $is_cart = ($page == 'cart.php');
                     ?>
-                        <li>
-                            <a href="<?php echo $page; ?>" class="<?php echo $active_class; ?> <?php echo $is_cart ? 'cart-link' : ''; ?>">
-                                <?php echo $label; ?>
-                                <?php if ($is_cart && $cartCount > 0): ?>
-                                    <span class="cart-badge" id="cartBadge"><?php echo $cartCount; ?></span>
-                                <?php endif; ?>
-                            </a>
-                        </li>
+                        <li><a href="<?php echo $page; ?>" class="<?php echo $active_class; ?>"><?php echo $label; ?></a></li>
                     <?php endforeach; ?>
                     
                     <!-- Account / Login/Register link -->
@@ -187,8 +178,8 @@ if ($isLoggedIn) {
             </nav>
             
             <div class="header-actions">
+                <!-- Cart icon with badge in header actions (always visible for logged in users) -->
                 <?php if ($isLoggedIn): ?>
-                    <!-- Cart icon with badge in header actions -->
                     <a href="cart.php" class="header-cart" title="View Cart">
                         <i class="fas fa-shopping-cart cart-icon"></i>
                         <span class="cart-badge-sm <?php echo $cartCount > 0 ? '' : 'empty'; ?>" id="headerCartBadge">
@@ -199,7 +190,13 @@ if ($isLoggedIn) {
                     <button class="logout-btn" onclick="logoutUser()" title="Logout">
                         <i class="fas fa-sign-out-alt"></i>
                     </button>
+                <?php else: ?>
+                    <!-- Show cart icon for guests too, but without badge -->
+                    <a href="cart.php" class="header-cart" title="View Cart">
+                        <i class="fas fa-shopping-cart cart-icon"></i>
+                    </a>
                 <?php endif; ?>
+                
                 <button class="categories-btn" onclick="toggleSidebar()">
                     <i class="fas fa-th-list"></i>
                     <span>Categories</span>
@@ -367,25 +364,14 @@ if ($isLoggedIn) {
                     if (data.success) {
                         const count = data.count;
                         
-                        // Update badge in nav
-                        const badge = document.getElementById('cartBadge');
-                        if (badge) {
-                            if (count > 0) {
-                                badge.textContent = count;
-                                badge.classList.remove('empty');
-                                badge.classList.add('pulse');
-                                setTimeout(() => badge.classList.remove('pulse'), 500);
-                            } else {
-                                badge.classList.add('empty');
-                            }
-                        }
-                        
                         // Update header cart badge
                         const headerBadge = document.getElementById('headerCartBadge');
                         if (headerBadge) {
                             if (count > 0) {
                                 headerBadge.textContent = count;
                                 headerBadge.classList.remove('empty');
+                                headerBadge.classList.add('pulse');
+                                setTimeout(() => headerBadge.classList.remove('pulse'), 500);
                             } else {
                                 headerBadge.classList.add('empty');
                             }
