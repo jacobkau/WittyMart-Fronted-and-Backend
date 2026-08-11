@@ -16,7 +16,7 @@ $total = 0;
 try {
     $stmt = $pdo->prepare("
         SELECT c.id as cart_id, c.product_id, c.quantity, 
-               p.name, p.price, p.image, p.description 
+               p.name, p.price, p.image, p.image_url, p.description, p.stock
         FROM cart c
         INNER JOIN products p ON c.product_id = p.id
         WHERE c.user_id = ?
@@ -253,6 +253,26 @@ function getCartCount() {
         return 0;
     }
 }
+
+// Helper function to get product image (with Cloudinary support)
+function getCartProductImage($product) {
+    if (!is_array($product)) {
+        return UPLOAD_URL . 'no-image.png';
+    }
+    
+    // Check for Cloudinary URL first
+    if (!empty($product['image_url'])) {
+        return $product['image_url'];
+    }
+    
+    // Fallback to local image
+    if (!empty($product['image']) && file_exists(UPLOAD_DIR . $product['image'])) {
+        return UPLOAD_URL . $product['image'];
+    }
+    
+    // Default no-image placeholder
+    return UPLOAD_URL . 'no-image.png';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -262,7 +282,255 @@ function getCartCount() {
     <title>Cart - WittyMart</title>
     <link rel="icon" type="image/png" href="images/logo.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="style.css">  
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* Cart Styles */
+        .cart-items {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .cart-item {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            background: #fff;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .cart-item:hover {
+            box-shadow: 0 4px 15px rgba(0,0,0,0.12);
+        }
+        
+        .cart-item .image-container {
+            position: relative;
+            width: 100px;
+            height: 100px;
+            flex-shrink: 0;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #f5f5f5;
+        }
+        
+        .cart-item .image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .cart-item .image-container .cloudinary-badge {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(52, 72, 197, 0.9);
+            color: white;
+            font-size: 8px;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            z-index: 2;
+        }
+        
+        .cart-item-details {
+            flex: 1;
+        }
+        
+        .cart-item-details h3 {
+            margin: 0 0 5px 0;
+            font-size: 16px;
+            color: #333;
+        }
+        
+        .cart-item-details p {
+            margin: 0;
+            font-size: 13px;
+            color: #666;
+        }
+        
+        .cart-item-price {
+            font-size: 18px;
+            font-weight: 700;
+            color: #05573c;
+            min-width: 100px;
+            text-align: center;
+        }
+        
+        .cart-item-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .cart-item-actions button {
+            background: #f0f0f0;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            color: #333;
+        }
+        
+        .cart-item-actions button:hover:not(.remove-btn) {
+            background: #05573c;
+            color: #fff;
+        }
+        
+        .cart-item-actions .quantity {
+            min-width: 30px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 16px;
+        }
+        
+        .cart-item-actions .remove-btn {
+            background: #dc3545;
+            color: #fff;
+            padding: 5px 12px;
+            font-size: 12px;
+        }
+        
+        .cart-item-actions .remove-btn:hover {
+            background: #c82333;
+        }
+        
+        .cart-summary {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .cart-summary h2 {
+            margin: 0;
+            font-size: 22px;
+        }
+        
+        .cart-summary .checkout-btn {
+            background: #05573c;
+            color: #fff;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .cart-summary .checkout-btn:hover {
+            background: #03402c;
+        }
+        
+        .cart-summary .clear-cart-btn {
+            background: #dc3545;
+            color: #fff;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .cart-summary .clear-cart-btn:hover {
+            background: #c82333;
+        }
+        
+        .empty-cart {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        
+        .empty-cart i {
+            font-size: 60px;
+            color: #ccc;
+            margin-bottom: 20px;
+            display: block;
+        }
+        
+        .empty-cart p {
+            font-size: 18px;
+            color: #888;
+        }
+        
+        .empty-cart .btn-primary {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 10px 30px;
+            background: #05573c;
+            color: #fff;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .empty-cart .btn-primary:hover {
+            background: #03402c;
+        }
+        
+        @media (max-width: 768px) {
+            .cart-item {
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+            
+            .cart-item .image-container {
+                width: 80px;
+                height: 80px;
+            }
+            
+            .cart-item-price {
+                min-width: auto;
+                text-align: left;
+                flex: 1;
+            }
+            
+            .cart-item-actions {
+                width: 100%;
+                justify-content: flex-start;
+            }
+            
+            .cart-summary {
+                flex-direction: column;
+                align-items: stretch;
+                text-align: center;
+            }
+            
+            .cart-summary h2 {
+                text-align: center;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .cart-item .image-container {
+                width: 60px;
+                height: 60px;
+            }
+            
+            .cart-item-details h3 {
+                font-size: 14px;
+            }
+            
+            .cart-item-details p {
+                font-size: 12px;
+            }
+        }
+    </style>
 </head>
 <body>
     <?php include "header.php"; ?>
@@ -274,27 +542,34 @@ function getCartCount() {
             <h1>Your <span>Shopping Cart</span></h1>
             
             <?php if (empty($cartItems)): ?>
-                <div class="empty-cart" style="text-align:center; padding:40px 0;">
-                    <i class="fas fa-shopping-cart" style="font-size: 60px; color: #ccc; margin-bottom: 20px; display: block;"></i>
-                    <p style="font-size: 18px; color: #888;">Your cart is empty</p>
-                    <a href="breadcrumbs.php" style="display: inline-block; margin-top: 15px; padding: 10px 30px; background: #05573c; color: #fff; border-radius: 6px; text-decoration: none;">Start Shopping</a>
+                <div class="empty-cart">
+                    <i class="fas fa-shopping-cart"></i>
+                    <p>Your cart is empty</p>
+                    <a href="breadcrumbs.php" class="btn-primary">Start Shopping</a>
                 </div>
             <?php else: ?>
                 <div class="cart-items" id="cart-items">
                     <?php foreach ($cartItems as $item): ?>
                         <div class="cart-item" data-cart-id="<?php echo $item['cart_id']; ?>">
-                            <img src="<?php echo htmlspecialchars(getProductImage($item['image'] ?? '')); ?>" 
-                                 alt="<?php echo htmlspecialchars($item['name']); ?>"
-                                 onerror="this.src='uploads/products/no-image.png'">
+                            <div class="image-container">
+                                <img src="<?php echo htmlspecialchars(getCartProductImage($item)); ?>" 
+                                     alt="<?php echo htmlspecialchars($item['name']); ?>"
+                                     onerror="this.src='uploads/products/no-image.png'">
+                                <?php if (!empty($item['image_url'])): ?>
+                                    <span class="cloudinary-badge">
+                                        <i class="fas fa-cloud"></i>
+                                    </span>
+                                <?php endif; ?>
+                            </div>
                             <div class="cart-item-details">
                                 <h3><?php echo htmlspecialchars($item['name']); ?></h3>
-                                <p><?php echo htmlspecialchars($item['description'] ?? ''); ?></p>
+                                <p><?php echo htmlspecialchars(substr($item['description'] ?? '', 0, 80)); ?></p>
                             </div>
                             <div class="cart-item-price">Ksh <?php echo number_format($item['price'], 0); ?></div>
                             <div class="cart-item-actions">
-                                <button onclick="updateQuantity(this, <?php echo $item['cart_id']; ?>, -1)">-</button>
+                                <button onclick="updateQuantity(this, <?php echo $item['cart_id']; ?>, -1)" aria-label="Decrease quantity">-</button>
                                 <span class="quantity" id="qty-<?php echo $item['cart_id']; ?>"><?php echo $item['quantity']; ?></span>
-                                <button onclick="updateQuantity(this, <?php echo $item['cart_id']; ?>, 1)">+</button>
+                                <button onclick="updateQuantity(this, <?php echo $item['cart_id']; ?>, 1)" aria-label="Increase quantity">+</button>
                                 <button class="remove-btn" onclick="removeItem(<?php echo $item['cart_id']; ?>)">Remove</button>
                             </div>
                         </div>
@@ -303,8 +578,10 @@ function getCartCount() {
 
                 <div class="cart-summary">
                     <h2>Total: KES <span id="cart-total"><?php echo number_format($total, 0); ?></span></h2>
-                    <button class="checkout-btn" onclick="checkout()">Proceed to Checkout</button>
-                    <button class="clear-cart-btn" onclick="clearCart()" style="background: #dc3545; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; margin-left: 10px;">Clear Cart</button>
+                    <div>
+                        <button class="checkout-btn" onclick="checkout()">Proceed to Checkout</button>
+                        <button class="clear-cart-btn" onclick="clearCart()">Clear Cart</button>
+                    </div>
                 </div>
             <?php endif; ?>
         </section>
