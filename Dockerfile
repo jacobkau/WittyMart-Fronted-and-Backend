@@ -26,10 +26,17 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     bcmath \
     gd
 
-# Enable Apache modules
-RUN a2enmod rewrite \
-    && a2enmod headers \
-    && a2enmod expires
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# Set working directory
+WORKDIR /var/www/html
+
+# Copy composer files first (for better caching)
+COPY composer.json composer.lock* ./
+
+# Install PHP dependencies (including Cloudinary)
+RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 # Copy application files
 COPY . /var/www/html/
@@ -37,6 +44,11 @@ COPY . /var/www/html/
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html
+
+# Enable Apache modules
+RUN a2enmod rewrite \
+    && a2enmod headers \
+    && a2enmod expires
 
 EXPOSE 80
 
