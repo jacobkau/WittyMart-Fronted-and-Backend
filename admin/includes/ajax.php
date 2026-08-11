@@ -1,19 +1,23 @@
 <?php
 
+// Disable error display but log them
 ini_set('display_errors', 0);
 ini_set('display_startup_errors', 0);
 error_reporting(E_ALL);
 
 // Clear any previous output
-ob_clean();
+if (ob_get_level()) {
+    ob_clean();
+}
+ob_start();
 
 // Set JSON header first
 header('Content-Type: application/json');
 
 try {
     require_once 'config.php';
-    require_once 'auth.php';
 } catch (Exception $e) {
+    ob_clean();
     echo json_encode(['success' => false, 'message' => 'Configuration error: ' . $e->getMessage()]);
     exit;
 }
@@ -24,6 +28,7 @@ $response = ['success' => false, 'message' => 'Invalid action'];
 
 // Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
+    ob_clean();
     echo json_encode(['success' => false, 'message' => 'Unauthorized - Please login']);
     exit;
 }
@@ -32,6 +37,7 @@ if (!isset($_SESSION['user_id'])) {
 $admin_actions = ['get_product', 'add_product', 'update_product', 'delete_product', 'get_order', 'update_order_status', 'delete_order', 'get_customer', 'delete_customer', 'get_category', 'add_category', 'update_category', 'delete_category', 'get_stats', 'search_orders', 'get_admin'];
 if (in_array($action, $admin_actions)) {
     if (!isset($_SESSION['is_admin']) || $_SESSION['is_admin'] !== true) {
+        ob_clean();
         echo json_encode(['success' => false, 'message' => 'Admin access required']);
         exit;
     }
@@ -67,7 +73,7 @@ try {
                 }
             } catch (PDOException $e) {
                 error_log('Get product error: ' . $e->getMessage());
-                $response = ['success' => false, 'message' => 'Database error'];
+                $response = ['success' => false, 'message' => 'Database error: ' . $e->getMessage()];
             }
             break;
             
