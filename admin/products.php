@@ -5,41 +5,57 @@ ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
 require_once 'includes/config.php';
-require_once 'includes/cloudinary_helper.php'; 
+require_once 'includes/cloudinary_helper.php'; // Add Cloudinary helper
 
 requireAdmin();
 
-global $pdo, $cloudinary;
+global $pdo;
 
 $message = '';
 $messageType = '';
 
-// ===== IMAGE UPLOAD DIRECTORY (Fallback) =====
-$upload_dir = UPLOAD_DIR;
+// ===== IMAGE UPLOAD DIRECTORY =====
+$upload_dir = UPLOAD_DIR; // Use the constant from config.php
 if (!file_exists($upload_dir)) {
     mkdir($upload_dir, 0777, true);
 }
 
+// ============================================
+// CLOUDINARY IMAGE FUNCTIONS
+// ============================================
 
-// ===== UPLOAD IMAGE FUNCTION (With Cloudinary Support) =====
-function uploadProductImage($file) {
+/**
+ * Upload product image to Cloudinary (with local fallback)
+ */
+function uploadProductImageToCloudinary($file, $folder = 'products') {
     global $cloudinary;
+    
+    $result = [
+        'success' => false,
+        'path' => '',
+        'url' => '',
+        'public_id' => '',
+        'error' => ''
+    ];
     
     // Validate file
     if (!isset($file) || $file['error'] !== UPLOAD_ERR_OK) {
-        return ['success' => false, 'path' => '', 'error' => 'No file uploaded or upload error.'];
+        $result['error'] = 'No file uploaded or upload error.';
+        return $result;
     }
     
     // Validate file type
     $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     $file_type = mime_content_type($file['tmp_name']);
     if (!in_array($file_type, $allowed_types)) {
-        return ['success' => false, 'path' => '', 'error' => 'Invalid file type. Only JPG, PNG, GIF, and WEBP are allowed.'];
+        $result['error'] = 'Invalid file type. Only JPG, PNG, GIF, and WEBP are allowed.';
+        return $result;
     }
     
     // Validate file size (5MB max)
     if ($file['size'] > 5 * 1024 * 1024) {
-        return ['success' => false, 'path' => '', 'error' => 'File size exceeds 5MB limit.'];
+        $result['error'] = 'File size exceeds 5MB limit.';
+        return $result;
     }
     
     // Generate unique filename for local storage
@@ -50,36 +66,26 @@ function uploadProductImage($file) {
     // Try Cloudinary first if available
     if ($cloudinary) {
         try {
-            $public_id = 'products/' . time() . '_' . pathinfo(basename($file['name']), PATHINFO_FILENAME);
+            $upload_result = uploadToCloudinary($file['tmp_name'], $folder);
             
-            $upload_result = $cloudinary->uploadApi()->upload(
-                $file['tmp_name'],
-                [
-                    'public_id' => $public_id,
-                    'folder' => 'products',
-                    'quality' => 'auto:best',
-                    'fetch_format' => 'auto',
-                    'transformation' => [
-                        ['width' => 800, 'height' => 800, 'crop' => 'limit', 'quality' => 'auto']
-                    ]
-                ]
-            );
-            
-            error_log('Cloudinary upload successful: ' . $upload_result['public_id']);
-            
-            // Also save locally as fallback
-            $target_path = UPLOAD_DIR . $filename;
-            move_uploaded_file($file['tmp_name'], $target_path);
-            
-            return [
-                'success' => true,
-                'path' => 'uploads/products/' . $filename,
-                'full_path' => $target_path,
-                'url' => $upload_result['secure_url'],
-                'public_id' => $upload_result['public_id']
-            ];
+            if ($upload_result['success']) {
+                $result['success'] = true;
+                $result['url'] = $upload_result['url'];
+                $result['public_id'] = $upload_result['public_id'];
+                $result['path'] = 'uploads/products/' . $filename; // Keep for fallback
+                
+                // Also save locally as fallback
+                $target_path = UPLOAD_DIR . $filename;
+                move_uploaded_file($file['tmp_name'], $target_path);
+                
+                error_log('Cloudinary upload successful: ' . $upload_result['public_id']);
+                return $result;
+            } else {
+                error_log('Cloudinary upload failed: ' . ($upload_result['error'] ?? 'Unknown error'));
+                // Fall through to local upload
+            }
         } catch (Exception $e) {
-            error_log('Cloudinary upload error: ' . $e->getMessage());
+            error_log('Cloudinary upload exception: ' . $e->getMessage());
             // Fall through to local upload
         }
     }
@@ -87,39 +93,59 @@ function uploadProductImage($file) {
     // Fallback to local upload
     $target_path = UPLOAD_DIR . $filename;
     if (move_uploaded_file($file['tmp_name'], $target_path)) {
-        error_log('File uploaded successfully to: ' . $target_path);
-        return [
-            'success' => true,
-            'path' => 'uploads/products/' . $filename,
-            'full_path' => $target_path,
-            'url' => 'https://wittymart.onrender.com/uploads/products/' . $filename,
-            'public_id' => null
-        ];
+        $result['success'] = true;
+        $result['path'] = 'uploads/products/' . $filename;
+        $result['url'] = UPLOAD_URL . $filename;
+        error_log('Local upload successful: ' . $filename);
     } else {
+        $result['error'] = 'Failed to save file locally.';
         error_log('Failed to move uploaded file to: ' . $target_path);
-        return ['success' => false, 'path' => '', 'error' => 'Failed to save file.'];
     }
+    
+    return $result;
 }
 
-// ===== DELETE IMAGE FUNCTION (With Cloudinary Support) =====
-function deleteProductImage($image_path, $public_id = null) {
+/**
+ * Delete product image from Cloudinary (if exists)
+ */
+function deleteProductImageFromCloudinary($image_path) {
     global $cloudinary;
     
-    // Delete from Cloudinary if public_id exists
-    if (!empty($public_id) && $cloudinary) {
-        try {
-            $cloudinary->uploadApi()->destroy($public_id);
-            error_log('Cloudinary image deleted: ' . $public_id);
-        } catch (Exception $e) {
-            error_log('Cloudinary delete error: ' . $e->getMessage());
-        }
-    }
-    
-    // Delete local file
     if (empty($image_path)) {
         return true;
     }
     
+    // Check if it's a Cloudinary URL by looking for cloudinary.com in the path
+    if (strpos($image_path, 'cloudinary.com') !== false) {
+        // Try to extract public_id from URL
+        // This assumes the URL format: https://res.cloudinary.com/cloud_name/image/upload/v1234567890/folder/public_id.jpg
+        $pattern = '/\/upload\/(?:v\d+\/)?([^\/]+\/[^\/]+)(?:\.[^.]+)?$/';
+        if (preg_match($pattern, $image_path, $matches)) {
+            $public_id = $matches[1];
+            return deleteFromCloudinary($public_id);
+        }
+        // Try alternative pattern for direct URLs
+        $parsed_url = parse_url($image_path);
+        $path = ltrim($parsed_url['path'] ?? '', '/');
+        $parts = explode('/', $path);
+        // Find the upload segment and get the path after it
+        $upload_index = array_search('upload', $parts);
+        if ($upload_index !== false && isset($parts[$upload_index + 1])) {
+            // Skip version number if present (starts with v)
+            $start = $upload_index + 1;
+            if (isset($parts[$start]) && strpos($parts[$start], 'v') === 0) {
+                $start++;
+            }
+            if (isset($parts[$start])) {
+                $public_id = implode('/', array_slice($parts, $start));
+                // Remove file extension if present
+                $public_id = preg_replace('/\.[^.]+$/', '', $public_id);
+                return deleteFromCloudinary($public_id);
+            }
+        }
+    }
+    
+    // Local file deletion
     $filename = basename($image_path);
     $full_path = UPLOAD_DIR . $filename;
     
@@ -130,12 +156,43 @@ function deleteProductImage($image_path, $public_id = null) {
         } else {
             error_log('Failed to delete local image: ' . $full_path);
         }
+    } else {
+        error_log('Local image not found for deletion: ' . $full_path);
     }
     
     return false;
 }
 
-// ===== HANDLE FORM SUBMISSIONS =====
+// ============================================
+// HELPER FUNCTION FOR PRODUCT IMAGE URL
+// ============================================
+
+/**
+ * Get product image URL (supports Cloudinary and local)
+ */
+function getProductImageUrl($image_path) {
+    // If no image, return placeholder
+    if (empty($image_path)) {
+        return 'https://wittymart.onrender.com/uploads/products/no-image.png';
+    }
+    
+    // If it's already a full URL (Cloudinary), return it
+    if (strpos($image_path, 'http://') === 0 || strpos($image_path, 'https://') === 0) {
+        return $image_path;
+    }
+    
+    // Clean the path - remove leading slashes and '../'
+    $image_path = ltrim($image_path, '/');
+    $image_path = str_replace('../', '', $image_path);
+    
+    // Return full URL
+    return 'https://wittymart.onrender.com/' . $image_path;
+}
+
+// ============================================
+// HANDLE FORM SUBMISSIONS
+// ============================================
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action'])) {
         switch ($_POST['action']) {
@@ -167,17 +224,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $sku = sanitize($sku);
                     }
                     
-                    // Handle image upload
+                    // Handle image upload with Cloudinary
                     $image_path = '';
-                    $image_url = null;
-                    $image_public_id = null;
-                    
                     if (isset($_FILES['product_image']) && $_FILES['product_image']['error'] === UPLOAD_ERR_OK) {
-                        $upload_result = uploadProductImage($_FILES['product_image']);
+                        $upload_result = uploadProductImageToCloudinary($_FILES['product_image']);
                         if ($upload_result['success']) {
-                            $image_path = $upload_result['path'];
-                            $image_url = $upload_result['url'] ?? null;
-                            $image_public_id = $upload_result['public_id'] ?? null;
+                            // Store the URL or path - prefer Cloudinary URL
+                            $image_path = !empty($upload_result['url']) ? $upload_result['url'] : $upload_result['path'];
                         } else {
                             $message = 'Image upload failed: ' . $upload_result['error'];
                             $messageType = 'error';
@@ -185,11 +238,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     
                     $stmt = $pdo->prepare("
-                        INSERT INTO products (name, description, price, image, image_url, image_public_id, category_id, stock, supplier, sku) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO products (name, description, price, image, category_id, stock, supplier, sku) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ");
                     
-                    if ($stmt->execute([$name, $description, $price, $image_path, $image_url, $image_public_id, $category_id, $stock, $supplier, $sku])) {
+                    if ($stmt->execute([$name, $description, $price, $image_path, $category_id, $stock, $supplier, $sku])) {
                         logActivity(
                             'add_product',
                             'Added product: ' . $name . ' (SKU: ' . $sku . ')',
@@ -213,13 +266,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 try {
                     $id = intval($_POST['id'] ?? 0);
                     
-                    $stmt = $pdo->prepare("SELECT image, image_public_id, name FROM products WHERE id = ?");
+                    $stmt = $pdo->prepare("SELECT image, name FROM products WHERE id = ?");
                     $stmt->execute([$id]);
                     $product = $stmt->fetch();
                     
-                    if ($product) {
-                        // Delete from Cloudinary and local
-                        deleteProductImage($product['image'] ?? '', $product['image_public_id'] ?? null);
+                    if ($product && $product['image']) {
+                        deleteProductImageFromCloudinary($product['image']);
                     }
                     
                     $stmt = $pdo->prepare("DELETE FROM products WHERE id = ?");
@@ -272,45 +324,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $sku = sanitize($sku);
                     }
                     
-                    $stmt = $pdo->prepare("SELECT image, image_public_id FROM products WHERE id = ?");
+                    $stmt = $pdo->prepare("SELECT image FROM products WHERE id = ?");
                     $stmt->execute([$id]);
                     $current = $stmt->fetch();
                     $image_path = $current['image'] ?? '';
-                    $image_public_id = $current['image_public_id'] ?? null;
-                    $image_url = null;
                     
                     if (isset($_FILES['edit_product_image']) && $_FILES['edit_product_image']['error'] === UPLOAD_ERR_OK) {
-                        // Delete old images
-                        deleteProductImage($image_path, $image_public_id);
+                        // Delete old image
+                        if (!empty($image_path)) {
+                            deleteProductImageFromCloudinary($image_path);
+                        }
                         
-                        $upload_result = uploadProductImage($_FILES['edit_product_image']);
+                        $upload_result = uploadProductImageToCloudinary($_FILES['edit_product_image']);
                         if ($upload_result['success']) {
-                            $image_path = $upload_result['path'];
-                            $image_url = $upload_result['url'] ?? null;
-                            $image_public_id = $upload_result['public_id'] ?? null;
+                            $image_path = !empty($upload_result['url']) ? $upload_result['url'] : $upload_result['path'];
                         } else {
                             $message = 'Image upload failed: ' . $upload_result['error'];
                             $messageType = 'error';
                         }
                     }
                     
-                    // Build update query dynamically
-                    $sql = "UPDATE products SET name = ?, description = ?, price = ?, category_id = ?, stock = ?, supplier = ?, sku = ?";
-                    $params = [$name, $description, $price, $category_id, $stock, $supplier, $sku];
+                    $stmt = $pdo->prepare("
+                        UPDATE products 
+                        SET name = ?, description = ?, price = ?, image = ?, category_id = ?, stock = ?, supplier = ?, sku = ?
+                        WHERE id = ?
+                    ");
                     
-                    if ($image_url !== null) {
-                        $sql .= ", image = ?, image_url = ?, image_public_id = ?";
-                        $params[] = $image_path;
-                        $params[] = $image_url;
-                        $params[] = $image_public_id;
-                    }
-                    
-                    $sql .= " WHERE id = ?";
-                    $params[] = $id;
-                    
-                    $stmt = $pdo->prepare($sql);
-                    
-                    if ($stmt->execute($params)) {
+                    if ($stmt->execute([$name, $description, $price, $image_path, $category_id, $stock, $supplier, $sku, $id])) {
                         logActivity(
                             'update_product',
                             'Updated product: ' . $name . ' (ID: ' . $id . ')',
@@ -439,17 +479,15 @@ $page_title = 'Products';
                                     <tr>
                                         <td>
                                             <?php 
-                                            $image_url = getProductImageUrl($product['image'] ?? '', $product['image_url'] ?? null);
+                                            $image_url = getProductImageUrl($product['image'] ?? '');
                                             ?>
                                             <img src="<?php echo htmlspecialchars($image_url); ?>" 
                                                  alt="<?php echo htmlspecialchars($product['name']); ?>" 
                                                  class="product-thumb"
                                                  style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; background: #f0f0f0;"
                                                  onerror="this.src='https://wittymart.onrender.com/uploads/products/no-image.png'">
-                                            <?php if (!empty($product['image_url'])): ?>
-                                                <span style="font-size: 8px; color: #3448C5; display: block; text-align: center;">
-                                                    <i class="fas fa-cloud"></i> Cloud
-                                                </span>
+                                            <?php if (strpos($image_url, 'cloudinary.com') !== false): ?>
+                                                <span style="display: inline-block; font-size: 8px; background: #3448C5; color: #fff; padding: 1px 4px; border-radius: 3px; margin-top: 2px;">Cloud</span>
                                             <?php endif; ?>
                                         </td>
                                         <td><strong><?php echo htmlspecialchars($product['name']); ?></strong></td>
@@ -538,7 +576,7 @@ $page_title = 'Products';
                             <p>No image selected</p>
                         </div>
                     </div>
-                    <small class="form-text text-muted">Supported formats: JPG, PNG, GIF, WEBP. Max size: 5MB. Will be uploaded to Cloudinary.</small>
+                    <small class="form-text text-muted">Supported formats: JPG, PNG, GIF, WEBP. Max size: 5MB</small>
                 </div>
                 
                 <div class="form-group">
@@ -611,7 +649,7 @@ $page_title = 'Products';
                             <i class="fas fa-cloud-upload-alt"></i> Change Image
                         </label>
                     </div>
-                    <small class="form-text text-muted">Leave empty to keep current image. Will be uploaded to Cloudinary.</small>
+                    <small class="form-text text-muted">Leave empty to keep current image</small>
                 </div>
                 
                 <div class="form-group">
@@ -963,6 +1001,12 @@ $page_title = 'Products';
 
         // ===== EDIT PRODUCT =====
         function editProduct(id) {
+            // Show loading state
+            const modal = document.getElementById('editProductModal');
+            if (modal) {
+                // You could show a loading spinner here
+            }
+            
             fetch('includes/ajax.php?action=get_product&id=' + id)
                 .then(response => {
                     if (!response.ok) {
@@ -982,10 +1026,8 @@ $page_title = 'Products';
                         document.getElementById('edit_product_supplier').value = data.product.supplier || '';
                         
                         const imgPreview = document.getElementById('editImagePreview');
-                        if (data.product.image_url) {
-                            imgPreview.innerHTML = `<img src="${data.product.image_url}" alt="Product Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px;"><p>Cloudinary image</p>`;
-                        } else if (data.product.image) {
-                            const imgUrl = 'https://wittymart.onrender.com/' + data.product.image;
+                        if (data.product.image) {
+                            const imgUrl = getProductImageUrl(data.product.image);
                             imgPreview.innerHTML = `<img src="${imgUrl}" alt="Product Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px;"><p>Current image</p>`;
                         } else {
                             imgPreview.innerHTML = `<i class="fas fa-image" style="font-size: 40px; color: #ddd;"></i><p>No image</p>`;
