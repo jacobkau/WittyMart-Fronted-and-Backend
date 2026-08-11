@@ -6,6 +6,30 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 
 // ============================================
+// COMPOSER AUTOLOADER
+// ============================================
+// Load Composer autoloader for Cloudinary and other dependencies
+$autoload_paths = [
+    __DIR__ . '/../vendor/autoload.php',  // From admin folder to root
+    __DIR__ . '/vendor/autoload.php',     // From root folder
+    $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php', // From document root
+];
+
+$autoload_loaded = false;
+foreach ($autoload_paths as $path) {
+    if (file_exists($path)) {
+        require_once $path;
+        $autoload_loaded = true;
+        error_log('Composer autoloader loaded from: ' . $path);
+        break;
+    }
+}
+
+if (!$autoload_loaded) {
+    error_log('Composer autoloader not found. Please run: composer install');
+}
+
+// ============================================
 // SESSION CONFIGURATION
 // ============================================
 if (session_status() === PHP_SESSION_NONE) {
@@ -84,28 +108,48 @@ define('PASSWORD_BCRYPT_COST', 12);
 // ============================================
 
 // Get Cloudinary credentials from environment variables
-define('CLOUDINARY_CLOUD_NAME', getenv('CLOUDINARY_CLOUD_NAME') ?: 'your_cloud_name');
-define('CLOUDINARY_API_KEY', getenv('CLOUDINARY_API_KEY') ?: 'your_api_key');
-define('CLOUDINARY_API_SECRET', getenv('CLOUDINARY_API_SECRET') ?: 'your_api_secret');
+define('CLOUDINARY_CLOUD_NAME', getenv('CLOUDINARY_CLOUD_NAME') ?: '');
+define('CLOUDINARY_API_KEY', getenv('CLOUDINARY_API_KEY') ?: '');
+define('CLOUDINARY_API_SECRET', getenv('CLOUDINARY_API_SECRET') ?: '');
 
-// Initialize Cloudinary (only if class exists)
+// Initialize Cloudinary
+$cloudinary = null;
+
+// Check if Cloudinary class exists (autoloader should be loaded)
 if (class_exists('Cloudinary\Cloudinary')) {
-    // Use statement must be at the top of the file, not here
-    // We'll create the instance directly without the use statement
-    $cloudinary = new Cloudinary\Cloudinary([
-        'cloud' => [
-            'cloud_name' => CLOUDINARY_CLOUD_NAME,
-            'api_key'    => CLOUDINARY_API_KEY,
-            'api_secret' => CLOUDINARY_API_SECRET,
-        ],
-        'url' => [
-            'secure' => true
-        ]
-    ]);
+    // Check if credentials are set
+    if (!empty(CLOUDINARY_CLOUD_NAME) && !empty(CLOUDINARY_API_KEY) && !empty(CLOUDINARY_API_SECRET)) {
+        try {
+            $cloudinary = new Cloudinary\Cloudinary([
+                'cloud' => [
+                    'cloud_name' => CLOUDINARY_CLOUD_NAME,
+                    'api_key'    => CLOUDINARY_API_KEY,
+                    'api_secret' => CLOUDINARY_API_SECRET,
+                ],
+                'url' => [
+                    'secure' => true
+                ]
+            ]);
+            error_log('Cloudinary initialized successfully with cloud: ' . CLOUDINARY_CLOUD_NAME);
+        } catch (Exception $e) {
+            error_log('Cloudinary initialization error: ' . $e->getMessage());
+            $cloudinary = null;
+        }
+    } else {
+        error_log('Cloudinary credentials not set. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET environment variables.');
+        error_log('Current values: CLOUDINARY_CLOUD_NAME=' . CLOUDINARY_CLOUD_NAME . ', API_KEY=' . (CLOUDINARY_API_KEY ? 'set' : 'not set') . ', API_SECRET=' . (CLOUDINARY_API_SECRET ? 'set' : 'not set'));
+    }
 } else {
     // Cloudinary not installed, set to null
     $cloudinary = null;
     error_log('Cloudinary class not found. Please run: composer require cloudinary/cloudinary_php');
+}
+
+// Log Cloudinary status for debugging
+if ($cloudinary) {
+    error_log('Cloudinary is ready to use');
+} else {
+    error_log('Cloudinary is NOT available - using local storage fallback');
 }
 
 // Site paths
