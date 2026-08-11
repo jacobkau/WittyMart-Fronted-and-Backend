@@ -79,6 +79,27 @@ define('ADMIN_URL', SITE_URL . '/admin');
 define('SESSION_TIMEOUT', 1800);
 define('PASSWORD_BCRYPT_COST', 12);
 
+// Get Cloudinary credentials from environment variables
+define('CLOUDINARY_CLOUD_NAME', getenv('CLOUDINARY_CLOUD_NAME'));
+define('CLOUDINARY_API_KEY', getenv('CLOUDINARY_API_KEY'));
+define('CLOUDINARY_API_SECRET', getenv('CLOUDINARY_API_SECRET'));
+
+// Initialize Cloudinary (you need to install cloudinary/cloudinary_php via composer)
+if (class_exists('Cloudinary\Cloudinary')) {
+    use Cloudinary\Cloudinary;
+    
+    $cloudinary = new Cloudinary([
+        'cloud' => [
+            'cloud_name' => CLOUDINARY_CLOUD_NAME,
+            'api_key'    => CLOUDINARY_API_KEY,
+            'api_secret' => CLOUDINARY_API_SECRET,
+        ],
+        'url' => [
+            'secure' => true
+        ]
+    ]);
+}
+
 // Site paths
 define('BASE_URL', 'https://wittymart.onrender.com/');
 define('BASE_PATH', $_SERVER['DOCUMENT_ROOT'] . '/');
