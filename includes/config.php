@@ -3,7 +3,33 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 
-// ===== SESSION CONFIGURATION =====
+// ============================================
+// COMPOSER AUTOLOADER
+// ============================================
+// Load Composer autoloader for Cloudinary and other dependencies
+$autoload_paths = [
+    __DIR__ . '/vendor/autoload.php',           // From root folder
+    __DIR__ . '/../vendor/autoload.php',        // From subfolder
+    $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php', // From document root
+];
+
+$autoload_loaded = false;
+foreach ($autoload_paths as $path) {
+    if (file_exists($path)) {
+        require_once $path;
+        $autoload_loaded = true;
+        error_log('Composer autoloader loaded from: ' . $path);
+        break;
+    }
+}
+
+if (!$autoload_loaded) {
+    error_log('Composer autoloader not found. Please run: composer install');
+}
+
+// ============================================
+// SESSION CONFIGURATION
+// ============================================
 if (session_status() === PHP_SESSION_NONE) {
     ini_set('session.cookie_httponly', 1);
     ini_set('session.use_only_cookies', 1);
@@ -13,6 +39,53 @@ if (session_status() === PHP_SESSION_NONE) {
     }
     
     session_start();
+}
+
+// ============================================
+// CLOUDINARY CONFIGURATION
+// ============================================
+
+// Get Cloudinary credentials from environment variables
+define('CLOUDINARY_CLOUD_NAME', getenv('CLOUDINARY_CLOUD_NAME') ?: '');
+define('CLOUDINARY_API_KEY', getenv('CLOUDINARY_API_KEY') ?: '');
+define('CLOUDINARY_API_SECRET', getenv('CLOUDINARY_API_SECRET') ?: '');
+
+// Initialize Cloudinary
+$cloudinary = null;
+
+// Check if Cloudinary class exists (autoloader should be loaded)
+if (class_exists('Cloudinary\Cloudinary')) {
+    // Check if credentials are set
+    if (!empty(CLOUDINARY_CLOUD_NAME) && !empty(CLOUDINARY_API_KEY) && !empty(CLOUDINARY_API_SECRET)) {
+        try {
+            $cloudinary = new Cloudinary\Cloudinary([
+                'cloud' => [
+                    'cloud_name' => CLOUDINARY_CLOUD_NAME,
+                    'api_key'    => CLOUDINARY_API_KEY,
+                    'api_secret' => CLOUDINARY_API_SECRET,
+                ],
+                'url' => [
+                    'secure' => true
+                ]
+            ]);
+            error_log('Cloudinary initialized successfully with cloud: ' . CLOUDINARY_CLOUD_NAME);
+        } catch (Exception $e) {
+            error_log('Cloudinary initialization error: ' . $e->getMessage());
+            $cloudinary = null;
+        }
+    } else {
+        error_log('Cloudinary credentials not set. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET environment variables.');
+    }
+} else {
+    $cloudinary = null;
+    error_log('Cloudinary class not found. Please run: composer require cloudinary/cloudinary_php');
+}
+
+// Log Cloudinary status for debugging
+if ($cloudinary) {
+    error_log('Cloudinary is ready to use');
+} else {
+    error_log('Cloudinary is NOT available - using local storage fallback');
 }
 
 // Get database URL from environment variable (Render)
@@ -293,6 +366,168 @@ function verifyCSRFToken($token) {
 $csrf_token = generateCSRFToken();
 
 // ============================================
+// IMAGE HELPER FUNCTIONS (UPDATED FOR CLOUDINARY)
+// ============================================
+
+/**
+ * Get product image URL with Cloudinary support
+ * @param string|array $image - Image filename or product array
+ * @param string|null $image_url - Cloudinary URL (if available)
+ * @return string - Full image URL
+ */
+function getProductImage($image, $image_url = null) {
+    // If image_url is provided directly (for individual calls)
+    if (!empty($image_url)) {
+        return $image_url;
+    }
+    
+    // If $image is an array (product data), check for image_url field
+    if (is_array($image)) {
+        if (!empty($image['image_url'])) {
+            return $image['image_url'];
+        }
+        $image_name = $image['image'] ?? null;
+    } else {
+        // $image is a string (filename)
+        $image_name = $image;
+    }
+    
+    // Fallback to local image
+    if (!empty($image_name) && file_exists(UPLOAD_DIR . $image_name)) {
+        return UPLOAD_URL . $image_name;
+    }
+    
+    // Default no-image placeholder
+    return UPLOAD_URL . 'no-image.png';
+}
+
+/**
+ * Get product image URL with Cloudinary support (for product arrays)
+ * @param array $product - Product data array
+ * @return string - Full image URL
+ */
+function getProductImageUrl($product) {
+    if (!is_array($product)) {
+        return UPLOAD_URL . 'no-image.png';
+    }
+    
+    // Check for Cloudinary URL first
+    if (!empty($product['image_url'])) {
+        return $product['image_url'];
+    }
+    
+    // Fallback to local image
+    if (!empty($product['image']) && file_exists(UPLOAD_DIR . $product['image'])) {
+        return UPLOAD_URL . $product['image'];
+    }
+    
+    // Default no-image placeholder
+    return UPLOAD_URL . 'no-image.png';
+}
+
+/**
+ * Upload image to Cloudinary (if available) or local storage
+ * @param string $file_path - Temporary file path
+ * @param string $folder - Folder name in Cloudinary
+ * @return array - Upload result with URL and public_id
+ */
+function uploadProductImage($file_path, $folder = 'products') {
+    global $cloudinary;
+    
+    $result = [
+        'success' => false,
+        'image_name' => null,
+        'image_url' => null,
+        'image_public_id' => null,
+        'error' => null
+    ];
+    
+    // Generate a unique filename for local storage
+    $image_name = time() . '_' . basename($file_path);
+    
+    // Try Cloudinary first if available
+    if ($cloudinary) {
+        try {
+            $public_id = $folder . '/' . time() . '_' . pathinfo(basename($file_path), PATHINFO_FILENAME);
+            
+            $upload_result = $cloudinary->uploadApi()->upload(
+                $file_path,
+                [
+                    'public_id' => $public_id,
+                    'folder' => $folder,
+                    'quality' => 'auto:best',
+                    'fetch_format' => 'auto',
+                    'transformation' => [
+                        ['width' => 800, 'height' => 800, 'crop' => 'limit', 'quality' => 'auto']
+                    ]
+                ]
+            );
+            
+            $result['success'] = true;
+            $result['image_url'] = $upload_result['secure_url'];
+            $result['image_public_id'] = $upload_result['public_id'];
+            $result['image_name'] = $image_name; // Keep for fallback
+            
+            error_log('Cloudinary upload successful: ' . $upload_result['public_id']);
+            
+            // Also save locally as fallback
+            $upload_path = UPLOAD_DIR . $image_name;
+            move_uploaded_file($file_path, $upload_path);
+            
+            return $result;
+        } catch (Exception $e) {
+            error_log('Cloudinary upload error: ' . $e->getMessage());
+            $result['error'] = $e->getMessage();
+            // Fall through to local upload
+        }
+    }
+    
+    // Fallback to local upload
+    if (!file_exists(UPLOAD_DIR)) {
+        mkdir(UPLOAD_DIR, 0777, true);
+    }
+    
+    $upload_path = UPLOAD_DIR . $image_name;
+    if (move_uploaded_file($file_path, $upload_path)) {
+        $result['success'] = true;
+        $result['image_name'] = $image_name;
+        $result['image_url'] = UPLOAD_URL . $image_name;
+        error_log('Local upload successful: ' . $image_name);
+    } else {
+        $result['error'] = 'Failed to upload file locally';
+        error_log('Local upload failed for: ' . $image_name);
+    }
+    
+    return $result;
+}
+
+/**
+ * Delete image from Cloudinary (if available)
+ * @param string $public_id - Cloudinary public ID
+ * @return bool - Success status
+ */
+function deleteCloudinaryImage($public_id) {
+    global $cloudinary;
+    
+    if (empty($public_id)) {
+        return true;
+    }
+    
+    if (!$cloudinary) {
+        return true; // Cloudinary not available, nothing to delete
+    }
+    
+    try {
+        $result = $cloudinary->uploadApi()->destroy($public_id);
+        error_log('Cloudinary delete successful: ' . $public_id);
+        return true;
+    } catch (Exception $e) {
+        error_log('Cloudinary delete error: ' . $e->getMessage());
+        return false;
+    }
+}
+
+// ============================================
 // SMART PICKS FUNCTIONS
 // ============================================
 
@@ -340,16 +575,6 @@ function getProductById($product_id) {
     }
 }
 
-/**
- * Get product image URL
- */
-function getProductImage($image_name) {
-    if (empty($image_name) || !file_exists(UPLOAD_DIR . $image_name)) {
-        return UPLOAD_URL . 'no-image.png';
-    }
-    return UPLOAD_URL . $image_name;
-}
-
 // ============================================
 // CART FUNCTIONS
 // ============================================
@@ -363,7 +588,7 @@ function getCartItems() {
     
     try {
         $stmt = $pdo->prepare("
-            SELECT c.*, p.name, p.price, p.image 
+            SELECT c.*, p.name, p.price, p.image, p.image_url 
             FROM cart c
             INNER JOIN products p ON c.product_id = p.id
             WHERE c.user_id = ?
