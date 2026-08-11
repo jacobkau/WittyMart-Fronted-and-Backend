@@ -18,13 +18,7 @@ try {
     $products = [];
 }
 
-// Helper function for product image
-function getProductImageUrl($image_path) {
-    if (empty($image_path)) {
-        return 'uploads/products/no-image.png';
-    }
-    return $image_path;
-}
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
