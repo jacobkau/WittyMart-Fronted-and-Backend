@@ -1,6 +1,6 @@
 <?php
 
-require_once __DIR__ . '/includes/config.php';
+require_once 'config.php';
 
 /**
  * Upload image to Cloudinary
