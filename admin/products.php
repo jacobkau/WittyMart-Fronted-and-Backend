@@ -118,7 +118,6 @@ function deleteProductImageFromCloudinary($image_path) {
     // Check if it's a Cloudinary URL by looking for cloudinary.com in the path
     if (strpos($image_path, 'cloudinary.com') !== false) {
         // Try to extract public_id from URL
-        // This assumes the URL format: https://res.cloudinary.com/cloud_name/image/upload/v1234567890/folder/public_id.jpg
         $pattern = '/\/upload\/(?:v\d+\/)?([^\/]+\/[^\/]+)(?:\.[^.]+)?$/';
         if (preg_match($pattern, $image_path, $matches)) {
             $public_id = $matches[1];
@@ -128,17 +127,14 @@ function deleteProductImageFromCloudinary($image_path) {
         $parsed_url = parse_url($image_path);
         $path = ltrim($parsed_url['path'] ?? '', '/');
         $parts = explode('/', $path);
-        // Find the upload segment and get the path after it
         $upload_index = array_search('upload', $parts);
         if ($upload_index !== false && isset($parts[$upload_index + 1])) {
-            // Skip version number if present (starts with v)
             $start = $upload_index + 1;
             if (isset($parts[$start]) && strpos($parts[$start], 'v') === 0) {
                 $start++;
             }
             if (isset($parts[$start])) {
                 $public_id = implode('/', array_slice($parts, $start));
-                // Remove file extension if present
                 $public_id = preg_replace('/\.[^.]+$/', '', $public_id);
                 return deleteFromCloudinary($public_id);
             }
@@ -163,31 +159,6 @@ function deleteProductImageFromCloudinary($image_path) {
     return false;
 }
 
-// ============================================
-// HELPER FUNCTION FOR PRODUCT IMAGE URL
-// ============================================
-
-/**
- * Get product image URL (supports Cloudinary and local)
- */
-function getProductImageUrl($image_path) {
-    // If no image, return placeholder
-    if (empty($image_path)) {
-        return 'https://wittymart.onrender.com/uploads/products/no-image.png';
-    }
-    
-    // If it's already a full URL (Cloudinary), return it
-    if (strpos($image_path, 'http://') === 0 || strpos($image_path, 'https://') === 0) {
-        return $image_path;
-    }
-    
-    // Clean the path - remove leading slashes and '../'
-    $image_path = ltrim($image_path, '/');
-    $image_path = str_replace('../', '', $image_path);
-    
-    // Return full URL
-    return 'https://wittymart.onrender.com/' . $image_path;
-}
 
 // ============================================
 // HANDLE FORM SUBMISSIONS
