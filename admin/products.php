@@ -5,22 +5,28 @@ ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
 require_once 'includes/config.php';
+require_once 'includes/cloudinary_helper.php'; 
 
 requireAdmin();
 
-global $pdo;
+global $pdo, $cloudinary;
 
 $message = '';
 $messageType = '';
 
-// ===== IMAGE UPLOAD DIRECTORY =====
-$upload_dir = UPLOAD_DIR; // Use the constant from config.php
+// ===== IMAGE UPLOAD DIRECTORY (Fallback) =====
+$upload_dir = UPLOAD_DIR;
 if (!file_exists($upload_dir)) {
     mkdir($upload_dir, 0777, true);
 }
 
-// ===== HELPER FUNCTION FOR PRODUCT IMAGE URL =====
-function getProductImageUrl($image_path) {
+// ===== HELPER FUNCTION FOR PRODUCT IMAGE URL (Cloudinary Support) =====
+function getProductImageUrl($image_path, $image_url = null) {
+    // If Cloudinary URL exists, use it
+    if (!empty($image_url)) {
+        return $image_url;
+    }
+    
     // Base URL from config
     $base_url = 'https://wittymart.onrender.com/';
     
@@ -42,9 +48,9 @@ function getProductImageUrl($image_path) {
     return $base_url . $image_path;
 }
 
-// ===== UPLOAD IMAGE FUNCTION =====
+// ===== UPLOAD IMAGE FUNCTION (With Cloudinary Support) =====
 function uploadProductImage($file) {
-    $upload_dir = UPLOAD_DIR;
+    global $cloudinary;
     
     // Validate file
     if (!isset($file) || $file['error'] !== UPLOAD_ERR_OK) {
@@ -63,22 +69,58 @@ function uploadProductImage($file) {
         return ['success' => false, 'path' => '', 'error' => 'File size exceeds 5MB limit.'];
     }
     
-    // Generate unique filename
+    // Generate unique filename for local storage
     $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
     $filename = time() . '_' . uniqid() . '.' . $extension;
     $filename = preg_replace('/[^a-zA-Z0-9._-]/', '', $filename);
     
-    // Full path for saving
-    $target_path = $upload_dir . $filename;
+    // Try Cloudinary first if available
+    if ($cloudinary) {
+        try {
+            $public_id = 'products/' . time() . '_' . pathinfo(basename($file['name']), PATHINFO_FILENAME);
+            
+            $upload_result = $cloudinary->uploadApi()->upload(
+                $file['tmp_name'],
+                [
+                    'public_id' => $public_id,
+                    'folder' => 'products',
+                    'quality' => 'auto:best',
+                    'fetch_format' => 'auto',
+                    'transformation' => [
+                        ['width' => 800, 'height' => 800, 'crop' => 'limit', 'quality' => 'auto']
+                    ]
+                ]
+            );
+            
+            error_log('Cloudinary upload successful: ' . $upload_result['public_id']);
+            
+            // Also save locally as fallback
+            $target_path = UPLOAD_DIR . $filename;
+            move_uploaded_file($file['tmp_name'], $target_path);
+            
+            return [
+                'success' => true,
+                'path' => 'uploads/products/' . $filename,
+                'full_path' => $target_path,
+                'url' => $upload_result['secure_url'],
+                'public_id' => $upload_result['public_id']
+            ];
+        } catch (Exception $e) {
+            error_log('Cloudinary upload error: ' . $e->getMessage());
+            // Fall through to local upload
+        }
+    }
     
-    // Move uploaded file
+    // Fallback to local upload
+    $target_path = UPLOAD_DIR . $filename;
     if (move_uploaded_file($file['tmp_name'], $target_path)) {
         error_log('File uploaded successfully to: ' . $target_path);
         return [
             'success' => true,
             'path' => 'uploads/products/' . $filename,
             'full_path' => $target_path,
-            'url' => 'https://wittymart.onrender.com/uploads/products/' . $filename
+            'url' => 'https://wittymart.onrender.com/uploads/products/' . $filename,
+            'public_id' => null
         ];
     } else {
         error_log('Failed to move uploaded file to: ' . $target_path);
@@ -86,25 +128,35 @@ function uploadProductImage($file) {
     }
 }
 
-// ===== DELETE IMAGE FUNCTION =====
-function deleteProductImage($image_path) {
+// ===== DELETE IMAGE FUNCTION (With Cloudinary Support) =====
+function deleteProductImage($image_path, $public_id = null) {
+    global $cloudinary;
+    
+    // Delete from Cloudinary if public_id exists
+    if (!empty($public_id) && $cloudinary) {
+        try {
+            $cloudinary->uploadApi()->destroy($public_id);
+            error_log('Cloudinary image deleted: ' . $public_id);
+        } catch (Exception $e) {
+            error_log('Cloudinary delete error: ' . $e->getMessage());
+        }
+    }
+    
+    // Delete local file
     if (empty($image_path)) {
         return true;
     }
     
-    // Get just the filename
     $filename = basename($image_path);
     $full_path = UPLOAD_DIR . $filename;
     
     if (file_exists($full_path) && is_file($full_path)) {
         if (unlink($full_path)) {
-            error_log('Deleted image: ' . $full_path);
+            error_log('Deleted local image: ' . $full_path);
             return true;
         } else {
-            error_log('Failed to delete image: ' . $full_path);
+            error_log('Failed to delete local image: ' . $full_path);
         }
-    } else {
-        error_log('Image not found for deletion: ' . $full_path);
     }
     
     return false;
@@ -144,10 +196,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     
                     // Handle image upload
                     $image_path = '';
+                    $image_url = null;
+                    $image_public_id = null;
+                    
                     if (isset($_FILES['product_image']) && $_FILES['product_image']['error'] === UPLOAD_ERR_OK) {
                         $upload_result = uploadProductImage($_FILES['product_image']);
                         if ($upload_result['success']) {
                             $image_path = $upload_result['path'];
+                            $image_url = $upload_result['url'] ?? null;
+                            $image_public_id = $upload_result['public_id'] ?? null;
                         } else {
                             $message = 'Image upload failed: ' . $upload_result['error'];
                             $messageType = 'error';
@@ -155,11 +212,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     
                     $stmt = $pdo->prepare("
-                        INSERT INTO products (name, description, price, image, category_id, stock, supplier, sku) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO products (name, description, price, image, image_url, image_public_id, category_id, stock, supplier, sku) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ");
                     
-                    if ($stmt->execute([$name, $description, $price, $image_path, $category_id, $stock, $supplier, $sku])) {
+                    if ($stmt->execute([$name, $description, $price, $image_path, $image_url, $image_public_id, $category_id, $stock, $supplier, $sku])) {
                         logActivity(
                             'add_product',
                             'Added product: ' . $name . ' (SKU: ' . $sku . ')',
@@ -183,12 +240,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 try {
                     $id = intval($_POST['id'] ?? 0);
                     
-                    $stmt = $pdo->prepare("SELECT image, name FROM products WHERE id = ?");
+                    $stmt = $pdo->prepare("SELECT image, image_public_id, name FROM products WHERE id = ?");
                     $stmt->execute([$id]);
                     $product = $stmt->fetch();
                     
-                    if ($product && $product['image']) {
-                        deleteProductImage($product['image']);
+                    if ($product) {
+                        // Delete from Cloudinary and local
+                        deleteProductImage($product['image'] ?? '', $product['image_public_id'] ?? null);
                     }
                     
                     $stmt = $pdo->prepare("DELETE FROM products WHERE id = ?");
@@ -241,32 +299,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $sku = sanitize($sku);
                     }
                     
-                    $stmt = $pdo->prepare("SELECT image FROM products WHERE id = ?");
+                    $stmt = $pdo->prepare("SELECT image, image_public_id FROM products WHERE id = ?");
                     $stmt->execute([$id]);
                     $current = $stmt->fetch();
                     $image_path = $current['image'] ?? '';
+                    $image_public_id = $current['image_public_id'] ?? null;
+                    $image_url = null;
                     
                     if (isset($_FILES['edit_product_image']) && $_FILES['edit_product_image']['error'] === UPLOAD_ERR_OK) {
+                        // Delete old images
+                        deleteProductImage($image_path, $image_public_id);
+                        
                         $upload_result = uploadProductImage($_FILES['edit_product_image']);
                         if ($upload_result['success']) {
-                            // Delete old image
-                            if (!empty($image_path)) {
-                                deleteProductImage($image_path);
-                            }
                             $image_path = $upload_result['path'];
+                            $image_url = $upload_result['url'] ?? null;
+                            $image_public_id = $upload_result['public_id'] ?? null;
                         } else {
                             $message = 'Image upload failed: ' . $upload_result['error'];
                             $messageType = 'error';
                         }
                     }
                     
-                    $stmt = $pdo->prepare("
-                        UPDATE products 
-                        SET name = ?, description = ?, price = ?, image = ?, category_id = ?, stock = ?, supplier = ?, sku = ?
-                        WHERE id = ?
-                    ");
+                    // Build update query dynamically
+                    $sql = "UPDATE products SET name = ?, description = ?, price = ?, category_id = ?, stock = ?, supplier = ?, sku = ?";
+                    $params = [$name, $description, $price, $category_id, $stock, $supplier, $sku];
                     
-                    if ($stmt->execute([$name, $description, $price, $image_path, $category_id, $stock, $supplier, $sku, $id])) {
+                    if ($image_url !== null) {
+                        $sql .= ", image = ?, image_url = ?, image_public_id = ?";
+                        $params[] = $image_path;
+                        $params[] = $image_url;
+                        $params[] = $image_public_id;
+                    }
+                    
+                    $sql .= " WHERE id = ?";
+                    $params[] = $id;
+                    
+                    $stmt = $pdo->prepare($sql);
+                    
+                    if ($stmt->execute($params)) {
                         logActivity(
                             'update_product',
                             'Updated product: ' . $name . ' (ID: ' . $id . ')',
@@ -395,13 +466,18 @@ $page_title = 'Products';
                                     <tr>
                                         <td>
                                             <?php 
-                                            $image_url = getProductImageUrl($product['image'] ?? '');
+                                            $image_url = getProductImageUrl($product['image'] ?? '', $product['image_url'] ?? null);
                                             ?>
                                             <img src="<?php echo htmlspecialchars($image_url); ?>" 
                                                  alt="<?php echo htmlspecialchars($product['name']); ?>" 
                                                  class="product-thumb"
                                                  style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; background: #f0f0f0;"
                                                  onerror="this.src='https://wittymart.onrender.com/uploads/products/no-image.png'">
+                                            <?php if (!empty($product['image_url'])): ?>
+                                                <span style="font-size: 8px; color: #3448C5; display: block; text-align: center;">
+                                                    <i class="fas fa-cloud"></i> Cloud
+                                                </span>
+                                            <?php endif; ?>
                                         </td>
                                         <td><strong><?php echo htmlspecialchars($product['name']); ?></strong></td>
                                         <td><code><?php echo htmlspecialchars($product['sku'] ?? 'N/A'); ?></code></td>
@@ -489,7 +565,7 @@ $page_title = 'Products';
                             <p>No image selected</p>
                         </div>
                     </div>
-                    <small class="form-text text-muted">Supported formats: JPG, PNG, GIF, WEBP. Max size: 5MB</small>
+                    <small class="form-text text-muted">Supported formats: JPG, PNG, GIF, WEBP. Max size: 5MB. Will be uploaded to Cloudinary.</small>
                 </div>
                 
                 <div class="form-group">
@@ -562,7 +638,7 @@ $page_title = 'Products';
                             <i class="fas fa-cloud-upload-alt"></i> Change Image
                         </label>
                     </div>
-                    <small class="form-text text-muted">Leave empty to keep current image</small>
+                    <small class="form-text text-muted">Leave empty to keep current image. Will be uploaded to Cloudinary.</small>
                 </div>
                 
                 <div class="form-group">
@@ -912,50 +988,46 @@ $page_title = 'Products';
             }
         }
 
-       // ===== EDIT PRODUCT =====
-function editProduct(id) {
-    // Show loading state
-    const modal = document.getElementById('editProductModal');
-    if (modal) {
-        // You could show a loading spinner here
-    }
-    
-    fetch('includes/ajax.php?action=get_product&id=' + id)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok: ' + response.status);
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.success) {
-                document.getElementById('edit_product_id').value = data.product.id;
-                document.getElementById('edit_product_name').value = data.product.name || '';
-                document.getElementById('edit_product_description').value = data.product.description || '';
-                document.getElementById('edit_product_price').value = data.product.price || 0;
-                document.getElementById('edit_product_category').value = data.product.category_id || '';
-                document.getElementById('edit_product_stock').value = data.product.stock || 0;
-                document.getElementById('edit_product_sku').value = data.product.sku || '';
-                document.getElementById('edit_product_supplier').value = data.product.supplier || '';
-                
-                const imgPreview = document.getElementById('editImagePreview');
-                if (data.product.image) {
-                    const imgUrl = 'https://wittymart.onrender.com/' + data.product.image;
-                    imgPreview.innerHTML = `<img src="${imgUrl}" alt="Product Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px;"><p>Current image</p>`;
-                } else {
-                    imgPreview.innerHTML = `<i class="fas fa-image" style="font-size: 40px; color: #ddd;"></i><p>No image</p>`;
-                }
-                
-                openModal('editProductModal');
-            } else {
-                alert('Failed to load product data: ' + (data.message || 'Unknown error'));
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Error loading product data. Please check the console for details.\n\n' + error.message);
-        });
-}
+        // ===== EDIT PRODUCT =====
+        function editProduct(id) {
+            fetch('includes/ajax.php?action=get_product&id=' + id)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok: ' + response.status);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('edit_product_id').value = data.product.id;
+                        document.getElementById('edit_product_name').value = data.product.name || '';
+                        document.getElementById('edit_product_description').value = data.product.description || '';
+                        document.getElementById('edit_product_price').value = data.product.price || 0;
+                        document.getElementById('edit_product_category').value = data.product.category_id || '';
+                        document.getElementById('edit_product_stock').value = data.product.stock || 0;
+                        document.getElementById('edit_product_sku').value = data.product.sku || '';
+                        document.getElementById('edit_product_supplier').value = data.product.supplier || '';
+                        
+                        const imgPreview = document.getElementById('editImagePreview');
+                        if (data.product.image_url) {
+                            imgPreview.innerHTML = `<img src="${data.product.image_url}" alt="Product Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px;"><p>Cloudinary image</p>`;
+                        } else if (data.product.image) {
+                            const imgUrl = 'https://wittymart.onrender.com/' + data.product.image;
+                            imgPreview.innerHTML = `<img src="${imgUrl}" alt="Product Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px;"><p>Current image</p>`;
+                        } else {
+                            imgPreview.innerHTML = `<i class="fas fa-image" style="font-size: 40px; color: #ddd;"></i><p>No image</p>`;
+                        }
+                        
+                        openModal('editProductModal');
+                    } else {
+                        alert('Failed to load product data: ' + (data.message || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error loading product data. Please check the console for details.\n\n' + error.message);
+                });
+        }
 
         // ===== AUTO-HIDE ALERTS =====
         setTimeout(() => {
