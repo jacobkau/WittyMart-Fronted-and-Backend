@@ -79,16 +79,20 @@ define('ADMIN_URL', SITE_URL . '/admin');
 define('SESSION_TIMEOUT', 1800);
 define('PASSWORD_BCRYPT_COST', 12);
 
-// Get Cloudinary credentials from environment variables
-define('CLOUDINARY_CLOUD_NAME', getenv('CLOUDINARY_CLOUD_NAME'));
-define('CLOUDINARY_API_KEY', getenv('CLOUDINARY_API_KEY'));
-define('CLOUDINARY_API_SECRET', getenv('CLOUDINARY_API_SECRET'));
+// ============================================
+// CLOUDINARY CONFIGURATION
+// ============================================
 
-// Initialize Cloudinary (you need to install cloudinary/cloudinary_php via composer)
+// Get Cloudinary credentials from environment variables
+define('CLOUDINARY_CLOUD_NAME', getenv('CLOUDINARY_CLOUD_NAME') ?: 'your_cloud_name');
+define('CLOUDINARY_API_KEY', getenv('CLOUDINARY_API_KEY') ?: 'your_api_key');
+define('CLOUDINARY_API_SECRET', getenv('CLOUDINARY_API_SECRET') ?: 'your_api_secret');
+
+// Initialize Cloudinary (only if class exists)
 if (class_exists('Cloudinary\Cloudinary')) {
-    use Cloudinary\Cloudinary;
-    
-    $cloudinary = new Cloudinary([
+    // Use statement must be at the top of the file, not here
+    // We'll create the instance directly without the use statement
+    $cloudinary = new Cloudinary\Cloudinary([
         'cloud' => [
             'cloud_name' => CLOUDINARY_CLOUD_NAME,
             'api_key'    => CLOUDINARY_API_KEY,
@@ -98,6 +102,10 @@ if (class_exists('Cloudinary\Cloudinary')) {
             'secure' => true
         ]
     ]);
+} else {
+    // Cloudinary not installed, set to null
+    $cloudinary = null;
+    error_log('Cloudinary class not found. Please run: composer require cloudinary/cloudinary_php');
 }
 
 // Site paths
