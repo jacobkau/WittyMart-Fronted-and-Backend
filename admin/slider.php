@@ -1,5 +1,6 @@
 <?php
 require_once 'includes/config.php';
+require_once 'includes/cloudinary_helper.php'; // Add Cloudinary helper
 requireAdmin();
 
 global $pdo;
@@ -7,7 +8,180 @@ global $pdo;
 $message = '';
 $messageType = '';
 
-// Handle CRUD operations
+// ============================================
+// CLOUDINARY IMAGE FUNCTIONS FOR SLIDER
+// ============================================
+
+/**
+ * Upload slider image to Cloudinary (with local fallback)
+ */
+function uploadSliderImageToCloudinary($file, $folder = 'slider') {
+    global $cloudinary;
+    
+    $result = [
+        'success' => false,
+        'path' => '',
+        'url' => '',
+        'public_id' => '',
+        'error' => ''
+    ];
+    
+    // Validate file
+    if (!isset($file) || $file['error'] !== UPLOAD_ERR_OK) {
+        $result['error'] = 'No file uploaded or upload error.';
+        return $result;
+    }
+    
+    // Validate file type
+    $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    $file_type = mime_content_type($file['tmp_name']);
+    if (!in_array($file_type, $allowed_types)) {
+        $result['error'] = 'Invalid file type. Only JPG, PNG, GIF, and WEBP are allowed.';
+        return $result;
+    }
+    
+    // Validate file size (5MB max)
+    if ($file['size'] > 5 * 1024 * 1024) {
+        $result['error'] = 'File size exceeds 5MB limit.';
+        return $result;
+    }
+    
+    // Generate unique filename for local storage
+    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+    $filename = time() . '_' . uniqid() . '.' . $extension;
+    $filename = preg_replace('/[^a-zA-Z0-9._-]/', '', $filename);
+    
+    // Try Cloudinary first if available
+    if ($cloudinary) {
+        try {
+            $upload_result = uploadToCloudinary($file['tmp_name'], $folder);
+            
+            if ($upload_result['success']) {
+                $result['success'] = true;
+                $result['url'] = $upload_result['url'];
+                $result['public_id'] = $upload_result['public_id'];
+                $result['path'] = 'uploads/slider/' . $filename; // Keep for fallback
+                
+                // Also save locally as fallback
+                $upload_dir = '../uploads/slider/';
+                if (!file_exists($upload_dir)) {
+                    mkdir($upload_dir, 0777, true);
+                }
+                $target_path = $upload_dir . $filename;
+                move_uploaded_file($file['tmp_name'], $target_path);
+                
+                error_log('Cloudinary slider upload successful: ' . $upload_result['public_id']);
+                return $result;
+            } else {
+                error_log('Cloudinary slider upload failed: ' . ($upload_result['error'] ?? 'Unknown error'));
+                // Fall through to local upload
+            }
+        } catch (Exception $e) {
+            error_log('Cloudinary slider upload exception: ' . $e->getMessage());
+            // Fall through to local upload
+        }
+    }
+    
+    // Fallback to local upload
+    $upload_dir = '../uploads/slider/';
+    if (!file_exists($upload_dir)) {
+        mkdir($upload_dir, 0777, true);
+    }
+    $target_path = $upload_dir . $filename;
+    
+    if (move_uploaded_file($file['tmp_name'], $target_path)) {
+        $result['success'] = true;
+        $result['path'] = 'uploads/slider/' . $filename;
+        $result['url'] = BASE_URL . 'uploads/slider/' . $filename;
+        error_log('Local slider upload successful: ' . $filename);
+    } else {
+        $result['error'] = 'Failed to save file locally.';
+        error_log('Failed to move slider uploaded file to: ' . $target_path);
+    }
+    
+    return $result;
+}
+
+/**
+ * Delete slider image from Cloudinary (if exists)
+ */
+function deleteSliderImageFromCloudinary($image_path) {
+    global $cloudinary;
+    
+    if (empty($image_path)) {
+        return true;
+    }
+    
+    // Check if it's a Cloudinary URL by looking for cloudinary.com in the path
+    if (strpos($image_path, 'cloudinary.com') !== false) {
+        // Try to extract public_id from URL
+        $pattern = '/\/upload\/(?:v\d+\/)?([^\/]+\/[^\/]+)(?:\.[^.]+)?$/';
+        if (preg_match($pattern, $image_path, $matches)) {
+            $public_id = $matches[1];
+            return deleteFromCloudinary($public_id);
+        }
+        // Try alternative pattern for direct URLs
+        $parsed_url = parse_url($image_path);
+        $path = ltrim($parsed_url['path'] ?? '', '/');
+        $parts = explode('/', $path);
+        $upload_index = array_search('upload', $parts);
+        if ($upload_index !== false && isset($parts[$upload_index + 1])) {
+            $start = $upload_index + 1;
+            if (isset($parts[$start]) && strpos($parts[$start], 'v') === 0) {
+                $start++;
+            }
+            if (isset($parts[$start])) {
+                $public_id = implode('/', array_slice($parts, $start));
+                $public_id = preg_replace('/\.[^.]+$/', '', $public_id);
+                return deleteFromCloudinary($public_id);
+            }
+        }
+    }
+    
+    // Local file deletion
+    $relative_path = ltrim($image_path, '/');
+    $full_path = '../' . $relative_path;
+    
+    if (file_exists($full_path) && is_file($full_path)) {
+        if (unlink($full_path)) {
+            error_log('Deleted local slider image: ' . $full_path);
+            return true;
+        } else {
+            error_log('Failed to delete local slider image: ' . $full_path);
+        }
+    } else {
+        error_log('Local slider image not found for deletion: ' . $full_path);
+    }
+    
+    return false;
+}
+
+/**
+ * Get slider image URL (supports Cloudinary and local)
+ */
+function getSliderImageUrl($image_path) {
+    // If no image, return placeholder
+    if (empty($image_path)) {
+        return BASE_URL . 'uploads/slider/default-slide.jpg';
+    }
+    
+    // If it's already a full URL (Cloudinary), return it
+    if (strpos($image_path, 'http://') === 0 || strpos($image_path, 'https://') === 0) {
+        return $image_path;
+    }
+    
+    // Clean the path - remove leading slashes and '../'
+    $image_path = ltrim($image_path, '/');
+    $image_path = str_replace('../', '', $image_path);
+    
+    // Return full URL
+    return BASE_URL . $image_path;
+}
+
+// ============================================
+// HANDLE CRUD OPERATIONS
+// ============================================
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     
@@ -21,18 +195,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $display_order = intval($_POST['display_order'] ?? 0);
                 $status = sanitize($_POST['status'] ?? 'active');
                 
-                // Handle image upload
+                // Handle image upload with Cloudinary
                 $image_path = '';
                 if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                    $upload_dir = '../uploads/slider/';
-                    if (!file_exists($upload_dir)) {
-                        mkdir($upload_dir, 0777, true);
-                    }
-                    $image_name = time() . '_' . basename($_FILES['image']['name']);
-                    $upload_path = $upload_dir . $image_name;
-                    
-                    if (move_uploaded_file($_FILES['image']['tmp_name'], $upload_path)) {
-                        $image_path = 'uploads/slider/' . $image_name;
+                    $upload_result = uploadSliderImageToCloudinary($_FILES['image']);
+                    if ($upload_result['success']) {
+                        // Store the URL or path - prefer Cloudinary URL
+                        $image_path = !empty($upload_result['url']) ? $upload_result['url'] : $upload_result['path'];
+                    } else {
+                        $message = 'Image upload failed: ' . $upload_result['error'];
+                        $messageType = 'error';
                     }
                 }
                 
@@ -61,19 +233,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 $image_path = $_POST['current_image'] ?? '';
                 if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                    $upload_dir = '../uploads/slider/';
-                    if (!file_exists($upload_dir)) {
-                        mkdir($upload_dir, 0777, true);
+                    // Delete old image if exists
+                    if (!empty($image_path)) {
+                        deleteSliderImageFromCloudinary($image_path);
                     }
-                    $image_name = time() . '_' . basename($_FILES['image']['name']);
-                    $upload_path = $upload_dir . $image_name;
                     
-                    if (move_uploaded_file($_FILES['image']['tmp_name'], $upload_path)) {
-                        // Delete old image
-                        if ($image_path && file_exists('../' . $image_path)) {
-                            unlink('../' . $image_path);
-                        }
-                        $image_path = 'uploads/slider/' . $image_name;
+                    $upload_result = uploadSliderImageToCloudinary($_FILES['image']);
+                    if ($upload_result['success']) {
+                        $image_path = !empty($upload_result['url']) ? $upload_result['url'] : $upload_result['path'];
+                    } else {
+                        $message = 'Image upload failed: ' . $upload_result['error'];
+                        $messageType = 'error';
                     }
                 }
                 
@@ -98,8 +268,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([$id]);
                 $slider = $stmt->fetch();
                 
-                if ($slider && $slider['image_path'] && file_exists('../' . $slider['image_path'])) {
-                    unlink('../' . $slider['image_path']);
+                if ($slider && $slider['image_path']) {
+                    deleteSliderImageFromCloudinary($slider['image_path']);
                 }
                 
                 $stmt = $pdo->prepare("DELETE FROM slider_images WHERE id = ?");
@@ -213,6 +383,15 @@ $page_title = 'Manage Slider';
             object-fit: cover;
             border-radius: 4px;
         }
+        .cloudinary-badge {
+            display: inline-block;
+            font-size: 8px;
+            background: #3448C5;
+            color: #fff;
+            padding: 1px 6px;
+            border-radius: 3px;
+            margin-top: 2px;
+        }
         /* Modal Styles */
         .modal {
             display: none;
@@ -304,6 +483,37 @@ $page_title = 'Manage Slider';
         .admin-table tr:hover {
             background: #f8f9fa;
         }
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        .file-input-wrapper .btn-secondary {
+            background: #f8f9fa;
+            border: 2px dashed #ccc;
+            padding: 10px 20px;
+            border-radius: 8px;
+            width: 100%;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #555;
+        }
+        .file-input-wrapper .btn-secondary:hover {
+            background: #e8f5f0;
+            border-color: #05573c;
+            color: #05573c;
+        }
     </style>
 </head>
 <body>
@@ -342,8 +552,12 @@ $page_title = 'Manage Slider';
                                 <?php foreach ($sliders as $slide): ?>
                                     <tr>
                                         <td>
-                                            <img src="../<?php echo $slide['image_path']; ?>" 
-                                                 alt="<?php echo htmlspecialchars($slide['title']); ?>">
+                                            <img src="<?php echo htmlspecialchars(getSliderImageUrl($slide['image_path'])); ?>" 
+                                                 alt="<?php echo htmlspecialchars($slide['title']); ?>"
+                                                 onerror="this.src='<?php echo BASE_URL; ?>uploads/slider/default-slide.jpg'">
+                                            <?php if (strpos($slide['image_path'] ?? '', 'cloudinary.com') !== false): ?>
+                                                <br><span class="cloudinary-badge"><i class="fas fa-cloud"></i> Cloud</span>
+                                            <?php endif; ?>
                                         </td>
                                         <td><?php echo htmlspecialchars($slide['title']); ?></td>
                                         <td><?php echo htmlspecialchars($slide['subtitle']); ?></td>
@@ -402,8 +616,13 @@ $page_title = 'Manage Slider';
                 
                 <div class="form-group">
                     <label><i class="fas fa-image"></i> Image *</label>
-                    <input type="file" name="image" accept="image/*" required>
-                    <small style="color:#999;">Recommended size: 1200x500px</small>
+                    <div class="file-input-wrapper">
+                        <div class="btn-secondary">
+                            <i class="fas fa-cloud-upload-alt"></i> Choose Image
+                        </div>
+                        <input type="file" name="image" accept="image/*" required>
+                    </div>
+                    <small style="color:#999;">Recommended size: 1200x500px. Will be uploaded to Cloudinary if available.</small>
                 </div>
                 
                 <div class="form-group">
@@ -461,8 +680,13 @@ $page_title = 'Manage Slider';
                 <div class="form-group">
                     <label><i class="fas fa-image"></i> Current Image</label>
                     <div id="edit_image_preview"></div>
-                    <input type="file" name="image" accept="image/*">
-                    <small style="color:#999;">Leave empty to keep current image</small>
+                    <div class="file-input-wrapper">
+                        <div class="btn-secondary">
+                            <i class="fas fa-cloud-upload-alt"></i> Change Image
+                        </div>
+                        <input type="file" name="image" accept="image/*">
+                    </div>
+                    <small style="color:#999;">Leave empty to keep current image. Will be uploaded to Cloudinary if available.</small>
                 </div>
                 
                 <div class="form-group">
@@ -527,9 +751,6 @@ $page_title = 'Manage Slider';
 
         // ===== EDIT SLIDE FUNCTION =====
         function editSlide(id) {
-            // Show loading state
-            const editModal = document.getElementById('editModal');
-            
             // Fetch slide data
             fetch('slider.php?action=get_slide&id=' + id)
                 .then(response => response.json())
@@ -550,7 +771,11 @@ $page_title = 'Manage Slider';
                         // Show current image
                         const preview = document.getElementById('edit_image_preview');
                         if (slide.image_path) {
-                            preview.innerHTML = '<img src="../' + slide.image_path + '" alt="Current image" style="max-width:200px;max-height:120px;object-fit:cover;border-radius:4px;margin:10px 0;">';
+                            const imgUrl = slide.image_path.includes('cloudinary.com') 
+                                ? slide.image_path 
+                                : '../' + slide.image_path;
+                            preview.innerHTML = '<img src="' + imgUrl + '" alt="Current image" style="max-width:200px;max-height:120px;object-fit:cover;border-radius:4px;margin:10px 0;">' +
+                                (slide.image_path.includes('cloudinary.com') ? '<br><span style="font-size:10px;color:#3448C5;"><i class="fas fa-cloud"></i> Cloudinary</span>' : '');
                         } else {
                             preview.innerHTML = '<p style="color:#999;">No image uploaded</p>';
                         }
@@ -567,16 +792,16 @@ $page_title = 'Manage Slider';
                 });
         }
 
-        // ===== IMAGE PREVIEW FOR ADD MODAL =====
-        document.querySelector('#addModal input[type="file"]').addEventListener('change', function(e) {
-            if (this.files && this.files[0]) {
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    // Show preview if you have a preview element
-                    // You can add a preview div in the add modal if needed
-                };
-                reader.readAsDataURL(this.files[0]);
-            }
+        // ===== FILE INPUT STYLING =====
+        document.querySelectorAll('.file-input-wrapper input[type="file"]').forEach(function(input) {
+            input.addEventListener('change', function(e) {
+                var fileName = this.files[0] ? this.files[0].name : 'No file chosen';
+                var parent = this.closest('.file-input-wrapper');
+                var btn = parent.querySelector('.btn-secondary');
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-file"></i> ' + fileName;
+                }
+            });
         });
 
         // ===== AUTO-HIDE ALERTS =====
