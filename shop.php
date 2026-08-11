@@ -17,6 +17,9 @@ try {
     $products = [];
 }
 
+// Check if user is logged in
+$isLoggedIn = isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -275,6 +278,9 @@ try {
     <?php include "footer.php"; ?>
 
     <script>
+        // Pass PHP login status to JavaScript
+        var isLoggedIn = <?php echo $isLoggedIn ? 'true' : 'false'; ?>;
+        
         // ============================================
         // TOAST NOTIFICATION
         // ============================================
@@ -294,7 +300,7 @@ try {
         }
 
         // ============================================
-        // ADD TO CART FUNCTION (Prevents Double Click)
+        // ADD TO CART FUNCTION
         // ============================================
         document.querySelectorAll('.add-to-cart').forEach(button => {
             button.addEventListener('click', function(e) {
@@ -302,6 +308,16 @@ try {
                 
                 // Prevent double click
                 if (this.disabled) {
+                    return;
+                }
+                
+                // Check if user is logged in
+                if (!isLoggedIn) {
+                    // Show info message and redirect to login
+                    showToast('Please login to add items to your cart', 'info');
+                    setTimeout(function() {
+                        window.location.href = 'home.php';
+                    }, 1500);
                     return;
                 }
                 
