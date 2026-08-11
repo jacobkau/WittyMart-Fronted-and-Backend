@@ -1,7 +1,6 @@
 <?php
 require_once 'includes/config.php';
 
-
 // Get all products from database
 try {
     $stmt = $pdo->prepare("
@@ -18,7 +17,6 @@ try {
     $products = [];
 }
 
-
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -30,6 +28,153 @@ try {
     <link rel="icon" type="image/png" href="images/logo.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* Product image container */
+        .product-image-container {
+            position: relative;
+            width: 100%;
+            height: 200px;
+            overflow: hidden;
+            border-radius: 8px;
+            background: #f5f5f5;
+            margin-bottom: 10px;
+        }
+        
+        .product-image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+        
+        .product:hover .product-image-container img {
+            transform: scale(1.05);
+        }
+        
+        .cloudinary-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(52, 72, 197, 0.9);
+            color: white;
+            font-size: 9px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            z-index: 2;
+        }
+        
+        .product {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            padding: 15px;
+            text-align: center;
+        }
+        
+        .product:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+        }
+        
+        .product h3 {
+            font-size: 16px;
+            margin: 10px 0 5px;
+            color: #333;
+        }
+        
+        .product p {
+            font-size: 13px;
+            color: #666;
+            margin: 5px 0;
+        }
+        
+        .product .price {
+            font-size: 18px;
+            font-weight: 700;
+            color: #05573c;
+            display: block;
+            margin: 8px 0;
+        }
+        
+        .product .add-to-cart {
+            background: #05573c;
+            color: #fff;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            width: 100%;
+            max-width: 200px;
+            margin-top: 5px;
+        }
+        
+        .product .add-to-cart:hover:not(:disabled) {
+            background: #03402c;
+        }
+        
+        .product .add-to-cart:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        
+        .product .add-to-cart.added {
+            background: #28a745;
+        }
+        
+        .product .add-to-cart.error {
+            background: #dc3545;
+        }
+        
+        .product .stock-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 5px;
+        }
+        
+        .stock-badge.in-stock {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .stock-badge.out-of-stock {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 25px;
+            margin-bottom: 20px;
+        }
+        
+        .no-products {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+        }
+        
+        .no-products i {
+            font-size: 60px;
+            display: block;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+        
+        .no-products h3 {
+            font-size: 24px;
+            margin-bottom: 10px;
+            color: #555;
+        }
+        
         /* Toast notification */
         .toast {
             position: fixed;
@@ -45,73 +190,33 @@ try {
             transition: all 0.3s ease;
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
-
+        
         .toast.show {
             transform: translateY(0);
             opacity: 1;
         }
-
+        
         .toast.success {
             background: #28a745;
         }
-
+        
         .toast.error {
             background: #dc3545;
         }
-
+        
         .toast.info {
             background: #17a2b8;
         }
-
-        .product .add-to-cart.added {
-            background: #28a745;
-        }
-
-        .product .add-to-cart.error {
-            background: #dc3545;
-        }
-
-        .product .add-to-cart:disabled {
-            opacity: 0.7;
-            cursor: not-allowed;
-        }
-
-        .product .stock-badge {
-            display: inline-block;
-            padding: 2px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-            margin-top: 5px;
-        }
-
-        .stock-badge.in-stock {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .stock-badge.out-of-stock {
-            background: #f8d7da;
-            color: #721c24;
-        }
-
-        .no-products {
-            text-align: center;
-            padding: 60px 20px;
-            color: #888;
-        }
-
-        .no-products i {
-            font-size: 60px;
-            display: block;
-            margin-bottom: 20px;
-            opacity: 0.3;
-        }
-
-        .no-products h3 {
-            font-size: 24px;
-            margin-bottom: 10px;
-            color: #555;
+        
+        @media (max-width: 768px) {
+            .products-grid {
+                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+                gap: 15px;
+            }
+            
+            .product-image-container {
+                height: 150px;
+            }
         }
     </style>
 </head>
@@ -131,9 +236,16 @@ try {
                 <div class="products-grid">
                     <?php foreach ($products as $product): ?>
                         <div class="product">
-                            <img src="<?php echo htmlspecialchars(getProductImageUrl($product['image'] ?? '')); ?>" 
-                                 alt="<?php echo htmlspecialchars($product['name']); ?>"
-                                 onerror="this.src='uploads/products/no-image.png'">
+                            <div class="product-image-container">
+                                <img src="<?php echo htmlspecialchars(getProductImageUrl($product)); ?>" 
+                                     alt="<?php echo htmlspecialchars($product['name']); ?>"
+                                     onerror="this.src='uploads/products/no-image.png'">
+                                <?php if (!empty($product['image_url'])): ?>
+                                    <span class="cloudinary-badge">
+                                        <i class="fas fa-cloud"></i> Cloud
+                                    </span>
+                                <?php endif; ?>
+                            </div>
                             <h3><?php echo htmlspecialchars($product['name']); ?></h3>
                             <p><?php echo htmlspecialchars(substr($product['description'] ?? '', 0, 60)); ?>...</p>
                             <span class="price">Ksh <?php echo number_format($product['price'], 0); ?></span>
@@ -222,7 +334,7 @@ try {
                         
                         // Update cart count if available
                         if (data.cart_count !== undefined) {
-                            const cartBadge = document.querySelector('.cart-count');
+                            const cartBadge = document.querySelector('.cart-count, .cart-badge');
                             if (cartBadge) {
                                 cartBadge.textContent = data.cart_count;
                             }
