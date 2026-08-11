@@ -123,41 +123,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
 // ============================================
 
 /**
- * Get product image URL (supports both Cloudinary and local)
- */
-function getProductImageUrl($product) {
-    // Check if product is an array or object
-    if (is_array($product)) {
-        // Check if Cloudinary URL exists first
-        if (!empty($product['image_url'])) {
-            return $product['image_url'];
-        }
-        
-        // Fallback to local image
-        if (!empty($product['image'])) {
-            // Check if local file exists
-            if (file_exists(UPLOAD_DIR . $product['image'])) {
-                return UPLOAD_URL . $product['image'];
-            }
-            // If file doesn't exist but we have a filename, still return the URL
-            // (the no-image placeholder will be shown via onerror)
-            return UPLOAD_URL . $product['image'];
-        }
-    } else if (is_string($product)) {
-        // If passed as string (just the filename), try to display it
-        if (!empty($product)) {
-            if (file_exists(UPLOAD_DIR . $product)) {
-                return UPLOAD_URL . $product;
-            }
-            return UPLOAD_URL . $product;
-        }
-    }
-    
-    // Default no-image placeholder
-    return UPLOAD_URL . 'no-image.png';
-}
-
-/**
  * Get slider image URL
  */
 function getSliderImageUrl($image_path) {
