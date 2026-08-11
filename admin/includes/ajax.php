@@ -33,10 +33,12 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-// Check if user is admin for admin-only actions
+// Check if user is admin for admin-only actions - FIXED to use user_role
 $admin_actions = ['get_product', 'add_product', 'update_product', 'delete_product', 'get_order', 'update_order_status', 'delete_order', 'get_customer', 'delete_customer', 'get_category', 'add_category', 'update_category', 'delete_category', 'get_stats', 'search_orders', 'get_admin'];
 if (in_array($action, $admin_actions)) {
-    if (!isset($_SESSION['is_admin']) || $_SESSION['is_admin'] !== true) {
+    // Check using the same admin check as config.php
+    $isAdmin = isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
+    if (!$isAdmin) {
         ob_clean();
         echo json_encode(['success' => false, 'message' => 'Admin access required']);
         exit;
