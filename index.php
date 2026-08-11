@@ -952,296 +952,298 @@ function renderStars($rating) {
     
     <?php include "footer.php"; ?>
     
-    <script>
-        // ============================================
-        // STAR RATING FUNCTION
-        // ============================================
-        function setRating(value) {
-            // Update hidden input
-            document.getElementById('ratingValue').value = value;
-            document.getElementById('ratingDisplay').textContent = value;
-            
-            // Update star colors
-            const stars = document.querySelectorAll('#starRating i');
-            stars.forEach(star => {
-                const starValue = parseInt(star.dataset.value);
-                if (starValue <= value) {
-                    star.style.color = '#ffc107';
-                    star.classList.add('active');
-                } else {
-                    star.style.color = '#ddd';
-                    star.classList.remove('active');
-                }
-            });
-        }
-
-        // ============================================
-        // TESTIMONIAL SUBMISSION
-        // ============================================
-        document.addEventListener('DOMContentLoaded', function() {
-            const testimonialForm = document.getElementById('testimonialForm');
-            if (testimonialForm) {
-                testimonialForm.addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    
-                    const content = document.getElementById('testimonialContent');
-                    const submitBtn = document.getElementById('submitTestimonial');
-                    const messageDiv = document.getElementById('testimonialMessage');
-                    const rating = document.getElementById('ratingValue').value;
-                    
-                    if (content.value.trim().length < 10) {
-                        messageDiv.style.display = 'block';
-                        messageDiv.style.color = '#dc3545';
-                        messageDiv.textContent = 'Please write at least 10 characters.';
-                        return;
-                    }
-                    
-                    // Disable button
-                    submitBtn.disabled = true;
-                    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
-                    
-                    const formData = new FormData();
-                    formData.append('ajax_action', 'submit_testimonial');
-                    formData.append('content', content.value.trim());
-                    formData.append('rating', rating);
-                    
-                    fetch('index.php', {
-                        method: 'POST',
-                        body: formData
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        messageDiv.style.display = 'block';
-                        if (data.success) {
-                            messageDiv.style.color = '#28a745';
-                            messageDiv.textContent = data.message;
-                            content.value = '';
-                            // Reset stars to 5
-                            setRating(5);
-                            showToast(data.message, 'success');
-                        } else {
-                            messageDiv.style.color = '#dc3545';
-                            messageDiv.textContent = data.message;
-                            showToast(data.message, 'error');
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        messageDiv.style.display = 'block';
-                        messageDiv.style.color = '#dc3545';
-                        messageDiv.textContent = 'An error occurred. Please try again.';
-                        showToast('An error occurred. Please try again.', 'error');
-                    })
-                    .finally(() => {
-                        submitBtn.disabled = false;
-                        submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Testimonial';
-                    });
-                });
-            }
-
-            // ============================================
-            // TOAST NOTIFICATION
-            // ============================================
-            window.showToast = function(message, type = 'success') {
-                const toast = document.getElementById('toast');
-                toast.textContent = message;
-                toast.className = 'toast ' + type;
-                
-                // Trigger reflow
-                void toast.offsetWidth;
-                
-                toast.classList.add('show');
-                
-                setTimeout(() => {
-                    toast.classList.remove('show');
-                }, 3000);
-            };
-
-           // ============================================
-// ADD TO CART FUNCTION (With Login Check)
-// ============================================
-document.querySelectorAll('.add-to-cart').forEach(button => {
-    button.addEventListener('click', function(e) {
-        e.preventDefault();
+<script>
+    // ============================================
+    // STAR RATING FUNCTION
+    // ============================================
+    function setRating(value) {
+        // Update hidden input
+        document.getElementById('ratingValue').value = value;
+        document.getElementById('ratingDisplay').textContent = value;
         
-        // Prevent double click
-        if (this.disabled) {
-            return;
-        }
-        
-        // Check if user is logged in
-        const isLoggedIn = <?php echo $isLoggedIn ? 'true' : 'false'; ?>;
-        
-        if (!isLoggedIn) {
-            // Redirect to login page
-            showToast('Please login to add items to your cart', 'info');
-            setTimeout(() => {
-                window.location.href = 'home.php';
-            }, 1500);
-            return;
-        }
-        
-        const productId = this.dataset.productId;
-        const productName = this.dataset.productName;
-        const originalText = this.innerHTML;
-        const originalClass = this.className;
-        
-        // Disable button and show loading state
-        this.disabled = true;
-        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
-        
-        // Send AJAX request
-        const formData = new FormData();
-        formData.append('ajax_action', 'add_to_cart');
-        formData.append('product_id', productId);
-        formData.append('quantity', 1);
-        
-        fetch('cart.php', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Success state
-                this.innerHTML = '<i class="fas fa-check"></i> Added!';
-                this.className = originalClass + ' added';
-                showToast(productName + ' added to cart!', 'success');
-                
-                // Update cart count if available
-                if (data.cart_count !== undefined) {
-                    const cartBadge = document.querySelector('.cart-badge');
-                    if (cartBadge) {
-                        cartBadge.textContent = data.cart_count;
-                    }
-                }
-                
-                // Reset after 2 seconds
-                setTimeout(() => {
-                    this.innerHTML = originalText;
-                    this.className = originalClass;
-                    this.disabled = false;
-                }, 2000);
+        // Update star colors
+        const stars = document.querySelectorAll('#starRating i');
+        stars.forEach(star => {
+            const starValue = parseInt(star.dataset.value);
+            if (starValue <= value) {
+                star.style.color = '#ffc107';
+                star.classList.add('active');
             } else {
-                // Error state
-                this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Failed!';
-                this.className = originalClass + ' error';
-                showToast(data.message || 'Failed to add to cart', 'error');
-                
-                setTimeout(() => {
-                    this.innerHTML = originalText;
-                    this.className = originalClass;
-                    this.disabled = false;
-                }, 2000);
+                star.style.color = '#ddd';
+                star.classList.remove('active');
             }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error!';
-            this.className = originalClass + ' error';
-            showToast('An error occurred. Please try again.', 'error');
+        });
+    }
+
+    // ============================================
+    // TESTIMONIAL SUBMISSION
+    // ============================================
+    document.addEventListener('DOMContentLoaded', function() {
+        const testimonialForm = document.getElementById('testimonialForm');
+        if (testimonialForm) {
+            testimonialForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const content = document.getElementById('testimonialContent');
+                const submitBtn = document.getElementById('submitTestimonial');
+                const messageDiv = document.getElementById('testimonialMessage');
+                const rating = document.getElementById('ratingValue').value;
+                
+                if (content.value.trim().length < 10) {
+                    messageDiv.style.display = 'block';
+                    messageDiv.style.color = '#dc3545';
+                    messageDiv.textContent = 'Please write at least 10 characters.';
+                    return;
+                }
+                
+                // Disable button
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+                
+                const formData = new FormData();
+                formData.append('ajax_action', 'submit_testimonial');
+                formData.append('content', content.value.trim());
+                formData.append('rating', rating);
+                
+                fetch('index.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    messageDiv.style.display = 'block';
+                    if (data.success) {
+                        messageDiv.style.color = '#28a745';
+                        messageDiv.textContent = data.message;
+                        content.value = '';
+                        // Reset stars to 5
+                        setRating(5);
+                        showToast(data.message, 'success');
+                    } else {
+                        messageDiv.style.color = '#dc3545';
+                        messageDiv.textContent = data.message;
+                        showToast(data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    messageDiv.style.display = 'block';
+                    messageDiv.style.color = '#dc3545';
+                    messageDiv.textContent = 'An error occurred. Please try again.';
+                    showToast('An error occurred. Please try again.', 'error');
+                })
+                .finally(() => {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Testimonial';
+                });
+            });
+        }
+
+        // ============================================
+        // TOAST NOTIFICATION
+        // ============================================
+        window.showToast = function(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast ' + type;
+            
+            // Trigger reflow
+            void toast.offsetWidth;
+            
+            toast.classList.add('show');
             
             setTimeout(() => {
-                this.innerHTML = originalText;
-                this.className = originalClass;
-                this.disabled = false;
-            }, 2000);
-        });
-    });
-});
+                toast.classList.remove('show');
+            }, 3000);
+        };
+
         // ============================================
-        // HERO SLIDER
+        // ADD TO CART FUNCTION (With Login Check)
         // ============================================
-        let currentSlide = 0;
-        const slides = document.querySelectorAll('#heroSlides .slide');
-        const totalSlides = slides.length;
-        let autoSlideInterval;
-
-        function showSlide(index) {
-            if (index >= totalSlides) currentSlide = 0;
-            if (index < 0) currentSlide = totalSlides - 1;
-            
-            const offset = -currentSlide * 100;
-            const slider = document.getElementById('heroSlides');
-            if (slider) {
-                slider.style.transform = `translateX(${offset}%)`;
-            }
-            
-            // Update dots
-            document.querySelectorAll('.slider-dot').forEach((dot, i) => {
-                dot.classList.toggle('active', i === currentSlide);
-            });
-        }
-
-        function nextSlide() {
-            currentSlide++;
-            showSlide(currentSlide);
-            resetAutoSlide();
-        }
-
-        function prevSlide() {
-            currentSlide--;
-            showSlide(currentSlide);
-            resetAutoSlide();
-        }
-
-        function goToSlide(index) {
-            currentSlide = index;
-            showSlide(currentSlide);
-            resetAutoSlide();
-        }
-
-        function resetAutoSlide() {
-            clearInterval(autoSlideInterval);
-            if (totalSlides > 1) {
-                autoSlideInterval = setInterval(nextSlide, 5000);
-            }
-        }
-
-        // Initialize slider
-        if (totalSlides > 0) {
-            showSlide(0);
-            if (totalSlides > 1) {
-                autoSlideInterval = setInterval(nextSlide, 5000);
-            }
-        }
-
-        // Pause auto-slide on hover
-        const sliderContainer = document.querySelector('.hero-slider');
-        if (sliderContainer) {
-            sliderContainer.addEventListener('mouseenter', () => {
-                clearInterval(autoSlideInterval);
-            });
-            
-            sliderContainer.addEventListener('mouseleave', () => {
-                if (totalSlides > 1) {
-                    autoSlideInterval = setInterval(nextSlide, 5000);
+        document.querySelectorAll('.add-to-cart').forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                // Prevent double click
+                if (this.disabled) {
+                    return;
                 }
-            });
-        }
-
-        // ===== TOUCH SUPPORT FOR MOBILE =====
-        let touchStartX = 0;
-        let touchEndX = 0;
-
-        const sliderElement = document.getElementById('heroSlides');
-        if (sliderElement) {
-            sliderElement.addEventListener('touchstart', (e) => {
-                touchStartX = e.changedTouches[0].screenX;
-            }, { passive: true });
-            
-            sliderElement.addEventListener('touchend', (e) => {
-                touchEndX = e.changedTouches[0].screenX;
-                const diff = touchStartX - touchEndX;
-                if (Math.abs(diff) > 50) {
-                    if (diff > 0) {
-                        nextSlide();
+                
+                // Check if user is logged in
+                const isLoggedIn = <?php echo $isLoggedIn ? 'true' : 'false'; ?>;
+                
+                if (!isLoggedIn) {
+                    // Redirect to login page
+                    showToast('Please login to add items to your cart', 'info');
+                    setTimeout(() => {
+                        window.location.href = 'home.php';
+                    }, 1500);
+                    return;
+                }
+                
+                const productId = this.dataset.productId;
+                const productName = this.dataset.productName;
+                const originalText = this.innerHTML;
+                const originalClass = this.className;
+                
+                // Disable button and show loading state
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+                
+                // Send AJAX request
+                const formData = new FormData();
+                formData.append('ajax_action', 'add_to_cart');
+                formData.append('product_id', productId);
+                formData.append('quantity', 1);
+                
+                fetch('cart.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Success state
+                        this.innerHTML = '<i class="fas fa-check"></i> Added!';
+                        this.className = originalClass + ' added';
+                        showToast(productName + ' added to cart!', 'success');
+                        
+                        // Update cart count if available
+                        if (data.cart_count !== undefined) {
+                            const cartBadge = document.querySelector('.cart-badge');
+                            if (cartBadge) {
+                                cartBadge.textContent = data.cart_count;
+                            }
+                        }
+                        
+                        // Reset after 2 seconds
+                        setTimeout(() => {
+                            this.innerHTML = originalText;
+                            this.className = originalClass;
+                            this.disabled = false;
+                        }, 2000);
                     } else {
-                        prevSlide();
+                        // Error state
+                        this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Failed!';
+                        this.className = originalClass + ' error';
+                        showToast(data.message || 'Failed to add to cart', 'error');
+                        
+                        setTimeout(() => {
+                            this.innerHTML = originalText;
+                            this.className = originalClass;
+                            this.disabled = false;
+                        }, 2000);
                     }
-                }
-            }, { passive: true });
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error!';
+                    this.className = originalClass + ' error';
+                    showToast('An error occurred. Please try again.', 'error');
+                    
+                    setTimeout(() => {
+                        this.innerHTML = originalText;
+                        this.className = originalClass;
+                        this.disabled = false;
+                    }, 2000);
+                });
+            });
+        });
+    }); // <-- This was the missing closing brace
+
+    // ============================================
+    // HERO SLIDER
+    // ============================================
+    let currentSlide = 0;
+    const slides = document.querySelectorAll('#heroSlides .slide');
+    const totalSlides = slides.length;
+    let autoSlideInterval;
+
+    function showSlide(index) {
+        if (index >= totalSlides) currentSlide = 0;
+        if (index < 0) currentSlide = totalSlides - 1;
+        
+        const offset = -currentSlide * 100;
+        const slider = document.getElementById('heroSlides');
+        if (slider) {
+            slider.style.transform = `translateX(${offset}%)`;
         }
-    </script>
+        
+        // Update dots
+        document.querySelectorAll('.slider-dot').forEach((dot, i) => {
+            dot.classList.toggle('active', i === currentSlide);
+        });
+    }
+
+    function nextSlide() {
+        currentSlide++;
+        showSlide(currentSlide);
+        resetAutoSlide();
+    }
+
+    function prevSlide() {
+        currentSlide--;
+        showSlide(currentSlide);
+        resetAutoSlide();
+    }
+
+    function goToSlide(index) {
+        currentSlide = index;
+        showSlide(currentSlide);
+        resetAutoSlide();
+    }
+
+    function resetAutoSlide() {
+        clearInterval(autoSlideInterval);
+        if (totalSlides > 1) {
+            autoSlideInterval = setInterval(nextSlide, 5000);
+        }
+    }
+
+    // Initialize slider
+    if (totalSlides > 0) {
+        showSlide(0);
+        if (totalSlides > 1) {
+            autoSlideInterval = setInterval(nextSlide, 5000);
+        }
+    }
+
+    // Pause auto-slide on hover
+    const sliderContainer = document.querySelector('.hero-slider');
+    if (sliderContainer) {
+        sliderContainer.addEventListener('mouseenter', () => {
+            clearInterval(autoSlideInterval);
+        });
+        
+        sliderContainer.addEventListener('mouseleave', () => {
+            if (totalSlides > 1) {
+                autoSlideInterval = setInterval(nextSlide, 5000);
+            }
+        });
+    }
+
+    // ===== TOUCH SUPPORT FOR MOBILE =====
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    const sliderElement = document.getElementById('heroSlides');
+    if (sliderElement) {
+        sliderElement.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+        }, { passive: true });
+        
+        sliderElement.addEventListener('touchend', (e) => {
+            touchEndX = e.changedTouches[0].screenX;
+            const diff = touchStartX - touchEndX;
+            if (Math.abs(diff) > 50) {
+                if (diff > 0) {
+                    nextSlide();
+                } else {
+                    prevSlide();
+                }
+            }
+        }, { passive: true });
+    }
+</script>
 </body>
 </html>
