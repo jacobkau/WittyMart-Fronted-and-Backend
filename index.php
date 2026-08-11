@@ -118,15 +118,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action']) && $_P
     exit();
 }
 
-// ===== HELPER FUNCTION FOR PRODUCT IMAGE =====
-function getProductImageUrl($image_path) {
-    if (empty($image_path)) {
-        return 'uploads/products/no-image.png';
+// ============================================
+// UPDATED HELPER FUNCTIONS FOR CLOUDINARY
+// ============================================
+
+/**
+ * Get product image URL (supports both Cloudinary and local)
+ */
+function getProductImageUrl($product) {
+    // Check if product is an array or object
+    if (is_array($product)) {
+        // Check if Cloudinary URL exists first
+        if (!empty($product['image_url'])) {
+            return $product['image_url'];
+        }
+        
+        // Fallback to local image
+        if (!empty($product['image'])) {
+            // Check if local file exists
+            if (file_exists(UPLOAD_DIR . $product['image'])) {
+                return UPLOAD_URL . $product['image'];
+            }
+            // If file doesn't exist but we have a filename, still return the URL
+            // (the no-image placeholder will be shown via onerror)
+            return UPLOAD_URL . $product['image'];
+        }
+    } else if (is_string($product)) {
+        // If passed as string (just the filename), try to display it
+        if (!empty($product)) {
+            if (file_exists(UPLOAD_DIR . $product)) {
+                return UPLOAD_URL . $product;
+            }
+            return UPLOAD_URL . $product;
+        }
     }
-    return $image_path;
+    
+    // Default no-image placeholder
+    return UPLOAD_URL . 'no-image.png';
 }
 
-// ===== HELPER FUNCTION FOR SLIDER IMAGE =====
+/**
+ * Get slider image URL
+ */
 function getSliderImageUrl($image_path) {
     if (empty($image_path)) {
         return 'images/default-slide.jpg';
@@ -134,7 +167,9 @@ function getSliderImageUrl($image_path) {
     return $image_path;
 }
 
-// ===== HELPER FUNCTION FOR STAR RATING =====
+/**
+ * Render star rating
+ */
 function renderStars($rating) {
     $html = '';
     for ($i = 1; $i <= 5; $i++) {
@@ -173,6 +208,7 @@ function renderStars($rating) {
             transition: transform 0.3s ease, box-shadow 0.3s ease;
             text-align: center;
             padding: 15px;
+            position: relative;
         }
 
         .product-card:hover {
@@ -180,11 +216,38 @@ function renderStars($rating) {
             box-shadow: 0 5px 20px rgba(0,0,0,0.15);
         }
 
-        .product-card img {
+        .product-card .image-container {
+            position: relative;
             width: 100%;
             height: 180px;
-            object-fit: cover;
+            overflow: hidden;
             border-radius: 8px;
+            background: #f5f5f5;
+        }
+
+        .product-card .image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+
+        .product-card:hover .image-container img {
+            transform: scale(1.05);
+        }
+
+        .product-card .cloudinary-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(52, 72, 197, 0.9);
+            color: white;
+            font-size: 9px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            z-index: 2;
         }
 
         .product-card h3 {
@@ -583,6 +646,37 @@ function renderStars($rating) {
             transform: scale(1.2);
         }
 
+        /* About Shop Section */
+        .about-shop-section {
+            background: #f8f9fa;
+            padding: 40px;
+            border-radius: 12px;
+            margin-bottom: 40px;
+        }
+
+        .about-shop-section h2 {
+            margin-top: 0;
+        }
+
+        .about-shop-section ul {
+            list-style: none;
+            padding: 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .about-shop-section ul li {
+            padding: 8px 0;
+            color: #555;
+        }
+
+        .about-shop-section ul li::before {
+            content: "✓ ";
+            color: #05573c;
+            font-weight: 700;
+        }
+
         /* Responsive */
         @media (max-width: 992px) {
             .hero {
@@ -614,7 +708,7 @@ function renderStars($rating) {
                 grid-template-columns: 1fr;
             }
 
-            .product-card img {
+            .product-card .image-container {
                 height: 140px;
             }
 
@@ -632,6 +726,14 @@ function renderStars($rating) {
 
             .slide .caption {
                 padding: 20px;
+            }
+
+            .about-shop-section {
+                padding: 20px;
+            }
+
+            .about-shop-section ul {
+                grid-template-columns: 1fr;
             }
         }
 
@@ -751,9 +853,16 @@ function renderStars($rating) {
                 <div class="product-grid">
                     <?php foreach ($featured_products as $product): ?>
                         <div class="product-card">
-                            <img src="<?php echo htmlspecialchars(getProductImageUrl($product['image'] ?? '')); ?>" 
-                                 alt="<?php echo htmlspecialchars($product['name']); ?>"
-                                 onerror="this.src='uploads/products/no-image.png'">
+                            <div class="image-container">
+                                <img src="<?php echo htmlspecialchars(getProductImageUrl($product)); ?>" 
+                                     alt="<?php echo htmlspecialchars($product['name']); ?>"
+                                     onerror="this.src='uploads/products/no-image.png'">
+                                <?php if (!empty($product['image_url'])): ?>
+                                    <span class="cloudinary-badge">
+                                        <i class="fas fa-cloud"></i> Cloud
+                                    </span>
+                                <?php endif; ?>
+                            </div>
                             <span class="category"><?php echo htmlspecialchars($product['category_name'] ?? 'Uncategorized'); ?></span>
                             <h3><?php echo htmlspecialchars($product['name']); ?></h3>
                             <div class="price">Ksh <?php echo number_format($product['price'], 2); ?></div>
