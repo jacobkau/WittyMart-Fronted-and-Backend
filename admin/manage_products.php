@@ -5,6 +5,7 @@ ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
 require_once 'includes/config.php';
+require_once 'includes/cloudinary_helper.php'; // Add Cloudinary helper
 requireAdmin();
 
 global $pdo;
@@ -25,26 +26,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $category_id = intval($_POST['category_id'] ?? 0);
                 $status = sanitize($_POST['status'] ?? 'active');
                 
-                // Handle image upload
-                $image_name = null;
+                // Handle image upload - UPLOAD TO CLOUDINARY
+                $image_url = null;
+                $image_public_id = null;
+                $image_name = null; // Keep for backward compatibility
+                $upload_message = '';
+                
                 if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                    $upload_dir = UPLOAD_DIR;
-                    if (!file_exists($upload_dir)) {
-                        mkdir($upload_dir, 0777, true);
-                    }
-                    $image_name = time() . '_' . basename($_FILES['image']['name']);
-                    $upload_path = $upload_dir . $image_name;
+                    // First, upload to Cloudinary
+                    $upload_result = uploadToCloudinary($_FILES['image']['tmp_name'], 'products');
                     
-                    if (move_uploaded_file($_FILES['image']['tmp_name'], $upload_path)) {
-                        // File uploaded successfully
+                    if ($upload_result['success']) {
+                        $image_url = $upload_result['url'];
+                        $image_public_id = $upload_result['public_id'];
+                        $upload_message = 'Image uploaded to Cloudinary successfully!';
+                        
+                        // Also save locally as fallback (optional)
+                        $upload_dir = UPLOAD_DIR;
+                        if (!file_exists($upload_dir)) {
+                            mkdir($upload_dir, 0777, true);
+                        }
+                        $image_name = time() . '_' . basename($_FILES['image']['name']);
+                        $upload_path = $upload_dir . $image_name;
+                        move_uploaded_file($_FILES['image']['tmp_name'], $upload_path);
                     } else {
-                        $image_name = null;
+                        // Fallback to local upload if Cloudinary fails
+                        $upload_dir = UPLOAD_DIR;
+                        if (!file_exists($upload_dir)) {
+                            mkdir($upload_dir, 0777, true);
+                        }
+                        $image_name = time() . '_' . basename($_FILES['image']['name']);
+                        $upload_path = $upload_dir . $image_name;
+                        
+                        if (move_uploaded_file($_FILES['image']['tmp_name'], $upload_path)) {
+                            $upload_message = 'Image saved locally (Cloudinary upload failed)';
+                        } else {
+                            $image_name = null;
+                            $upload_message = 'Image upload failed';
+                        }
                     }
                 }
                 
                 if ($name && $price > 0) {
-                    $stmt = $pdo->prepare("INSERT INTO products (name, description, price, category_id, image, status) VALUES (?, ?, ?, ?, ?, ?)");
-                    if ($stmt->execute([$name, $description, $price, $category_id, $image_name, $status])) {
+                    // Update SQL to include image_url and image_public_id
+                    $stmt = $pdo->prepare("INSERT INTO products (name, description, price, category_id, image, image_url, image_public_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                    if ($stmt->execute([$name, $description, $price, $category_id, $image_name, $image_url, $image_public_id, $status])) {
                         if (function_exists('logActivity')) {
                             logActivity(
                                 'add_product',
@@ -53,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $_SESSION['user_name']
                             );
                         }
-                        $message = 'Product added successfully!';
+                        $message = 'Product added successfully! ' . $upload_message;
                         $messageType = 'success';
                     } else {
                         $message = 'Failed to add product.';
@@ -73,31 +99,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $category_id = intval($_POST['category_id'] ?? 0);
                 $status = sanitize($_POST['status'] ?? 'active');
                 
+                // Get existing product to delete old Cloudinary image if needed
+                $stmt = $pdo->prepare("SELECT image_public_id, image FROM products WHERE id = ?");
+                $stmt->execute([$id]);
+                $existing_product = $stmt->fetch();
+                
                 // Handle image upload
+                $image_url = null;
+                $image_public_id = null;
                 $image_name = null;
+                $upload_message = '';
+                
                 if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                    $upload_dir = UPLOAD_DIR;
-                    if (!file_exists($upload_dir)) {
-                        mkdir($upload_dir, 0777, true);
+                    // Delete old Cloudinary image if exists
+                    if (!empty($existing_product['image_public_id'])) {
+                        $delete_result = deleteFromCloudinary($existing_product['image_public_id']);
+                        if ($delete_result['success']) {
+                            $upload_message = 'Old image deleted from Cloudinary. ';
+                        }
                     }
-                    $image_name = time() . '_' . basename($_FILES['image']['name']);
-                    $upload_path = $upload_dir . $image_name;
                     
-                    if (move_uploaded_file($_FILES['image']['tmp_name'], $upload_path)) {
-                        // File uploaded successfully
+                    // Upload new image to Cloudinary
+                    $upload_result = uploadToCloudinary($_FILES['image']['tmp_name'], 'products');
+                    
+                    if ($upload_result['success']) {
+                        $image_url = $upload_result['url'];
+                        $image_public_id = $upload_result['public_id'];
+                        $upload_message .= 'New image uploaded to Cloudinary!';
+                        
+                        // Also save locally as fallback
+                        $upload_dir = UPLOAD_DIR;
+                        if (!file_exists($upload_dir)) {
+                            mkdir($upload_dir, 0777, true);
+                        }
+                        $image_name = time() . '_' . basename($_FILES['image']['name']);
+                        $upload_path = $upload_dir . $image_name;
+                        move_uploaded_file($_FILES['image']['tmp_name'], $upload_path);
                     } else {
-                        $image_name = null;
+                        // Fallback to local
+                        $upload_dir = UPLOAD_DIR;
+                        if (!file_exists($upload_dir)) {
+                            mkdir($upload_dir, 0777, true);
+                        }
+                        $image_name = time() . '_' . basename($_FILES['image']['name']);
+                        $upload_path = $upload_dir . $image_name;
+                        if (move_uploaded_file($_FILES['image']['tmp_name'], $upload_path)) {
+                            $upload_message = 'Image saved locally (Cloudinary upload failed)';
+                        } else {
+                            $image_name = null;
+                            $upload_message = 'Image upload failed';
+                        }
                     }
                 }
                 
                 if ($name && $price > 0 && $id) {
-                    if ($image_name) {
-                        $stmt = $pdo->prepare("UPDATE products SET name = ?, description = ?, price = ?, category_id = ?, image = ?, status = ? WHERE id = ?");
-                        $result = $stmt->execute([$name, $description, $price, $category_id, $image_name, $status, $id]);
-                    } else {
-                        $stmt = $pdo->prepare("UPDATE products SET name = ?, description = ?, price = ?, category_id = ?, status = ? WHERE id = ?");
-                        $result = $stmt->execute([$name, $description, $price, $category_id, $status, $id]);
+                    // Build the update query dynamically
+                    $sql = "UPDATE products SET name = ?, description = ?, price = ?, category_id = ?, status = ?";
+                    $params = [$name, $description, $price, $category_id, $status];
+                    
+                    if ($image_url !== null) {
+                        $sql .= ", image = ?, image_url = ?, image_public_id = ?";
+                        $params[] = $image_name;
+                        $params[] = $image_url;
+                        $params[] = $image_public_id;
                     }
+                    
+                    $sql .= " WHERE id = ?";
+                    $params[] = $id;
+                    
+                    $stmt = $pdo->prepare($sql);
+                    $result = $stmt->execute($params);
                     
                     if ($result) {
                         if (function_exists('logActivity')) {
@@ -108,7 +179,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $_SESSION['user_name']
                             );
                         }
-                        $message = 'Product updated successfully!';
+                        $message = 'Product updated successfully! ' . $upload_message;
                         $messageType = 'success';
                     } else {
                         $message = 'Failed to update product.';
@@ -122,6 +193,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
             case 'delete':
                 $id = intval($_POST['id']);
+                
+                // Check if product is in cart
                 $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM cart WHERE product_id = ?");
                 $stmt->execute([$id]);
                 $cart_count = $stmt->fetch()['count'];
@@ -130,6 +203,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = 'Cannot delete product as it is in a cart.';
                     $messageType = 'error';
                 } else {
+                    // Get product info to delete Cloudinary image
+                    $stmt = $pdo->prepare("SELECT image_public_id FROM products WHERE id = ?");
+                    $stmt->execute([$id]);
+                    $product = $stmt->fetch();
+                    
+                    // Delete from Cloudinary if exists
+                    $delete_message = '';
+                    if (!empty($product['image_public_id'])) {
+                        $delete_result = deleteFromCloudinary($product['image_public_id']);
+                        if ($delete_result['success']) {
+                            $delete_message = 'Image deleted from Cloudinary. ';
+                        }
+                    }
+                    
+                    // Delete from database
                     $stmt = $pdo->prepare("DELETE FROM products WHERE id = ?");
                     if ($stmt->execute([$id])) {
                         if (function_exists('logActivity')) {
@@ -140,7 +228,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $_SESSION['user_name']
                             );
                         }
-                        $message = 'Product deleted successfully!';
+                        $message = 'Product deleted successfully! ' . $delete_message;
                         $messageType = 'success';
                     } else {
                         $message = 'Failed to delete product.';
@@ -192,12 +280,19 @@ if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
     }
 }
 
-// Helper function to get product image URL
-function getProductImage($image_name) {
-    if (empty($image_name) || !file_exists(UPLOAD_DIR . $image_name)) {
-        return '../uploads/products/no-image.png';
+// Helper function to get product image URL - UPDATED for Cloudinary
+function getProductImage($image_name, $image_url = null) {
+    // If Cloudinary URL exists, use it
+    if (!empty($image_url)) {
+        return $image_url;
     }
-    return '../uploads/products/' . $image_name;
+    
+    // Fallback to local image
+    if (!empty($image_name) && file_exists(UPLOAD_DIR . $image_name)) {
+        return '../uploads/products/' . $image_name;
+    }
+    
+    return '../uploads/products/no-image.png';
 }
 
 // Helper function to escape JavaScript strings
@@ -302,6 +397,14 @@ $page_title = 'Products';
         .btn-secondary:hover {
             background-color: #5a6268;
         }
+        .cloudinary-badge {
+            background-color: #3448C5;
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 5px;
+        }
     </style>
 </head>
 <body>
@@ -345,9 +448,12 @@ $page_title = 'Products';
                                 <?php foreach ($products as $product): ?>
                                     <tr>
                                         <td>
-                                            <img src="<?php echo getProductImage($product['image'] ?? null); ?>" 
+                                            <img src="<?php echo getProductImage($product['image'] ?? null, $product['image_url'] ?? null); ?>" 
                                                  alt="<?php echo htmlspecialchars($product['name']); ?>"
                                                  class="product-image-thumb">
+                                            <?php if (!empty($product['image_url'])): ?>
+                                                <span class="cloudinary-badge">Cloud</span>
+                                            <?php endif; ?>
                                         </td>
                                         <td><strong><?php echo htmlspecialchars($product['name']); ?></strong></td>
                                         <td><?php echo htmlspecialchars(substr($product['description'] ?? '', 0, 50)); ?>...</td>
@@ -435,7 +541,9 @@ $page_title = 'Products';
                             </button>
                             <input type="file" name="image" accept="image/*">
                         </div>
-                        <small style="display:block; margin-top:5px; color:#666;">Max size: 5MB (JPG, PNG, GIF)</small>
+                        <small style="display:block; margin-top:5px; color:#666;">
+                            <i class="fas fa-cloud-upload-alt"></i> Will be uploaded to Cloudinary
+                        </small>
                     </div>
                     <div class="form-group">
                         <label><i class="fas fa-toggle-on"></i> Status</label>
@@ -503,7 +611,9 @@ $page_title = 'Products';
                             </button>
                             <input type="file" name="image" accept="image/*">
                         </div>
-                        <small style="display:block; margin-top:5px; color:#666;">Leave empty to keep current image</small>
+                        <small style="display:block; margin-top:5px; color:#666;">
+                            <i class="fas fa-cloud-upload-alt"></i> Will be uploaded to Cloudinary
+                        </small>
                     </div>
                     <div class="form-group">
                         <label><i class="fas fa-toggle-on"></i> Status</label>
@@ -523,7 +633,7 @@ $page_title = 'Products';
     </div>
 
     <script>
-        // Store product data for editing
+        // Store product data for editing - UPDATED with Cloudinary data
         var productData = {};
         
         <?php foreach ($products as $product): ?>
@@ -534,7 +644,8 @@ $page_title = 'Products';
                 price: '<?php echo $product['price']; ?>',
                 category_id: '<?php echo $product['category_id'] ?? ''; ?>',
                 status: '<?php echo $product['status'] ?? 'active'; ?>',
-                image: '<?php echo $product['image'] ? jsEscape($product['image']) : ''; ?>'
+                image: '<?php echo $product['image'] ? jsEscape($product['image']) : ''; ?>',
+                image_url: '<?php echo $product['image_url'] ? jsEscape($product['image_url']) : ''; ?>'
             };
         <?php endforeach; ?>
         
@@ -564,10 +675,16 @@ $page_title = 'Products';
             document.getElementById('editProductCategory').value = data.category_id;
             document.getElementById('editProductStatus').value = data.status;
             
-            // Show current image
+            // Show current image - UPDATED for Cloudinary
             var imagePreview = document.getElementById('editProductImagePreview');
-            if (data.image) {
-                imagePreview.innerHTML = '<img src="<?php echo '../uploads/products/'; ?>' + data.image + '" alt="Current image" style="max-height:100px; border-radius:4px;"><br><small style="color:#666;">Current image: ' + data.image + '</small>';
+            if (data.image_url) {
+                imagePreview.innerHTML = '<img src="' + data.image_url + '" alt="Current image" style="max-height:100px; border-radius:4px;"><br>' +
+                                        '<small style="color:#666;">' +
+                                        '<i class="fas fa-cloud" style="color:#3448C5;"></i> Cloudinary image' +
+                                        '</small>';
+            } else if (data.image) {
+                imagePreview.innerHTML = '<img src="<?php echo '../uploads/products/'; ?>' + data.image + '" alt="Current image" style="max-height:100px; border-radius:4px;"><br>' +
+                                        '<small style="color:#666;">Local image: ' + data.image + '</small>';
             } else {
                 imagePreview.innerHTML = '<small style="color:#666;">No image uploaded</small>';
             }
