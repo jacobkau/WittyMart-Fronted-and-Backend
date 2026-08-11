@@ -20,33 +20,6 @@ if (!file_exists($upload_dir)) {
     mkdir($upload_dir, 0777, true);
 }
 
-// ===== HELPER FUNCTION FOR PRODUCT IMAGE URL (Cloudinary Support) =====
-function getProductImageUrl($image_path, $image_url = null) {
-    // If Cloudinary URL exists, use it
-    if (!empty($image_url)) {
-        return $image_url;
-    }
-    
-    // Base URL from config
-    $base_url = 'https://wittymart.onrender.com/';
-    
-    // If no image, return placeholder
-    if (empty($image_path)) {
-        return $base_url . 'uploads/products/no-image.png';
-    }
-    
-    // If it's already a full URL, return it
-    if (strpos($image_path, 'http://') === 0 || strpos($image_path, 'https://') === 0) {
-        return $image_path;
-    }
-    
-    // Clean the path - remove leading slashes and '../'
-    $image_path = ltrim($image_path, '/');
-    $image_path = str_replace('../', '', $image_path);
-    
-    // Return full URL
-    return $base_url . $image_path;
-}
 
 // ===== UPLOAD IMAGE FUNCTION (With Cloudinary Support) =====
 function uploadProductImage($file) {
