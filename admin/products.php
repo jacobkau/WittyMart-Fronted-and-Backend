@@ -827,204 +827,222 @@ $page_title = 'Products';
         }
     </style>
 
-    <script>
-        // ===== IMAGE PREVIEW =====
-        function previewImage(input, previewId) {
-            const preview = document.getElementById(previewId);
-            if (input.files && input.files[0]) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    preview.innerHTML = `<img src="${e.target.result}" alt="Product Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px;"><p>New image</p>`;
-                }
-                reader.readAsDataURL(input.files[0]);
-            }
-        }
-
-        // ===== MODAL FUNCTIONS =====
-        function openModal(id) {
-            document.getElementById(id).style.display = 'block';
-            document.body.style.overflow = 'hidden';
+<script>
+    // ===== JAVASCRIPT HELPER FOR IMAGE URL =====
+    function getProductImageUrlJs(imagePath) {
+        if (!imagePath) {
+            return 'https://wittymart.onrender.com/uploads/products/no-image.png';
         }
         
-        function closeModal(id) {
-            document.getElementById(id).style.display = 'none';
+        // If it's already a full URL, return it
+        if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+            return imagePath;
+        }
+        
+        // Clean the path
+        let cleanPath = imagePath.replace(/^\/+/, '').replace(/\.\.\//g, '');
+        
+        // Return full URL
+        return 'https://wittymart.onrender.com/' + cleanPath;
+    }
+
+    // ===== IMAGE PREVIEW =====
+    function previewImage(input, previewId) {
+        const preview = document.getElementById(previewId);
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                preview.innerHTML = `<img src="${e.target.result}" alt="Product Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px;"><p>New image</p>`;
+            }
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    // ===== MODAL FUNCTIONS =====
+    function openModal(id) {
+        document.getElementById(id).style.display = 'block';
+        document.body.style.overflow = 'hidden';
+    }
+    
+    function closeModal(id) {
+        document.getElementById(id).style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+    
+    window.onclick = function(event) {
+        if (event.target.classList.contains('modal')) {
+            event.target.style.display = 'none';
             document.body.style.overflow = 'auto';
         }
-        
-        window.onclick = function(event) {
-            if (event.target.classList.contains('modal')) {
-                event.target.style.display = 'none';
-                document.body.style.overflow = 'auto';
-            }
+    }
+    
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.style.display = 'none';
+            });
+            document.body.style.overflow = 'auto';
         }
+    });
+    
+    // ===== SEARCH FUNCTIONS =====
+    function filterTable(inputId, tableId) {
+        const input = document.getElementById(inputId);
+        const table = document.getElementById(tableId);
         
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                document.querySelectorAll('.modal').forEach(modal => {
-                    modal.style.display = 'none';
-                });
-                document.body.style.overflow = 'auto';
-            }
+        if (!input || !table) return;
+
+        const filter = input.value.toLowerCase().trim();
+        const rows = table.querySelectorAll('tbody tr');
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            const match = text.includes(filter);
+            row.style.display = match ? '' : 'none';
+            if (match) visibleCount++;
         });
+
+        // Update result count
+        const counter = table.parentElement.querySelector('.result-count');
+        if (counter) {
+            counter.textContent = `Showing ${visibleCount} of ${rows.length} results`;
+        }
+
+        // Show/hide no results message
+        const noResultMsg = table.parentElement.querySelector('.no-results-message');
+        if (noResultMsg) {
+            noResultMsg.style.display = visibleCount === 0 ? 'block' : 'none';
+        }
+
+        // Show/hide clear button
+        const clearBtn = input.parentElement.querySelector('.clear-search-btn');
+        if (clearBtn) {
+            clearBtn.style.display = input.value.length > 0 ? 'block' : 'none';
+        }
+    }
+
+    function clearSearch(inputId, tableId) {
+        const input = document.getElementById(inputId);
+        if (input) {
+            input.value = '';
+            filterTable(inputId, tableId);
+            input.focus();
+        }
+    }
+
+    // ===== PRODUCT FILTERS =====
+    function filterProducts() {
+        const categoryFilter = document.getElementById('categoryFilter').value.toLowerCase();
+        const stockFilter = document.getElementById('stockFilter').value;
+        const searchInput = document.getElementById('searchProducts');
+        const rows = document.querySelectorAll('#productsTable tbody tr');
+        let visibleCount = 0;
+
+        rows.forEach(row => {
+            let show = true;
+            const cells = row.querySelectorAll('td');
+            
+            // Category filter
+            if (categoryFilter) {
+                const categoryCell = cells[6];
+                if (categoryCell && !categoryCell.textContent.toLowerCase().includes(categoryFilter)) {
+                    show = false;
+                }
+            }
+            
+            // Stock filter
+            if (stockFilter && show) {
+                const stockCell = cells[4];
+                if (stockCell) {
+                    const stockText = stockCell.textContent.trim();
+                    const stockValue = parseInt(stockText);
+                    if (stockFilter === 'in-stock' && stockValue <= 0) show = false;
+                    else if (stockFilter === 'low-stock' && (stockValue > 5 || stockValue <= 0)) show = false;
+                    else if (stockFilter === 'out-of-stock' && stockValue > 0) show = false;
+                }
+            }
+            
+            // Search filter (if search input has value)
+            if (show && searchInput && searchInput.value.trim()) {
+                const searchText = row.textContent.toLowerCase();
+                if (!searchText.includes(searchInput.value.toLowerCase().trim())) {
+                    show = false;
+                }
+            }
+            
+            row.style.display = show ? '' : 'none';
+            if (show) visibleCount++;
+        });
+
+        // Update result count
+        const table = document.getElementById('productsTable');
+        const counter = table.parentElement.querySelector('.result-count');
+        if (counter) {
+            counter.textContent = `Showing ${visibleCount} of ${rows.length} results`;
+        }
+
+        const noResultMsg = table.parentElement.querySelector('.no-results-message');
+        if (noResultMsg) {
+            noResultMsg.style.display = visibleCount === 0 ? 'block' : 'none';
+        }
+    }
+
+    // ===== EDIT PRODUCT =====
+    function editProduct(id) {
+        // Show loading state
+        const modal = document.getElementById('editProductModal');
+        if (modal) {
+            // You could show a loading spinner here
+        }
         
-        // ===== SEARCH FUNCTIONS =====
-        function filterTable(inputId, tableId) {
-            const input = document.getElementById(inputId);
-            const table = document.getElementById(tableId);
-            
-            if (!input || !table) return;
-
-            const filter = input.value.toLowerCase().trim();
-            const rows = table.querySelectorAll('tbody tr');
-            let visibleCount = 0;
-
-            rows.forEach(row => {
-                const text = row.textContent.toLowerCase();
-                const match = text.includes(filter);
-                row.style.display = match ? '' : 'none';
-                if (match) visibleCount++;
-            });
-
-            // Update result count
-            const counter = table.parentElement.querySelector('.result-count');
-            if (counter) {
-                counter.textContent = `Showing ${visibleCount} of ${rows.length} results`;
-            }
-
-            // Show/hide no results message
-            const noResultMsg = table.parentElement.querySelector('.no-results-message');
-            if (noResultMsg) {
-                noResultMsg.style.display = visibleCount === 0 ? 'block' : 'none';
-            }
-
-            // Show/hide clear button
-            const clearBtn = input.parentElement.querySelector('.clear-search-btn');
-            if (clearBtn) {
-                clearBtn.style.display = input.value.length > 0 ? 'block' : 'none';
-            }
-        }
-
-        function clearSearch(inputId, tableId) {
-            const input = document.getElementById(inputId);
-            if (input) {
-                input.value = '';
-                filterTable(inputId, tableId);
-                input.focus();
-            }
-        }
-
-        // ===== PRODUCT FILTERS =====
-        function filterProducts() {
-            const categoryFilter = document.getElementById('categoryFilter').value.toLowerCase();
-            const stockFilter = document.getElementById('stockFilter').value;
-            const searchInput = document.getElementById('searchProducts');
-            const rows = document.querySelectorAll('#productsTable tbody tr');
-            let visibleCount = 0;
-
-            rows.forEach(row => {
-                let show = true;
-                const cells = row.querySelectorAll('td');
-                
-                // Category filter
-                if (categoryFilter) {
-                    const categoryCell = cells[6];
-                    if (categoryCell && !categoryCell.textContent.toLowerCase().includes(categoryFilter)) {
-                        show = false;
-                    }
+        fetch('includes/ajax.php?action=get_product&id=' + id)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok: ' + response.status);
                 }
-                
-                // Stock filter
-                if (stockFilter && show) {
-                    const stockCell = cells[4];
-                    if (stockCell) {
-                        const stockText = stockCell.textContent.trim();
-                        const stockValue = parseInt(stockText);
-                        if (stockFilter === 'in-stock' && stockValue <= 0) show = false;
-                        else if (stockFilter === 'low-stock' && (stockValue > 5 || stockValue <= 0)) show = false;
-                        else if (stockFilter === 'out-of-stock' && stockValue > 0) show = false;
-                    }
-                }
-                
-                // Search filter (if search input has value)
-                if (show && searchInput && searchInput.value.trim()) {
-                    const searchText = row.textContent.toLowerCase();
-                    if (!searchText.includes(searchInput.value.toLowerCase().trim())) {
-                        show = false;
-                    }
-                }
-                
-                row.style.display = show ? '' : 'none';
-                if (show) visibleCount++;
-            });
-
-            // Update result count
-            const table = document.getElementById('productsTable');
-            const counter = table.parentElement.querySelector('.result-count');
-            if (counter) {
-                counter.textContent = `Showing ${visibleCount} of ${rows.length} results`;
-            }
-
-            const noResultMsg = table.parentElement.querySelector('.no-results-message');
-            if (noResultMsg) {
-                noResultMsg.style.display = visibleCount === 0 ? 'block' : 'none';
-            }
-        }
-
-        // ===== EDIT PRODUCT =====
-        function editProduct(id) {
-            // Show loading state
-            const modal = document.getElementById('editProductModal');
-            if (modal) {
-                // You could show a loading spinner here
-            }
-            
-            fetch('includes/ajax.php?action=get_product&id=' + id)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok: ' + response.status);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.success) {
-                        document.getElementById('edit_product_id').value = data.product.id;
-                        document.getElementById('edit_product_name').value = data.product.name || '';
-                        document.getElementById('edit_product_description').value = data.product.description || '';
-                        document.getElementById('edit_product_price').value = data.product.price || 0;
-                        document.getElementById('edit_product_category').value = data.product.category_id || '';
-                        document.getElementById('edit_product_stock').value = data.product.stock || 0;
-                        document.getElementById('edit_product_sku').value = data.product.sku || '';
-                        document.getElementById('edit_product_supplier').value = data.product.supplier || '';
-                        
-                        const imgPreview = document.getElementById('editImagePreview');
-                        if (data.product.image) {
-                            const imgUrl = getProductImageUrl(data.product.image);
-                            imgPreview.innerHTML = `<img src="${imgUrl}" alt="Product Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px;"><p>Current image</p>`;
-                        } else {
-                            imgPreview.innerHTML = `<i class="fas fa-image" style="font-size: 40px; color: #ddd;"></i><p>No image</p>`;
-                        }
-                        
-                        openModal('editProductModal');
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('edit_product_id').value = data.product.id;
+                    document.getElementById('edit_product_name').value = data.product.name || '';
+                    document.getElementById('edit_product_description').value = data.product.description || '';
+                    document.getElementById('edit_product_price').value = data.product.price || 0;
+                    document.getElementById('edit_product_category').value = data.product.category_id || '';
+                    document.getElementById('edit_product_stock').value = data.product.stock || 0;
+                    document.getElementById('edit_product_sku').value = data.product.sku || '';
+                    document.getElementById('edit_product_supplier').value = data.product.supplier || '';
+                    
+                    const imgPreview = document.getElementById('editImagePreview');
+                    if (data.product.image) {
+                        const imgUrl = getProductImageUrlJs(data.product.image);
+                        imgPreview.innerHTML = `<img src="${imgUrl}" alt="Product Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px;"><p>Current image</p>`;
                     } else {
-                        alert('Failed to load product data: ' + (data.message || 'Unknown error'));
+                        imgPreview.innerHTML = `<i class="fas fa-image" style="font-size: 40px; color: #ddd;"></i><p>No image</p>`;
                     }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Error loading product data. Please check the console for details.\n\n' + error.message);
-                });
-        }
-
-        // ===== AUTO-HIDE ALERTS =====
-        setTimeout(() => {
-            document.querySelectorAll('.alert-persistent').forEach(alert => {
-                alert.style.transition = 'opacity 0.5s ease';
-                setTimeout(() => {
-                    alert.style.opacity = '0';
-                    setTimeout(() => alert.remove(), 500);
-                }, 5000);
+                    
+                    openModal('editProductModal');
+                } else {
+                    alert('Failed to load product data: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error loading product data. Please check the console for details.\n\n' + error.message);
             });
-        }, 1000);
-    </script>
+    }
+
+    // ===== AUTO-HIDE ALERTS =====
+    setTimeout(() => {
+        document.querySelectorAll('.alert-persistent').forEach(alert => {
+            alert.style.transition = 'opacity 0.5s ease';
+            setTimeout(() => {
+                alert.style.opacity = '0';
+                setTimeout(() => alert.remove(), 500);
+            }, 5000);
+        });
+    }, 1000);
+</script>
 </body>
 </html>
