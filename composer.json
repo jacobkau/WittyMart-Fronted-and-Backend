@@ -1,0 +1,14 @@
+{
+    "name": "wittymart/ecommerce",
+    "description": "WittyMart E-commerce Application",
+    "type": "project",
+    "require": {
+        "php": ">=7.4",
+        "cloudinary/cloudinary_php": "^2.0"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist"
+    },
+    "minimum-stability": "stable"
+}
