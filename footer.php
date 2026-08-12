@@ -57,9 +57,9 @@
             <div class="footer-card">
                 <h2>Legal</h2>
                 <ul>
-                    <li><a href="terms.html#privacy">Privacy Policy</a></li>
-                    <li><a href="terms.html#terms">Terms of Service</a></li>
-                    <li><a href="terms.html#returns">Return Policy</a></li>
+                    <li><a href="terms.php#privacy">Privacy Policy</a></li>
+                    <li><a href="terms.php#terms">Terms of Service</a></li>
+                    <li><a href="terms.php#returns">Return Policy</a></li>
                     <?php if ($isAdmin ?? false): ?>
                         <li><a href="admin/dashboard.php"><i class="fas fa-crown"></i> Admin Panel</a></li>
                     <?php endif; ?>
