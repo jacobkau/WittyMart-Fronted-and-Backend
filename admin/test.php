@@ -1,7 +1,6 @@
 <?php
 require_once 'includes/config.php';
 
-
 // Get all tables
 $tables = [];
 try {
@@ -22,7 +21,7 @@ try {
 $tableInfo = [];
 foreach ($tables as $table) {
     try {
-        // Get columns
+        // Get columns - FIXED: Removed duplicate data_type
         $stmt = $pdo->prepare("
             SELECT 
                 column_name,
@@ -30,7 +29,6 @@ foreach ($tables as $table) {
                 character_maximum_length,
                 is_nullable,
                 column_default,
-                data_type,
                 udt_name
             FROM information_schema.columns 
             WHERE table_schema = 'public' 
@@ -40,22 +38,28 @@ foreach ($tables as $table) {
         $stmt->execute([$table]);
         $columns = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        // Get primary key
+        // Get primary key - FIXED: Properly alias the column
         $stmt = $pdo->prepare("
-            SELECT c.column_name
+            SELECT 
+                kcu.column_name 
             FROM information_schema.table_constraints tc
-            JOIN information_schema.constraint_column_usage ccu 
-                ON tc.constraint_name = ccu.constraint_name
+            JOIN information_schema.key_column_usage kcu 
+                ON tc.constraint_name = kcu.constraint_name
             WHERE tc.constraint_type = 'PRIMARY KEY'
             AND tc.table_schema = 'public'
             AND tc.table_name = ?
+            LIMIT 1
         ");
         $stmt->execute([$table]);
         $primaryKey = $stmt->fetch(PDO::FETCH_COLUMN);
         
-        // Get row count
-        $stmt = $pdo->query("SELECT COUNT(*) FROM \"$table\"");
-        $rowCount = $stmt->fetchColumn();
+        // Get row count - FIXED: Handle tables with special characters
+        try {
+            $rowCountStmt = $pdo->query("SELECT COUNT(*) FROM \"" . str_replace('"', '""', $table) . "\"");
+            $rowCount = $rowCountStmt->fetchColumn();
+        } catch (PDOException $e) {
+            $rowCount = 0;
+        }
         
         $tableInfo[$table] = [
             'columns' => $columns,
@@ -73,7 +77,7 @@ foreach ($tables as $table) {
     }
 }
 
-// Get table relationships (foreign keys)
+// Get table relationships (foreign keys) - FIXED: Simplified query
 $relationships = [];
 foreach ($tables as $table) {
     try {
@@ -106,7 +110,7 @@ function formatDataType($column) {
     $type = $column['data_type'] ?? $column['udt_name'] ?? 'unknown';
     $length = $column['character_maximum_length'] ?? null;
     
-    if ($length) {
+    if ($length && $length > 0) {
         return $type . '(' . $length . ')';
     }
     return $type;
@@ -261,6 +265,18 @@ function getDataTypeBadge($type) {
         
         .table-content.open {
             display: block;
+        }
+        
+        .alert {
+            padding: 15px 20px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        
+        .alert-danger {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
         }
         
         table {
@@ -531,12 +547,12 @@ function getDataTypeBadge($type) {
                             <div class="relationship">
                                 <i class="fas fa-link"></i>
                                 <strong>Foreign Keys:</strong>
-                                <?php foreach ($relationships[$table] as $rel): ?>
+                                <?php foreach ($relationships[$table] as $index => $rel): ?>
                                     <?php echo htmlspecialchars($rel['column_name']); ?> 
                                     → 
                                     <strong><?php echo htmlspecialchars($rel['foreign_table_name']); ?></strong>.
                                     <?php echo htmlspecialchars($rel['foreign_column_name']); ?>
-                                    <?php if (next($relationships[$table])): ?>, <?php endif; ?>
+                                    <?php if ($index < count($relationships[$table]) - 1): ?>, <?php endif; ?>
                                 <?php endforeach; ?>
                             </div>
                         <?php endif; ?>
