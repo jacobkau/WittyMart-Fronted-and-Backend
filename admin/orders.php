@@ -22,12 +22,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $stmt = $pdo->prepare("UPDATE orders SET status = ? WHERE id = ?");
                 if ($stmt->execute([$status, $id])) {
-                     logActivity(
-        'update_order',
-        'Updated order #' . $order_id . ' status to: ' . $status,
-        $_SESSION['user_id'],
-        $_SESSION['user_name']
-    );
+                    logActivity(
+                        'update_order',
+                        'Updated order #' . $id . ' status to: ' . $status,
+                        $_SESSION['user_id'],
+                        $_SESSION['user_name']
+                    );
                     $message = 'Order status updated successfully!';
                     $messageType = 'success';
                 } else {
@@ -53,12 +53,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Then delete order
             $stmt = $pdo->prepare("DELETE FROM orders WHERE id = ?");
             if ($stmt->execute([$id])) {
-                 logActivity(
-        'delete_order',
-        'Deleted order #' . $order_id,
-        $_SESSION['user_id'],
-        $_SESSION['user_name']
-    );
+                logActivity(
+                    'delete_order',
+                    'Deleted order #' . $id,
+                    $_SESSION['user_id'],
+                    $_SESSION['user_name']
+                );
                 $message = 'Order deleted successfully!';
                 $messageType = 'success';
             } else {
@@ -98,6 +98,248 @@ $page_title = 'Orders';
     <link rel="shortcut icon" href="images/logo.png" type="image/x-icon">
     <link rel="stylesheet" href="admin.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .table-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 10px 0;
+            margin-bottom: 15px;
+        }
+        
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #f8f9fa;
+            padding: 5px 12px;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .search-box input {
+            border: none;
+            background: transparent;
+            padding: 6px 0;
+            outline: none;
+            width: 200px;
+        }
+        
+        .filter-box select {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+            background: #f8f9fa;
+        }
+        
+        .status-select {
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+            background: #fff;
+            cursor: pointer;
+        }
+        
+        .badge {
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .badge-warning { background: #ffc107; color: #333; }
+        .badge-info { background: #17a2b8; color: #fff; }
+        .badge-primary { background: #007bff; color: #fff; }
+        .badge-success { background: #28a745; color: #fff; }
+        .badge-danger { background: #dc3545; color: #fff; }
+        .badge-secondary { background: #6c757d; color: #fff; }
+        
+        .btn-sm {
+            padding: 5px 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .btn-edit {
+            background: #28a745;
+            color: #fff;
+        }
+        
+        .btn-delete {
+            background: #dc3545;
+            color: #fff;
+        }
+        
+        .btn-edit:hover, .btn-delete:hover {
+            opacity: 0.8;
+        }
+        
+        .order-details {
+            padding: 10px 0;
+        }
+        
+        .order-details p {
+            margin: 5px 0;
+        }
+        
+        .order-details hr {
+            margin: 15px 0;
+            border: none;
+            border-top: 1px solid #dee2e6;
+        }
+        
+        .alert {
+            padding: 12px 20px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .text-muted {
+            color: #6c757d;
+        }
+        
+        .text-danger {
+            color: #dc3545;
+        }
+        
+        .text-center {
+            text-align: center;
+        }
+        
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            overflow: auto;
+        }
+        
+        .modal-content {
+            background-color: #fff;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+        }
+        
+        .close {
+            font-size: 28px;
+            font-weight: 700;
+            cursor: pointer;
+            color: #aaa;
+        }
+        
+        .close:hover {
+            color: #333;
+        }
+        
+        .admin-wrapper {
+            display: flex;
+        }
+        
+        .admin-main {
+            flex: 1;
+            padding: 20px;
+        }
+        
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .admin-card {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .card-body {
+            padding: 20px;
+            overflow-x: auto;
+        }
+        
+        .admin-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .admin-table th {
+            background: #f8f9fa;
+            padding: 10px;
+            text-align: left;
+            border-bottom: 2px solid #dee2e6;
+            font-weight: 600;
+        }
+        
+        .admin-table td {
+            padding: 10px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .admin-table tr:hover {
+            background: #f8f9fa;
+        }
+        
+        @media (max-width: 768px) {
+            .table-toolbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .search-box input {
+                width: 100%;
+            }
+            
+            .admin-table {
+                font-size: 13px;
+            }
+            
+            .admin-table th,
+            .admin-table td {
+                padding: 6px 8px;
+            }
+        }
+    </style>
 </head>
 <body>
     <?php include "header.php"?>
@@ -106,8 +348,8 @@ $page_title = 'Orders';
 
         <!-- Main Content -->
         <main class="admin-main">
-            <header class="admin-header" style="margin-bottom:20px:">
-                <span style="margin-bottom:20px:" class="badge badge-info">Total: <?php echo count($orders); ?></span>
+            <header class="admin-header">
+                <span class="badge badge-info">Total: <?php echo count($orders); ?> orders</span>
             </header>
 
             <?php if ($message): ?>
@@ -118,8 +360,8 @@ $page_title = 'Orders';
             <?php endif; ?>
 
             <!-- Orders Table -->
-            <div class="admin-card" style="padding:14px">
-                <div class="card-body" style="padding:14px">
+            <div class="admin-card">
+                <div class="card-body">
                     <div class="table-toolbar">
                         <div class="search-box">
                             <i class="fas fa-search"></i>
@@ -276,32 +518,42 @@ $page_title = 'Orders';
                                     </thead>
                                     <tbody>
                         `;
-                        data.items.forEach(item => {
+                        if (data.items && data.items.length > 0) {
+                            data.items.forEach(item => {
+                                html += `
+                                    <tr>
+                                        <td>${item.product_name}</td>
+                                        <td>${item.quantity}</td>
+                                        <td>${formatPrice(item.price)}</td>
+                                        <td>${formatPrice(item.quantity * item.price)}</td>
+                                    </tr>
+                                `;
+                            });
+                        } else {
                             html += `
                                 <tr>
-                                    <td>${item.product_name}</td>
-                                    <td>${item.quantity}</td>
-                                    <td>${formatPrice(item.price)}</td>
-                                    <td>${formatPrice(item.quantity * item.price)}</td>
+                                    <td colspan="4" style="text-align:center; color:#888; padding:15px;">
+                                        <i class="fas fa-box-open"></i> No items found
+                                    </td>
                                 </tr>
                             `;
-                        });
+                        }
                         html += `
                                     </tbody>
                                 </table>
-                                <div style="text-align: right; margin-top: 15px;">
-                                    <strong>Grand Total: ${formatPrice(data.order.total)}</strong>
+                                <div style="text-align: right; margin-top: 15px; font-size: 18px; font-weight: 700; color: #05573c;">
+                                    Grand Total: ${formatPrice(data.order.total)}
                                 </div>
                             </div>
                         `;
                         document.getElementById('orderDetails').innerHTML = html;
                     } else {
-                        document.getElementById('orderDetails').innerHTML = '<p class="text-danger">Failed to load order details.</p>';
+                        document.getElementById('orderDetails').innerHTML = '<p class="text-danger">Failed to load order details: ' + (data.message || 'Unknown error') + '</p>';
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    document.getElementById('orderDetails').innerHTML = '<p class="text-danger">Error loading order details.</p>';
+                    document.getElementById('orderDetails').innerHTML = '<p class="text-danger">Error loading order details. Please try again.</p>';
                 });
         }
 
@@ -313,8 +565,11 @@ $page_title = 'Orders';
                 if (row.cells.length > 0) {
                     const statusCell = row.cells[3];
                     if (statusCell) {
-                        const status = statusCell.textContent?.toLowerCase().trim() || '';
-                        row.style.display = !filter || status === filter ? '' : 'none';
+                        const statusSelect = statusCell.querySelector('select');
+                        if (statusSelect) {
+                            const status = statusSelect.value.toLowerCase();
+                            row.style.display = !filter || status === filter ? '' : 'none';
+                        }
                     }
                 }
             });
@@ -351,6 +606,19 @@ $page_title = 'Orders';
             };
             return badges[status] || 'badge-secondary';
         }
+
+        // ===== AUTO-HIDE ALERTS =====
+        setTimeout(function() {
+            document.querySelectorAll('.alert-persistent').forEach(function(alert) {
+                alert.style.transition = 'opacity 0.5s ease';
+                setTimeout(function() {
+                    alert.style.opacity = '0';
+                    setTimeout(function() {
+                        alert.style.display = 'none';
+                    }, 500);
+                }, 5000);
+            });
+        }, 1000);
     </script>
 </body>
 </html>
