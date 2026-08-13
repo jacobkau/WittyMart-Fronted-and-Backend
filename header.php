@@ -885,13 +885,20 @@ if ($isLoggedIn) {
         });
 
         // ============================================
-        // SEARCH SUGGESTIONS (Live Search)
+        // SEARCH SUGGESTIONS (Live Search) - FIXED
         // ============================================
         const searchInput = document.getElementById('searchInput');
         const suggestions = document.getElementById('searchSuggestions');
         let searchTimeout;
 
         if (searchInput) {
+            // Close suggestions when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.search-wrapper')) {
+                    suggestions.classList.remove('active');
+                }
+            });
+
             searchInput.addEventListener('input', function() {
                 clearTimeout(searchTimeout);
                 const query = this.value.trim();
@@ -910,7 +917,7 @@ if ($isLoggedIn) {
                                 data.products.forEach(product => {
                                     const price = 'Ksh ' + parseFloat(product.price).toFixed(2);
                                     html += `
-                                        <a href="product.php?id=${product.id}" class="suggestion-item">
+                                        <a href="product.php?id=${product.id}" class="suggestion-item" data-product-id="${product.id}">
                                             <i class="fas fa-search"></i>
                                             <span class="product-name">${product.name}</span>
                                             <span class="product-price">${price}</span>
@@ -930,11 +937,24 @@ if ($isLoggedIn) {
                 }, 300);
             });
 
-            // Close suggestions on blur
-            searchInput.addEventListener('blur', function() {
-                setTimeout(() => {
+            // Handle suggestion item clicks directly
+            suggestions.addEventListener('click', function(e) {
+                const item = e.target.closest('.suggestion-item');
+                if (item) {
+                    e.preventDefault();
+                    const href = item.getAttribute('href');
+                    if (href) {
+                        window.location.href = href;
+                    }
+                }
+            });
+
+            // Close suggestions when pressing Escape
+            searchInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
                     suggestions.classList.remove('active');
-                }, 200);
+                    this.blur();
+                }
             });
 
             // Prevent form submission if no query
