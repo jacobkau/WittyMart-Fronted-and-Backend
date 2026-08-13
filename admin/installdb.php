@@ -1,10 +1,6 @@
 <?php
 require_once 'includes/config.php';
 
-// Check if user is admin
-if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
-    die('Admin access required');
-}
 
 try {
     // Drop existing tables if they exist
