@@ -82,10 +82,21 @@ $isLoggedIn = isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
             box-shadow: 0 5px 20px rgba(0,0,0,0.15);
         }
         
+        .product .product-link {
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        
         .product h3 {
             font-size: 16px;
             margin: 10px 0 5px;
             color: #333;
+            transition: color 0.3s ease;
+        }
+        
+        .product h3:hover {
+            color: #05573c;
         }
         
         .product p {
@@ -239,17 +250,21 @@ $isLoggedIn = isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
                 <div class="products-grid">
                     <?php foreach ($products as $product): ?>
                         <div class="product">
-                            <div class="product-image-container">
-                                <img src="<?php echo htmlspecialchars(getProductImageUrl($product)); ?>" 
-                                     alt="<?php echo htmlspecialchars($product['name']); ?>"
-                                     onerror="this.src='uploads/products/no-image.png'">
-                                <?php if (!empty($product['image_url'])): ?>
-                                    <span class="cloudinary-badge">
-                                        <i class="fas fa-cloud"></i> Cloud
-                                    </span>
-                                <?php endif; ?>
-                            </div>
-                            <h3><?php echo htmlspecialchars($product['name']); ?></h3>
+                            <a href="product.php?id=<?php echo $product['id']; ?>" class="product-link">
+                                <div class="product-image-container">
+                                    <img src="<?php echo htmlspecialchars(getProductImageUrl($product)); ?>" 
+                                         alt="<?php echo htmlspecialchars($product['name']); ?>"
+                                         onerror="this.src='uploads/products/no-image.png'">
+                                    <?php if (!empty($product['image_url'])): ?>
+                                        <span class="cloudinary-badge">
+                                            <i class="fas fa-cloud"></i> Cloud
+                                        </span>
+                                    <?php endif; ?>
+                                </div>
+                            </a>
+                            <a href="product.php?id=<?php echo $product['id']; ?>" class="product-link">
+                                <h3><?php echo htmlspecialchars($product['name']); ?></h3>
+                            </a>
                             <p><?php echo htmlspecialchars(substr($product['description'] ?? '', 0, 60)); ?>...</p>
                             <span class="price">Ksh <?php echo number_format($product['price'], 0); ?></span>
                             <span class="stock-badge <?php echo ($product['stock'] ?? 0) > 0 ? 'in-stock' : 'out-of-stock'; ?>">
@@ -305,6 +320,7 @@ $isLoggedIn = isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
         document.querySelectorAll('.add-to-cart').forEach(button => {
             button.addEventListener('click', function(e) {
                 e.preventDefault();
+                e.stopPropagation(); // Prevent triggering the product link
                 
                 // Prevent double click
                 if (this.disabled) {
