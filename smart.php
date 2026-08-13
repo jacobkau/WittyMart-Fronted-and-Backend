@@ -65,10 +65,21 @@ $smart_products = getSmartPicks(8);
             box-shadow: 0 5px 20px rgba(0,0,0,0.15);
         }
         
+        .product .product-link {
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        
         .product h3 {
             font-size: 16px;
             margin: 10px 0 5px;
             color: #333;
+            transition: color 0.3s ease;
+        }
+        
+        .product h3:hover {
+            color: #05573c;
         }
         
         .product p {
@@ -221,17 +232,21 @@ $smart_products = getSmartPicks(8);
                 <?php if (!empty($smart_products)): ?>
                     <?php foreach ($smart_products as $product): ?>
                         <div class="product">
-                            <div class="product-image-container">
-                                <img src="<?php echo htmlspecialchars(getProductImageUrl($product)); ?>" 
-                                     alt="<?php echo htmlspecialchars($product['name']); ?>"
-                                     onerror="this.src='uploads/products/no-image.png'">
-                                <?php if (!empty($product['image_url'])): ?>
-                                    <span class="cloudinary-badge">
-                                        <i class="fas fa-cloud"></i> Cloud
-                                    </span>
-                                <?php endif; ?>
-                            </div>
-                            <h3><?php echo htmlspecialchars($product['name']); ?></h3>
+                            <a href="product.php?id=<?php echo $product['id']; ?>" class="product-link">
+                                <div class="product-image-container">
+                                    <img src="<?php echo htmlspecialchars(getProductImageUrl($product)); ?>" 
+                                         alt="<?php echo htmlspecialchars($product['name']); ?>"
+                                         onerror="this.src='uploads/products/no-image.png'">
+                                    <?php if (!empty($product['image_url'])): ?>
+                                        <span class="cloudinary-badge">
+                                            <i class="fas fa-cloud"></i> Cloud
+                                        </span>
+                                    <?php endif; ?>
+                                </div>
+                            </a>
+                            <a href="product.php?id=<?php echo $product['id']; ?>" class="product-link">
+                                <h3><?php echo htmlspecialchars($product['name']); ?></h3>
+                            </a>
                             <p><?php echo htmlspecialchars(substr($product['description'] ?? '', 0, 60)); ?>...</p>
                             <span class="price">Ksh <?php echo number_format($product['price'], 0); ?></span>
                             <span class="stock-badge <?php echo ($product['stock'] ?? 0) > 0 ? 'in-stock' : 'out-of-stock'; ?>">
@@ -277,98 +292,99 @@ $smart_products = getSmartPicks(8);
             }, 3000);
         }
 
-     // ============================================
-// ADD TO CART FUNCTION
-// ============================================
-document.querySelectorAll('.add-to-cart').forEach(button => {
-    button.addEventListener('click', function(e) {
-        e.preventDefault();
-        
-        // Prevent double click
-        if (this.disabled) {
-            return;
-        }
-        
-        // Check if user is logged in
-        const isLoggedIn = <?php echo isset($_SESSION['user_id']) ? 'true' : 'false'; ?>;
-        
-        if (!isLoggedIn) {
-            // Redirect to login page
-            showToast('Please login to add items to your cart', 'info');
-            setTimeout(() => {
-                window.location.href = 'home.php';
-            }, 1500);
-            return;
-        }
-        
-        const productId = this.dataset.productId;
-        const productName = this.dataset.productName;
-        const originalText = this.innerHTML;
-        const originalClass = this.className;
-        
-        // Disable button and show loading state
-        this.disabled = true;
-        this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
-        
-        // Send AJAX request
-        const formData = new FormData();
-        formData.append('ajax_action', 'add_to_cart');
-        formData.append('product_id', productId);
-        formData.append('quantity', 1);
-        
-        fetch('cart.php', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Success state
-                this.innerHTML = '<i class="fas fa-check"></i> Added!';
-                this.className = originalClass + ' added';
-                showToast(productName + ' added to cart!', 'success');
+        // ============================================
+        // ADD TO CART FUNCTION
+        // ============================================
+        document.querySelectorAll('.add-to-cart').forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation(); // Prevent triggering the product link
                 
-                // Update cart count if available
-                if (data.cart_count !== undefined) {
-                    const cartBadge = document.querySelector('.cart-count, .cart-badge');
-                    if (cartBadge) {
-                        cartBadge.textContent = data.cart_count;
-                    }
+                // Prevent double click
+                if (this.disabled) {
+                    return;
                 }
                 
-                // Reset after 2 seconds
-                setTimeout(() => {
-                    this.innerHTML = originalText;
-                    this.className = originalClass;
-                    this.disabled = false;
-                }, 2000);
-            } else {
-                // Error state
-                this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Failed!';
-                this.className = originalClass + ' error';
-                showToast(data.message || 'Failed to add to cart', 'error');
+                // Check if user is logged in
+                const isLoggedIn = <?php echo isset($_SESSION['user_id']) ? 'true' : 'false'; ?>;
                 
-                setTimeout(() => {
-                    this.innerHTML = originalText;
-                    this.className = originalClass;
-                    this.disabled = false;
-                }, 2000);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error!';
-            this.className = originalClass + ' error';
-            showToast('An error occurred. Please try again.', 'error');
-            
-            setTimeout(() => {
-                this.innerHTML = originalText;
-                this.className = originalClass;
-                this.disabled = false;
-            }, 2000);
+                if (!isLoggedIn) {
+                    // Redirect to login page
+                    showToast('Please login to add items to your cart', 'info');
+                    setTimeout(() => {
+                        window.location.href = 'home.php';
+                    }, 1500);
+                    return;
+                }
+                
+                const productId = this.dataset.productId;
+                const productName = this.dataset.productName;
+                const originalText = this.innerHTML;
+                const originalClass = this.className;
+                
+                // Disable button and show loading state
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+                
+                // Send AJAX request
+                const formData = new FormData();
+                formData.append('ajax_action', 'add_to_cart');
+                formData.append('product_id', productId);
+                formData.append('quantity', 1);
+                
+                fetch('cart.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Success state
+                        this.innerHTML = '<i class="fas fa-check"></i> Added!';
+                        this.className = originalClass + ' added';
+                        showToast(productName + ' added to cart!', 'success');
+                        
+                        // Update cart count if available
+                        if (data.cart_count !== undefined) {
+                            const cartBadge = document.querySelector('.cart-count, .cart-badge');
+                            if (cartBadge) {
+                                cartBadge.textContent = data.cart_count;
+                            }
+                        }
+                        
+                        // Reset after 2 seconds
+                        setTimeout(() => {
+                            this.innerHTML = originalText;
+                            this.className = originalClass;
+                            this.disabled = false;
+                        }, 2000);
+                    } else {
+                        // Error state
+                        this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Failed!';
+                        this.className = originalClass + ' error';
+                        showToast(data.message || 'Failed to add to cart', 'error');
+                        
+                        setTimeout(() => {
+                            this.innerHTML = originalText;
+                            this.className = originalClass;
+                            this.disabled = false;
+                        }, 2000);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error!';
+                    this.className = originalClass + ' error';
+                    showToast('An error occurred. Please try again.', 'error');
+                    
+                    setTimeout(() => {
+                        this.innerHTML = originalText;
+                        this.className = originalClass;
+                        this.disabled = false;
+                    }, 2000);
+                });
+            });
         });
-    });
-});
     </script>
 </body>
 </html>
