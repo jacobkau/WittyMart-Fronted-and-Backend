@@ -30,6 +30,281 @@ if ($isLoggedIn) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
     <style>
+        /* ============================================
+           FIXED HEADER STYLES
+           ============================================ */
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background: #fff;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            transition: box-shadow 0.3s ease;
+        }
+        
+        body.dark-mode header {
+            background: #1a1a2e;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        /* Logo */
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+        
+        .logo img {
+            height: 40px;
+            width: auto;
+        }
+        
+        .logo h1 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #05573c;
+            margin: 0;
+            white-space: nowrap;
+        }
+        
+        body.dark-mode .logo h1 {
+            color: #0a7a54;
+        }
+        
+        /* ============================================
+           SEARCH BAR - FIXED
+           ============================================ */
+        .search-container {
+            flex: 1;
+            max-width: 500px;
+            min-width: 200px;
+            margin: 0 15px;
+        }
+        
+        .search-form {
+            display: flex;
+            align-items: center;
+            background: #f5f5f5;
+            border-radius: 25px;
+            padding: 2px 5px 2px 18px;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        
+        .search-form:focus-within {
+            background: #fff;
+            border-color: #05573c;
+            box-shadow: 0 0 0 3px rgba(5, 87, 60, 0.1);
+        }
+        
+        body.dark-mode .search-form {
+            background: #2a2a3e;
+        }
+        
+        body.dark-mode .search-form:focus-within {
+            background: #1a1a2e;
+            border-color: #0a7a54;
+            box-shadow: 0 0 0 3px rgba(10, 122, 84, 0.2);
+        }
+        
+        .search-form input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            padding: 8px 0;
+            font-size: 14px;
+            outline: none;
+            color: #333;
+            min-width: 100px;
+        }
+        
+        body.dark-mode .search-form input {
+            color: #eee;
+        }
+        
+        .search-form input::placeholder {
+            color: #999;
+        }
+        
+        body.dark-mode .search-form input::placeholder {
+            color: #777;
+        }
+        
+        .search-form .search-btn {
+            background: #05573c;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+        }
+        
+        .search-form .search-btn:hover {
+            background: #03402c;
+            transform: scale(1.02);
+        }
+        
+        .search-form .search-btn i {
+            font-size: 14px;
+        }
+        
+        /* Search suggestions dropdown */
+        .search-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #fff;
+            border-radius: 0 0 12px 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            max-height: 400px;
+            overflow-y: auto;
+            display: none;
+            z-index: 1001;
+            margin-top: 2px;
+        }
+        
+        .search-suggestions.active {
+            display: block;
+        }
+        
+        .search-suggestions .suggestion-item {
+            padding: 10px 18px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .search-suggestions .suggestion-item:hover {
+            background: #f8f9fa;
+        }
+        
+        .search-suggestions .suggestion-item i {
+            color: #05573c;
+            font-size: 14px;
+        }
+        
+        .search-suggestions .suggestion-item .product-name {
+            flex: 1;
+        }
+        
+        .search-suggestions .suggestion-item .product-price {
+            color: #05573c;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        
+        .search-suggestions .suggestion-item .product-category {
+            font-size: 11px;
+            color: #888;
+        }
+        
+        .search-suggestions .suggestion-empty {
+            padding: 20px;
+            text-align: center;
+            color: #888;
+        }
+        
+        body.dark-mode .search-suggestions {
+            background: #1a1a2e;
+            border: 1px solid #2a2a3e;
+        }
+        
+        body.dark-mode .search-suggestions .suggestion-item {
+            border-bottom-color: #2a2a3e;
+        }
+        
+        body.dark-mode .search-suggestions .suggestion-item:hover {
+            background: #2a2a3e;
+        }
+        
+        .search-wrapper {
+            position: relative;
+            flex: 1;
+            max-width: 500px;
+            min-width: 200px;
+        }
+        
+        /* ============================================
+           NAVIGATION
+           ============================================ */
+        nav {
+            display: flex;
+            align-items: center;
+        }
+        
+        .nav-links {
+            display: flex;
+            align-items: center;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            gap: 5px;
+        }
+        
+        .nav-links li {
+            margin: 0;
+        }
+        
+        .nav-links li a {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border-radius: 6px;
+            color: #333;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-links li a:hover {
+            background: rgba(5, 87, 60, 0.08);
+            color: #05573c;
+        }
+        
+        .nav-links li a.active {
+            background: #05573c;
+            color: #fff !important;
+        }
+        
+        body.dark-mode .nav-links li a {
+            color: #eee;
+        }
+        
+        body.dark-mode .nav-links li a:hover {
+            background: rgba(255,255,255,0.08);
+            color: #0a7a54;
+        }
+        
+        body.dark-mode .nav-links li a.active {
+            background: #0a7a54;
+            color: #fff !important;
+        }
+        
         /* Cart badge styles */
         .nav-links .cart-link {
             position: relative;
@@ -113,7 +388,68 @@ if ($isLoggedIn) {
             display: none;
         }
 
-        /* Mobile Menu Styles */
+        /* Header actions */
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        
+        .logout-btn {
+            background: none;
+            border: none;
+            color: #e74c3c;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+        
+        .logout-btn:hover {
+            background: rgba(231, 76, 60, 0.1);
+            color: #c0392b;
+        }
+        
+        body.dark-mode .logout-btn {
+            color: #e74c3c;
+        }
+
+        /* Categories button */
+        .categories-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: none;
+            border: 1px solid #e0e0e0;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            color: #333;
+            transition: all 0.3s ease;
+            font-size: 13px;
+        }
+        
+        .categories-btn:hover {
+            background: rgba(5, 87, 60, 0.08);
+            border-color: #05573c;
+            color: #05573c;
+        }
+        
+        body.dark-mode .categories-btn {
+            color: #eee;
+            border-color: #3a3a5e;
+        }
+        
+        body.dark-mode .categories-btn:hover {
+            background: rgba(255,255,255,0.08);
+            border-color: #0a7a54;
+            color: #0a7a54;
+        }
+
+        /* Menu toggle */
         .menu-toggle {
             display: none;
             background: none;
@@ -129,15 +465,6 @@ if ($isLoggedIn) {
         .menu-toggle:hover {
             background: rgba(0,0,0,0.05);
         }
-
-        /* Dark mode */
-        body.dark-mode .header-cart {
-            color: #eee;
-        }
-        
-        body.dark-mode .header-cart:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
         
         body.dark-mode .menu-toggle {
             color: #eee;
@@ -147,15 +474,60 @@ if ($isLoggedIn) {
             background: rgba(255,255,255,0.1);
         }
 
+        /* Theme toggle button */
+        .theme-toggle {
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+            color: #555;
+        }
+        
+        .theme-toggle:hover {
+            background: rgba(0,0,0,0.05);
+        }
+        
+        body.dark-mode .theme-toggle {
+            color: #ddd;
+        }
+        
+        body.dark-mode .theme-toggle:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
         /* ============================================
-           FIXED: Responsive styles
+           MOBILE RESPONSIVE
            ============================================ */
+        @media (max-width: 992px) {
+            .search-wrapper {
+                order: 10;
+                flex: 1 1 100%;
+                max-width: 100%;
+                margin: 5px 0;
+            }
+            
+            .header-container {
+                gap: 10px;
+            }
+        }
+
         @media (max-width: 768px) {
             .menu-toggle {
                 display: block;
             }
             
-            /* More specific selector to avoid !important conflicts */
+            .logo h1 {
+                font-size: 16px;
+            }
+            
+            .logo img {
+                height: 32px;
+            }
+            
+            /* Mobile nav */
             #nav-links.nav-links {
                 display: none;
                 position: absolute;
@@ -171,6 +543,7 @@ if ($isLoggedIn) {
                 gap: 0;
                 max-height: 80vh;
                 overflow-y: auto;
+                width: 100%;
             }
             
             #nav-links.nav-links.open {
@@ -180,7 +553,6 @@ if ($isLoggedIn) {
             #nav-links.nav-links li {
                 margin: 2px 0;
                 width: 100%;
-                list-style: none;
             }
             
             #nav-links.nav-links li a {
@@ -221,18 +593,158 @@ if ($isLoggedIn) {
                 color: #fff !important;
             }
             
-            /* Header container should be relative for absolute positioning */
             .header-container {
                 position: relative;
             }
+            
+            .search-wrapper {
+                order: 10;
+                flex: 1 1 100%;
+                max-width: 100%;
+            }
+            
+            .search-form {
+                border-radius: 20px;
+                padding: 2px 5px 2px 14px;
+            }
+            
+            .search-form .search-btn span {
+                display: none;
+            }
+            
+            .search-form .search-btn {
+                padding: 8px 14px;
+                border-radius: 50%;
+            }
+            
+            .search-form input {
+                font-size: 13px;
+                padding: 6px 0;
+            }
+            
+            .categories-btn span {
+                display: none;
+            }
+            
+            .categories-btn {
+                padding: 6px 10px;
+            }
         }
 
-        /* Small screens */
         @media (max-width: 480px) {
+            .header-container {
+                padding: 8px 12px;
+                gap: 8px;
+            }
+            
+            .logo h1 {
+                font-size: 14px;
+            }
+            
+            .logo img {
+                height: 28px;
+            }
+            
             #nav-links.nav-links li a {
                 padding: 10px 12px;
                 font-size: 14px;
             }
+            
+            .header-actions {
+                gap: 4px;
+            }
+            
+            .header-cart .cart-icon {
+                font-size: 18px;
+            }
+            
+            .search-form {
+                padding: 2px 5px 2px 12px;
+            }
+            
+            .search-form input {
+                font-size: 12px;
+                padding: 5px 0;
+                min-width: 60px;
+            }
+            
+            .search-form .search-btn {
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+        }
+        
+        /* ============================================
+           SIDEBAR STYLES
+           ============================================ */
+        .sidebar-user-info {
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: #f8f9fa;
+            margin: 0 10px 10px 10px;
+            border-radius: 8px;
+        }
+        
+        .sidebar-user-info .user-details {
+            flex: 1;
+        }
+        
+        .sidebar-user-info .user-name {
+            font-weight: 600;
+            color: #333;
+            margin: 0;
+            font-size: 14px;
+        }
+        
+        .sidebar-user-info .user-email {
+            color: #888;
+            margin: 2px 0 0;
+            font-size: 12px;
+        }
+        
+        .sidebar-footer {
+            padding: 15px 20px;
+            border-top: 1px solid #e0e0e0;
+            margin-top: 10px;
+        }
+        
+        .sidebar-logout {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #e74c3c;
+            text-decoration: none;
+            font-weight: 600;
+            padding: 8px 12px;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+        
+        .sidebar-logout:hover {
+            background: rgba(231, 76, 60, 0.1);
+            color: #c0392b;
+        }
+        
+        body.dark-mode .sidebar-user-info {
+            background: #2a2a3e;
+        }
+        
+        body.dark-mode .sidebar-user-info .user-name {
+            color: #eee;
+        }
+        
+        body.dark-mode .sidebar-user-info .user-email {
+            color: #999;
+        }
+        
+        body.dark-mode .sidebar-footer {
+            border-top-color: #3a3a5e;
+        }
+        
+        .nav-links a i {
+            margin-right: 5px;
         }
     </style>
 </head>
@@ -243,6 +755,19 @@ if ($isLoggedIn) {
             <div class="logo">
                 <img src="images/logo.png" alt="WittyMart Logo">
                 <h1>WittyMart Shop</h1>
+            </div>
+            
+            <!-- Search Bar - Fixed and Sticky -->
+            <div class="search-wrapper">
+                <form class="search-form" action="search.php" method="GET" id="searchForm">
+                    <input type="text" name="q" id="searchInput" placeholder="Search products..." autocomplete="off">
+                    <button type="submit" class="search-btn">
+                        <i class="fas fa-search"></i>
+                        <span>Search</span>
+                    </button>
+                </form>
+                <!-- Search Suggestions -->
+                <div class="search-suggestions" id="searchSuggestions"></div>
             </div>
             
             <nav id="main-nav">
@@ -364,134 +889,9 @@ if ($isLoggedIn) {
         <?php endif; ?>
     </div>
 
-    <style>
-        /* Header styles for logged-in state */
-        .header-actions {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .logout-btn {
-            background: none;
-            border: none;
-            color: #e74c3c;
-            font-size: 20px;
-            cursor: pointer;
-            padding: 5px 10px;
-            border-radius: 6px;
-            transition: all 0.3s ease;
-        }
-        
-        .logout-btn:hover {
-            background: rgba(231, 76, 60, 0.1);
-            color: #c0392b;
-        }
-        
-        /* Sidebar user info */
-        .sidebar-user-info {
-            padding: 15px 20px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            background: #f8f9fa;
-            margin: 0 10px 10px 10px;
-            border-radius: 8px;
-        }
-        
-        .sidebar-user-info .user-details {
-            flex: 1;
-        }
-        
-        .sidebar-user-info .user-name {
-            font-weight: 600;
-            color: #333;
-            margin: 0;
-            font-size: 14px;
-        }
-        
-        .sidebar-user-info .user-email {
-            color: #888;
-            margin: 2px 0 0;
-            font-size: 12px;
-        }
-        
-        .sidebar-footer {
-            padding: 15px 20px;
-            border-top: 1px solid #e0e0e0;
-            margin-top: 10px;
-        }
-        
-        .sidebar-logout {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: #e74c3c;
-            text-decoration: none;
-            font-weight: 600;
-            padding: 8px 12px;
-            border-radius: 6px;
-            transition: all 0.3s ease;
-        }
-        
-        .sidebar-logout:hover {
-            background: rgba(231, 76, 60, 0.1);
-            color: #c0392b;
-        }
-        
-        /* Dark mode styles */
-        body.dark-mode .sidebar-user-info {
-            background: #2a2a3e;
-        }
-        
-        body.dark-mode .sidebar-user-info .user-name {
-            color: #eee;
-        }
-        
-        body.dark-mode .sidebar-user-info .user-email {
-            color: #999;
-        }
-        
-        body.dark-mode .sidebar-footer {
-            border-top-color: #3a3a5e;
-        }
-        
-        body.dark-mode .logout-btn {
-            color: #e74c3c;
-        }
-        
-        .nav-links a i {
-            margin-right: 5px;
-        }
-
-        /* Theme toggle button */
-        .theme-toggle {
-            background: none;
-            border: none;
-            font-size: 18px;
-            cursor: pointer;
-            padding: 8px 12px;
-            border-radius: 6px;
-            transition: all 0.3s ease;
-            color: #555;
-        }
-        
-        .theme-toggle:hover {
-            background: rgba(0,0,0,0.05);
-        }
-        
-        body.dark-mode .theme-toggle {
-            color: #ddd;
-        }
-        
-        body.dark-mode .theme-toggle:hover {
-            background: rgba(255,255,255,0.1);
-        }
-    </style>
-
     <script>
         // ============================================
-        // MOBILE MENU TOGGLE - FIXED
+        // MOBILE MENU TOGGLE
         // ============================================
         function toggleMenu() {
             const navLinks = document.getElementById('nav-links');
@@ -503,10 +903,6 @@ if ($isLoggedIn) {
             }
             
             navLinks.classList.toggle('open');
-            
-            // Debug logging
-            console.log('Menu toggled. Open class:', navLinks.classList.contains('open'));
-            console.log('Current display style:', window.getComputedStyle(navLinks).display);
             
             if (navLinks.classList.contains('open')) {
                 if (menuIcon) menuIcon.className = 'fas fa-times';
@@ -521,7 +917,6 @@ if ($isLoggedIn) {
             const menuToggle = document.getElementById('menuToggleBtn');
             const navLinks = document.getElementById('nav-links');
             
-            // If click is outside the nav and menu is open, close it
             if (navLinks && navLinks.classList.contains('open')) {
                 if (!nav.contains(event.target) && !menuToggle.contains(event.target)) {
                     navLinks.classList.remove('open');
@@ -546,6 +941,67 @@ if ($isLoggedIn) {
                 }
             });
         });
+
+        // ============================================
+        // SEARCH SUGGESTIONS (Live Search)
+        // ============================================
+        const searchInput = document.getElementById('searchInput');
+        const suggestions = document.getElementById('searchSuggestions');
+        let searchTimeout;
+
+        if (searchInput) {
+            searchInput.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                const query = this.value.trim();
+                
+                if (query.length < 2) {
+                    suggestions.classList.remove('active');
+                    return;
+                }
+                
+                searchTimeout = setTimeout(function() {
+                    fetch('includes/ajax.php?action=search_products&q=' + encodeURIComponent(query))
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success && data.products && data.products.length > 0) {
+                                let html = '';
+                                data.products.forEach(product => {
+                                    const price = 'Ksh ' + parseFloat(product.price).toFixed(2);
+                                    html += `
+                                        <a href="product.php?id=${product.id}" class="suggestion-item">
+                                            <i class="fas fa-search"></i>
+                                            <span class="product-name">${product.name}</span>
+                                            <span class="product-price">${price}</span>
+                                        </a>
+                                    `;
+                                });
+                                suggestions.innerHTML = html;
+                                suggestions.classList.add('active');
+                            } else {
+                                suggestions.innerHTML = `<div class="suggestion-empty">No products found</div>`;
+                                suggestions.classList.add('active');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Search error:', error);
+                        });
+                }, 300);
+            });
+
+            // Close suggestions on blur
+            searchInput.addEventListener('blur', function() {
+                setTimeout(() => {
+                    suggestions.classList.remove('active');
+                }, 200);
+            });
+
+            // Prevent form submission if no query
+            document.getElementById('searchForm').addEventListener('submit', function(e) {
+                if (!searchInput.value.trim()) {
+                    e.preventDefault();
+                }
+            });
+        }
 
         // ============================================
         // CART COUNT REFRESH FUNCTION
@@ -589,10 +1045,8 @@ if ($isLoggedIn) {
         // ============================================
         // AUTO-REFRESH CART COUNT
         // ============================================
-        // Refresh cart count every 30 seconds
         setInterval(refreshCartCount, 30000);
 
-        // Refresh cart count when page becomes visible again
         document.addEventListener('visibilitychange', function() {
             if (!document.hidden) {
                 refreshCartCount();
@@ -637,21 +1091,12 @@ if ($isLoggedIn) {
             }
         }
 
-        // Close sidebar when clicking overlay
         document.addEventListener('DOMContentLoaded', function() {
             const overlay = document.getElementById('sidebarOverlay');
             if (overlay) {
                 overlay.addEventListener('click', function() {
                     toggleSidebar();
                 });
-            }
-            
-            // Debug: Log initial state
-            const navLinks = document.getElementById('nav-links');
-            if (navLinks) {
-                console.log('Nav links found. Initial display:', window.getComputedStyle(navLinks).display);
-            } else {
-                console.error('Nav links element not found on DOM ready');
             }
         });
     </script>
