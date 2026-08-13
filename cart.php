@@ -753,15 +753,15 @@ function getCartProductImage($product) {
             document.getElementById('cart-total').textContent = total.toLocaleString();
         }
         
-        function checkout() {
-            const cartItems = document.querySelectorAll('.cart-item');
-            if (cartItems.length === 0) {
-                alert('Your cart is empty!');
-                return;
-            }
-            alert('Proceeding to checkout...');
-            // window.location.href = 'checkout.php';
-        }
+      function checkout() {
+    const cartItems = document.querySelectorAll('.cart-item');
+    if (cartItems.length === 0) {
+        alert('Your cart is empty!');
+        return;
+    }
+    // Redirect to checkout page
+    window.location.href = 'checkout.php';
+}
     </script>
 </body>
 </html>
