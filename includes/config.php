@@ -151,7 +151,7 @@ if ($cloudinary) {
     error_log('Cloudinary is NOT available - using local storage fallback');
 }
 
-
+require_once 'cloudinary_helper.php';
 
 // ============================================
 // SITE CONFIGURATION
