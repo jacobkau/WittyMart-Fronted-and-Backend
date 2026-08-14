@@ -178,6 +178,23 @@ function getSliderImageUrl($image_path) {
     }
     return $image_path;
 }
+  // ===== JAVASCRIPT HELPER FOR IMAGE URL =====
+    function getProductImageUrlJs(imagePath) {
+        if (!imagePath) {
+            return 'https://wittymart.onrender.com/uploads/products/no-image.png';
+        }
+        
+        // If it's already a full URL, return it
+        if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+            return imagePath;
+        }
+        
+        // Clean the path
+        let cleanPath = imagePath.replace(/^\/+/, '').replace(/\.\.\//g, '');
+        
+        // Return full URL
+        return 'https://wittymart.onrender.com/' + cleanPath;
+    }
 
 /**
  * Render star rating
