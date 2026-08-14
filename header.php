@@ -20,6 +20,18 @@ if ($isLoggedIn) {
         $cartCount = 0;
     }
 }
+
+// Get user initials for avatar
+function getUserInitials($name) {
+    $initials = '';
+    $words = explode(' ', trim($name));
+    foreach ($words as $word) {
+        if (!empty($word)) {
+            $initials .= strtoupper(substr($word, 0, 1));
+        }
+    }
+    return substr($initials, 0, 2);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -155,7 +167,7 @@ if ($isLoggedIn) {
         }
         
         /* ============================================
-           SEARCH BAR - FIXED
+           SEARCH BAR
            ============================================ */
         .search-wrapper {
             flex: 1;
@@ -290,11 +302,6 @@ if ($isLoggedIn) {
             font-size: 13px;
         }
         
-        .search-suggestions .suggestion-item .product-category {
-            font-size: 11px;
-            color: #888;
-        }
-        
         .search-suggestions .suggestion-empty {
             padding: 20px;
             text-align: center;
@@ -367,24 +374,22 @@ if ($isLoggedIn) {
             display: none;
         }
         
-        .logout-btn {
-            background: none;
-            border: none;
-            color: #e74c3c;
-            font-size: 18px;
-            cursor: pointer;
-            padding: 5px 10px;
+        .login-btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
             border-radius: 6px;
+            background: #05573c;
+            color: #fff;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 14px;
             transition: all 0.3s ease;
         }
         
-        .logout-btn:hover {
-            background: rgba(231, 76, 60, 0.1);
-            color: #c0392b;
-        }
-        
-        body.dark-mode .logout-btn {
-            color: #e74c3c;
+        .login-btn:hover {
+            background: #03402c;
         }
         
         .theme-toggle {
@@ -660,7 +665,6 @@ if ($isLoggedIn) {
                 display: block;
             }
             
-            /* Mobile nav - appears when menu toggle is clicked */
             .header-bottom .nav-links.mobile-open {
                 display: flex;
                 flex-direction: column;
@@ -768,7 +772,7 @@ if ($isLoggedIn) {
                 font-size: 12px;
             }
             
-            .user-dropdown .dropdown-toggle span {
+            .user-dropdown .dropdown-toggle span:not(.user-avatar) {
                 display: none;
             }
         }
@@ -914,14 +918,7 @@ if ($isLoggedIn) {
                     <div class="user-dropdown" id="userDropdown">
                         <button class="dropdown-toggle" onclick="toggleDropdown()" title="My Account">
                             <span class="user-avatar">
-                                <?php 
-                                $initials = '';
-                                $words = explode(' ', $userName);
-                                foreach ($words as $word) {
-                                    $initials .= strtoupper(substr($word, 0, 1));
-                                }
-                                echo substr($initials, 0, 2);
-                                ?>
+                                <?php echo getUserInitials($userName); ?>
                             </span>
                             <span><?php echo htmlspecialchars($userName); ?></span>
                             <i class="fas fa-chevron-down" style="font-size: 12px;"></i>
@@ -953,7 +950,7 @@ if ($isLoggedIn) {
                     </div>
                 <?php else: ?>
                     <!-- Login/Register Button -->
-                    <a href="home.php" class="login-btn" style="display:flex; align-items:center; gap:6px; padding:8px 16px; border-radius:6px; background:#05573c; color:#fff; text-decoration:none; font-weight:500; font-size:14px; transition: all 0.3s ease;">
+                    <a href="home.php" class="login-btn">
                         <i class="fas fa-sign-in-alt"></i> Login
                     </a>
                 <?php endif; ?>
@@ -1048,7 +1045,9 @@ if ($isLoggedIn) {
         // ============================================
         function toggleDropdown() {
             const dropdown = document.getElementById('dropdownMenu');
-            dropdown.classList.toggle('active');
+            if (dropdown) {
+                dropdown.classList.toggle('active');
+            }
         }
 
         // Close dropdown when clicking outside
@@ -1115,7 +1114,7 @@ if ($isLoggedIn) {
         });
 
         // ============================================
-        // SEARCH SUGGESTIONS (Live Search) - FIXED
+        // SEARCH SUGGESTIONS (Live Search)
         // ============================================
         const searchInput = document.getElementById('searchInput');
         const suggestions = document.getElementById('searchSuggestions');
@@ -1144,7 +1143,7 @@ if ($isLoggedIn) {
                         .then(data => {
                             if (data.success && data.products && data.products.length > 0) {
                                 let html = '';
-                                data.products.forEach(product => {
+                                data.products.forEach(function(product) {
                                     const price = 'Ksh ' + parseFloat(product.price).toFixed(2);
                                     html += `
                                         <a href="product.php?id=${product.id}" class="suggestion-item" data-product-id="${product.id}">
@@ -1157,11 +1156,11 @@ if ($isLoggedIn) {
                                 suggestions.innerHTML = html;
                                 suggestions.classList.add('active');
                             } else {
-                                suggestions.innerHTML = `<div class="suggestion-empty">No products found</div>`;
+                                suggestions.innerHTML = '<div class="suggestion-empty">No products found</div>';
                                 suggestions.classList.add('active');
                             }
                         })
-                        .catch(error => {
+                        .catch(function(error) {
                             console.error('Search error:', error);
                         });
                 }, 300);
@@ -1202,19 +1201,18 @@ if ($isLoggedIn) {
             if (!<?php echo json_encode($isLoggedIn); ?>) return;
             
             fetch('cart.php?action=get_cart_count')
-                .then(response => response.json())
-                .then(data => {
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
                     if (data.success) {
-                        const count = data.count;
+                        var count = data.count;
                         
-                        // Update header cart badge
-                        const headerBadge = document.getElementById('headerCartBadge');
+                        var headerBadge = document.getElementById('headerCartBadge');
                         if (headerBadge) {
                             if (count > 0) {
                                 headerBadge.textContent = count;
                                 headerBadge.classList.remove('empty');
                                 headerBadge.classList.add('pulse');
-                                setTimeout(() => headerBadge.classList.remove('pulse'), 500);
+                                setTimeout(function() { headerBadge.classList.remove('pulse'); }, 500);
                             } else {
                                 headerBadge.textContent = '';
                                 headerBadge.classList.add('empty');
@@ -1222,16 +1220,7 @@ if ($isLoggedIn) {
                         }
                     }
                 })
-                .catch(error => console.error('Error refreshing cart count:', error));
-        }
-
-        // ============================================
-        // LOGOUT FUNCTION
-        // ============================================
-        function logoutUser() {
-            if (confirm('Are you sure you want to logout?')) {
-                window.location.href = 'logout.php';
-            }
+                .catch(function(error) { console.error('Error refreshing cart count:', error); });
         }
 
         // ============================================
@@ -1250,8 +1239,8 @@ if ($isLoggedIn) {
         // ============================================
         function toggleTheme() {
             document.body.classList.toggle('dark-mode');
-            const isDark = document.body.classList.contains('dark-mode');
-            const icon = document.getElementById('theme-icon');
+            var isDark = document.body.classList.contains('dark-mode');
+            var icon = document.getElementById('theme-icon');
             if (icon) {
                 icon.innerHTML = isDark ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
                 icon.title = isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode';
@@ -1260,10 +1249,10 @@ if ($isLoggedIn) {
         }
 
         // Load saved theme
-        const savedTheme = localStorage.getItem('theme');
+        var savedTheme = localStorage.getItem('theme');
         if (savedTheme === 'dark') {
             document.body.classList.add('dark-mode');
-            const icon = document.getElementById('theme-icon');
+            var icon = document.getElementById('theme-icon');
             if (icon) {
                 icon.innerHTML = '<i class="fas fa-moon"></i>';
                 icon.title = 'Switch to Light Mode';
@@ -1274,8 +1263,8 @@ if ($isLoggedIn) {
         // SIDEBAR TOGGLE
         // ============================================
         function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const overlay = document.getElementById('sidebarOverlay');
+            var sidebar = document.getElementById('sidebar');
+            var overlay = document.getElementById('sidebarOverlay');
             if (sidebar && overlay) {
                 sidebar.classList.toggle('active');
                 overlay.classList.toggle('active');
@@ -1284,7 +1273,7 @@ if ($isLoggedIn) {
         }
 
         document.addEventListener('DOMContentLoaded', function() {
-            const overlay = document.getElementById('sidebarOverlay');
+            var overlay = document.getElementById('sidebarOverlay');
             if (overlay) {
                 overlay.addEventListener('click', function() {
                     toggleSidebar();
