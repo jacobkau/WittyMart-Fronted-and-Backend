@@ -1,5 +1,6 @@
 <?php
 // Disable error display but log them
+// Disable error display but log them
 ini_set('display_errors', 0);
 ini_set('display_startup_errors', 0);
 error_reporting(E_ALL);
@@ -13,8 +14,13 @@ ob_start();
 // Set JSON header first
 header('Content-Type: application/json');
 
-// Load config
-require_once 'config.php';
+try {
+    require_once 'config.php';
+} catch (Exception $e) {
+    ob_clean();
+    echo json_encode(['success' => false, 'message' => 'Configuration error: ' . $e->getMessage()]);
+    exit;
+}
 
 // Get action from request
 $action = $_GET['action'] ?? '';
