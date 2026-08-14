@@ -1,7 +1,19 @@
 <?php
 
 require_once 'config.php';
-
+function getProductImage($image_name, $image_url = null) {
+    // If Cloudinary URL exists, use it
+    if (!empty($image_url)) {
+        return $image_url;
+    }
+    
+    // Fallback to local image
+    if (!empty($image_name) && file_exists(UPLOAD_DIR . $image_name)) {
+        return '../uploads/products/' . $image_name;
+    }
+    
+    return '../uploads/products/no-image.png';
+}
 /**
  * Upload image to Cloudinary
  */
