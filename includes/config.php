@@ -1,8 +1,8 @@
 <?php
 
 error_reporting(E_ALL);
-ini_set('display_errors', 0);
-
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
 // ============================================
 // COMPOSER AUTOLOADER
 // ============================================
@@ -42,6 +42,67 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // ============================================
+// DATABASE CONNECTION
+// ============================================
+
+// Get database URL from environment variable (Render)
+$database_url = getenv('DATABASE_URL');
+
+if (!$database_url && isset($_ENV['DATABASE_URL'])) {
+    $database_url = $_ENV['DATABASE_URL'];
+}
+
+error_log('DATABASE_URL exists: ' . ($database_url ? 'Yes' : 'No'));
+
+if (!$database_url) {
+    die('DATABASE_URL environment variable is not set');
+}
+
+// Parse the database URL
+$db_parts = parse_url($database_url);
+
+$db_config = [
+    'host' => $db_parts['host'] ?? 'localhost',
+    'port' => $db_parts['port'] ?? '5432',
+    'dbname' => ltrim($db_parts['path'] ?? '', '/'),
+    'user' => $db_parts['user'] ?? '',
+    'password' => $db_parts['pass'] ?? '',
+];
+
+try {
+    $dsn = sprintf(
+        'pgsql:host=%s;port=%s;dbname=%s',
+        $db_config['host'],
+        $db_config['port'],
+        $db_config['dbname']
+    );
+    
+    $pdo = new PDO($dsn, $db_config['user'], $db_config['password'], [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES => false,
+    ]);
+    
+} catch (PDOException $e) {
+    error_log('Database connection failed: ' . $e->getMessage());
+    die('Database connection error. Please try again later.');
+}
+
+// ============================================
+// APPLICATION CONFIGURATION
+// ============================================
+
+$protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
+$host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+define('SITE_URL', $protocol . $host);
+define('ADMIN_URL', SITE_URL . '/admin');
+define('SESSION_TIMEOUT', 1800);
+define('PASSWORD_BCRYPT_COST', 12);
+
+
+
+
+// ============================================
 // CLOUDINARY CONFIGURATION
 // ============================================
 
@@ -75,8 +136,10 @@ if (class_exists('Cloudinary\Cloudinary')) {
         }
     } else {
         error_log('Cloudinary credentials not set. Please set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET environment variables.');
+        error_log('Current values: CLOUDINARY_CLOUD_NAME=' . CLOUDINARY_CLOUD_NAME . ', API_KEY=' . (CLOUDINARY_API_KEY ? 'set' : 'not set') . ', API_SECRET=' . (CLOUDINARY_API_SECRET ? 'set' : 'not set'));
     }
 } else {
+    // Cloudinary not installed, set to null
     $cloudinary = null;
     error_log('Cloudinary class not found. Please run: composer require cloudinary/cloudinary_php');
 }
@@ -88,78 +151,13 @@ if ($cloudinary) {
     error_log('Cloudinary is NOT available - using local storage fallback');
 }
 
-// ============================================
-// INCLUDE CLOUDINARY HELPER
-// ============================================
-// Load Cloudinary helper functions (must be after $cloudinary is initialized)
-require_once 'cloudinary_helper.php';
 
-// Get database URL from environment variable (Render)
-$database_url = getenv('DATABASE_URL');
-
-if (!$database_url && isset($_ENV['DATABASE_URL'])) {
-    $database_url = $_ENV['DATABASE_URL'];
-}
-
-error_log('DATABASE_URL exists: ' . ($database_url ? 'Yes' : 'No'));
-
-if (!$database_url) {
-    die('DATABASE_URL environment variable is not set');
-}
-
-// Parse the database URL
-$db_parts = parse_url($database_url);
-
-$db_config = [
-    'host' => $db_parts['host'] ?? 'localhost',
-    'port' => $db_parts['port'] ?? '5432',
-    'dbname' => ltrim($db_parts['path'] ?? '', '/'),
-    'user' => $db_parts['user'] ?? '',
-    'password' => $db_parts['pass'] ?? '',
-];
-
-// ============================================
-// PDO DATABASE CONNECTION
-// ============================================
-
-try {
-    $dsn = sprintf(
-        'pgsql:host=%s;port=%s;dbname=%s',
-        $db_config['host'],
-        $db_config['port'],
-        $db_config['dbname']
-    );
-    
-    $pdo = new PDO($dsn, $db_config['user'], $db_config['password'], [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES => false,
-    ]);
-    
-} catch (PDOException $e) {
-    error_log('Database connection failed: ' . $e->getMessage());
-    error_log('Connection details - Host: ' . $db_config['host'] . ', DB: ' . $db_config['dbname']);
-    die('Database connection error. Please try again later.');
-}
-
-// ============================================
-// APPLICATION CONFIGURATION
-// ============================================
-
-$protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
-$host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-define('SITE_URL', $protocol . $host);
-define('ADMIN_URL', SITE_URL . '/admin');
-define('SESSION_TIMEOUT', 1800);
-define('PASSWORD_BCRYPT_COST', 12);
 
 // ============================================
 // SITE CONFIGURATION
 // ============================================
 define('BASE_URL', 'https://wittymart.onrender.com/'); 
 define('BASE_PATH', $_SERVER['DOCUMENT_ROOT'] . '/');
-
-// Upload directory configuration
 define('UPLOAD_DIR', BASE_PATH . 'uploads/products/');
 define('UPLOAD_URL', BASE_URL . 'uploads/products/');
 
