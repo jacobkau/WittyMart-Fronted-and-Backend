@@ -88,6 +88,12 @@ if ($cloudinary) {
     error_log('Cloudinary is NOT available - using local storage fallback');
 }
 
+// ============================================
+// INCLUDE CLOUDINARY HELPER
+// ============================================
+// Load Cloudinary helper functions (must be after $cloudinary is initialized)
+require_once __DIR__ . '/includes/cloudinary_helper.php';
+
 // Get database URL from environment variable (Render)
 $database_url = getenv('DATABASE_URL');
 
@@ -366,68 +372,14 @@ function verifyCSRFToken($token) {
 $csrf_token = generateCSRFToken();
 
 // ============================================
-// IMAGE HELPER FUNCTIONS (UPDATED FOR CLOUDINARY)
+// NOTE: getProductImage() and getProductImageUrl() 
+// are now defined in cloudinary_helper.php
 // ============================================
 
 /**
- * Get product image URL with Cloudinary support
- * @param string|array $image - Image filename or product array
- * @param string|null $image_url - Cloudinary URL (if available)
- * @return string - Full image URL
- */
-function getProductImage($image, $image_url = null) {
-    // If image_url is provided directly (for individual calls)
-    if (!empty($image_url)) {
-        return $image_url;
-    }
-    
-    // If $image is an array (product data), check for image_url field
-    if (is_array($image)) {
-        if (!empty($image['image_url'])) {
-            return $image['image_url'];
-        }
-        $image_name = $image['image'] ?? null;
-    } else {
-        // $image is a string (filename)
-        $image_name = $image;
-    }
-    
-    // Fallback to local image
-    if (!empty($image_name) && file_exists(UPLOAD_DIR . $image_name)) {
-        return UPLOAD_URL . $image_name;
-    }
-    
-    // Default no-image placeholder
-    return UPLOAD_URL . 'no-image.png';
-}
-
-/**
- * Get product image URL with Cloudinary support (for product arrays)
- * This is the main function used in templates
- * @param array $product - Product data array
- * @return string - Full image URL
- */
-function getProductImageUrl($product) {
-    if (!is_array($product)) {
-        return UPLOAD_URL . 'no-image.png';
-    }
-    
-    // Check for Cloudinary URL first
-    if (!empty($product['image_url'])) {
-        return $product['image_url'];
-    }
-    
-    // Fallback to local image
-    if (!empty($product['image']) && file_exists(UPLOAD_DIR . $product['image'])) {
-        return UPLOAD_URL . $product['image'];
-    }
-    
-    // Default no-image placeholder
-    return UPLOAD_URL . 'no-image.png';
-}
-
-/**
  * Upload image to Cloudinary (if available) or local storage
+ * This function is kept here for backward compatibility
+ * It uses the helper functions from cloudinary_helper.php
  * @param string $file_path - Temporary file path
  * @param string $folder - Folder name in Cloudinary
  * @return array - Upload result with URL and public_id
@@ -451,31 +403,24 @@ function uploadProductImage($file_path, $folder = 'products') {
         try {
             $public_id = $folder . '/' . time() . '_' . pathinfo(basename($file_path), PATHINFO_FILENAME);
             
-            $upload_result = $cloudinary->uploadApi()->upload(
-                $file_path,
-                [
-                    'public_id' => $public_id,
-                    'folder' => $folder,
-                    'quality' => 'auto:best',
-                    'fetch_format' => 'auto',
-                    'transformation' => [
-                        ['width' => 800, 'height' => 800, 'crop' => 'limit', 'quality' => 'auto']
-                    ]
-                ]
-            );
+            $upload_result = uploadToCloudinary($file_path, $folder);
             
-            $result['success'] = true;
-            $result['image_url'] = $upload_result['secure_url'];
-            $result['image_public_id'] = $upload_result['public_id'];
-            $result['image_name'] = $image_name; // Keep for fallback
-            
-            error_log('Cloudinary upload successful: ' . $upload_result['public_id']);
-            
-            // Also save locally as fallback
-            $upload_path = UPLOAD_DIR . $image_name;
-            move_uploaded_file($file_path, $upload_path);
-            
-            return $result;
+            if ($upload_result['success']) {
+                $result['success'] = true;
+                $result['image_url'] = $upload_result['url'];
+                $result['image_public_id'] = $upload_result['public_id'];
+                $result['image_name'] = $image_name; // Keep for fallback
+                
+                error_log('Cloudinary upload successful: ' . $upload_result['public_id']);
+                
+                // Also save locally as fallback
+                $upload_path = UPLOAD_DIR . $image_name;
+                move_uploaded_file($file_path, $upload_path);
+                
+                return $result;
+            } else {
+                error_log('Cloudinary upload failed: ' . ($upload_result['error'] ?? 'Unknown error'));
+            }
         } catch (Exception $e) {
             error_log('Cloudinary upload error: ' . $e->getMessage());
             $result['error'] = $e->getMessage();
@@ -504,28 +449,13 @@ function uploadProductImage($file_path, $folder = 'products') {
 
 /**
  * Delete image from Cloudinary (if available)
+ * This function is kept here for backward compatibility
  * @param string $public_id - Cloudinary public ID
  * @return bool - Success status
  */
 function deleteCloudinaryImage($public_id) {
-    global $cloudinary;
-    
-    if (empty($public_id)) {
-        return true;
-    }
-    
-    if (!$cloudinary) {
-        return true; // Cloudinary not available, nothing to delete
-    }
-    
-    try {
-        $result = $cloudinary->uploadApi()->destroy($public_id);
-        error_log('Cloudinary delete successful: ' . $public_id);
-        return true;
-    } catch (Exception $e) {
-        error_log('Cloudinary delete error: ' . $e->getMessage());
-        return false;
-    }
+    $result = deleteFromCloudinary($public_id);
+    return $result['success'] ?? false;
 }
 
 // ============================================
