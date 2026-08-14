@@ -4,8 +4,8 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-// ===== IMPORTANT: Include config first =====
 require_once 'includes/config.php';
+require_once 'includes/cloudinary_helper.php'; 
 
 // ===== CHECK IF PDO IS AVAILABLE =====
 if (!isset($pdo)) {
@@ -91,19 +91,10 @@ try {
     error_log('Get categories error: ' . $e->getMessage());
     $categories = [];
 }
-function getProductImage($image_name, $image_url = null) {
-    // If Cloudinary URL exists, use it
-    if (!empty($image_url)) {
-        return $image_url;
-    }
-    
-    // Fallback to local image
-    if (!empty($image_name) && file_exists(UPLOAD_DIR . $image_name)) {
-        return '../uploads/products/' . $image_name;
-    }
-    
-    return '../uploads/products/no-image.png';
-}
+
+// ===== NOTE: getProductImage() is now defined in config.php or cloudinary_helper.php =====
+// Do not redeclare it here to avoid conflicts
+
 // Function to get products by category
 function getProductsByCategory($category_id, $limit = 6) {
     global $pdo;
@@ -189,7 +180,6 @@ function getSliderImageUrl($image_path) {
     }
     return $image_path;
 }
-
 
 /**
  * Render star rating
@@ -1081,7 +1071,7 @@ function renderStars($rating) {
                         <div class="product-card">
                             <a href="product.php?id=<?php echo $product['id']; ?>" class="product-link">
                                 <div class="image-container">
-                                    <img src="<?php echo htmlspecialchars(getProductImage($product['image'] ?? null, $product['image_url'] ?? null); ?>" 
+                                    <img src="<?php echo htmlspecialchars(getProductImage($product['image'] ?? null, $product['image_url'] ?? null)); ?>" 
                                          alt="<?php echo htmlspecialchars($product['name']); ?>"
                                          onerror="this.src='uploads/products/no-image.png'">
                                     <?php if (!empty($product['image_url'])): ?>
@@ -1139,7 +1129,7 @@ function renderStars($rating) {
                                 <div class="category-product">
                                     <a href="product.php?id=<?php echo $product['id']; ?>" class="product-link">
                                         <div class="product-image-container">
-                                            <img src="<?php echo htmlspecialchars(getProductImage($product['image'] ?? null, $product['image_url'] ?? null); ?>" 
+                                            <img src="<?php echo htmlspecialchars(getProductImage($product['image'] ?? null, $product['image_url'] ?? null)); ?>" 
                                                  alt="<?php echo htmlspecialchars($product['name']); ?>"
                                                  onerror="this.src='uploads/products/no-image.png'">
                                             <?php if (!empty($product['image_url'])): ?>
