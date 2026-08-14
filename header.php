@@ -4,6 +4,7 @@ require_once 'includes/config.php';
 
 $isLoggedIn = isset($_SESSION['user_id']);
 $userName = $_SESSION['user_name'] ?? 'User';
+$userEmail = $_SESSION['user_email'] ?? '';
 $isAdmin = isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true;
 
 // Get cart count
@@ -71,8 +72,9 @@ if ($isLoggedIn) {
             max-width: 1400px;
             margin: 0 auto;
             display: flex;
-            justify-content: space-between;
+            justify-content: center;
             align-items: center;
+            position: relative;
         }
         
         body.dark-mode .header-bottom {
@@ -87,6 +89,7 @@ if ($isLoggedIn) {
             padding: 0;
             gap: 2px;
             flex-wrap: wrap;
+            justify-content: center;
         }
         
         .header-bottom .nav-links li a {
@@ -464,6 +467,178 @@ if ($isLoggedIn) {
         }
 
         /* ============================================
+           USER DROPDOWN MENU
+           ============================================ */
+        .user-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .user-dropdown .dropdown-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: none;
+            border: none;
+            color: #333;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+        
+        .user-dropdown .dropdown-toggle:hover {
+            background: rgba(5, 87, 60, 0.08);
+            color: #05573c;
+        }
+        
+        body.dark-mode .user-dropdown .dropdown-toggle {
+            color: #eee;
+        }
+        
+        body.dark-mode .user-dropdown .dropdown-toggle:hover {
+            background: rgba(255,255,255,0.08);
+            color: #0a7a54;
+        }
+        
+        .user-dropdown .dropdown-toggle .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #05573c;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .user-dropdown .dropdown-menu {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 100%;
+            margin-top: 8px;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            min-width: 220px;
+            z-index: 1002;
+            overflow: hidden;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .user-dropdown .dropdown-menu.active {
+            display: block;
+        }
+        
+        body.dark-mode .user-dropdown .dropdown-menu {
+            background: #1a1a2e;
+            border-color: #2a2a3e;
+        }
+        
+        .user-dropdown .dropdown-menu .dropdown-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            background: #f8f9fa;
+        }
+        
+        body.dark-mode .user-dropdown .dropdown-menu .dropdown-header {
+            background: #15152a;
+            border-bottom-color: #2a2a3e;
+        }
+        
+        .user-dropdown .dropdown-menu .dropdown-header .dropdown-user-name {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        body.dark-mode .user-dropdown .dropdown-menu .dropdown-header .dropdown-user-name {
+            color: #eee;
+        }
+        
+        .user-dropdown .dropdown-menu .dropdown-header .dropdown-user-email {
+            font-size: 12px;
+            color: #888;
+        }
+        
+        body.dark-mode .user-dropdown .dropdown-menu .dropdown-header .dropdown-user-email {
+            color: #999;
+        }
+        
+        .user-dropdown .dropdown-menu .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 20px;
+            color: #333;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .user-dropdown .dropdown-menu .dropdown-item:hover {
+            background: #f8f9fa;
+            color: #05573c;
+        }
+        
+        body.dark-mode .user-dropdown .dropdown-menu .dropdown-item {
+            color: #eee;
+            border-bottom-color: #2a2a3e;
+        }
+        
+        body.dark-mode .user-dropdown .dropdown-menu .dropdown-item:hover {
+            background: #2a2a3e;
+            color: #0a7a54;
+        }
+        
+        .user-dropdown .dropdown-menu .dropdown-item:last-child {
+            border-bottom: none;
+        }
+        
+        .user-dropdown .dropdown-menu .dropdown-item i {
+            width: 20px;
+            text-align: center;
+            color: #05573c;
+        }
+        
+        body.dark-mode .user-dropdown .dropdown-menu .dropdown-item i {
+            color: #0a7a54;
+        }
+        
+        .user-dropdown .dropdown-menu .dropdown-divider {
+            height: 1px;
+            background: #f0f0f0;
+            margin: 5px 0;
+        }
+        
+        body.dark-mode .user-dropdown .dropdown-menu .dropdown-divider {
+            background: #2a2a3e;
+        }
+        
+        .user-dropdown .dropdown-menu .dropdown-item.text-danger {
+            color: #dc3545;
+        }
+        
+        .user-dropdown .dropdown-menu .dropdown-item.text-danger i {
+            color: #dc3545;
+        }
+        
+        .user-dropdown .dropdown-menu .dropdown-item.text-danger:hover {
+            background: #f8d7da;
+            color: #c82333;
+        }
+        
+        body.dark-mode .user-dropdown .dropdown-menu .dropdown-item.text-danger:hover {
+            background: rgba(220, 53, 69, 0.2);
+            color: #dc3545;
+        }
+
+        /* ============================================
            MOBILE RESPONSIVE
            ============================================ */
         @media (max-width: 992px) {
@@ -529,11 +704,16 @@ if ($isLoggedIn) {
                 position: relative;
                 padding: 5px 20px;
                 min-height: 48px;
+                justify-content: flex-end;
             }
             
             .header-bottom .menu-toggle {
                 display: block;
                 margin-left: auto;
+            }
+            
+            .header-bottom .nav-links.mobile-open {
+                justify-content: flex-start;
             }
         }
 
@@ -580,6 +760,16 @@ if ($isLoggedIn) {
             
             .header-bottom {
                 padding: 5px 12px;
+            }
+            
+            .user-dropdown .dropdown-toggle .user-avatar {
+                width: 28px;
+                height: 28px;
+                font-size: 12px;
+            }
+            
+            .user-dropdown .dropdown-toggle span {
+                display: none;
             }
         }
 
@@ -711,20 +901,60 @@ if ($isLoggedIn) {
             
             <!-- Header Actions -->
             <div class="header-actions">
+                <!-- Cart Icon -->
+                <a href="cart.php" class="header-cart" title="View Cart">
+                    <i class="fas fa-shopping-cart cart-icon"></i>
+                    <span class="cart-badge-sm <?php echo $cartCount > 0 ? '' : 'empty'; ?>" id="headerCartBadge">
+                        <?php echo $cartCount > 0 ? $cartCount : ''; ?>
+                    </span>
+                </a>
+                
                 <?php if ($isLoggedIn): ?>
-                    <a href="cart.php" class="header-cart" title="View Cart">
-                        <i class="fas fa-shopping-cart cart-icon"></i>
-                        <span class="cart-badge-sm <?php echo $cartCount > 0 ? '' : 'empty'; ?>" id="headerCartBadge">
-                            <?php echo $cartCount > 0 ? $cartCount : ''; ?>
-                        </span>
-                    </a>
-                    
-                    <button class="logout-btn" onclick="logoutUser()" title="Logout">
-                        <i class="fas fa-sign-out-alt"></i>
-                    </button>
+                    <!-- User Dropdown -->
+                    <div class="user-dropdown" id="userDropdown">
+                        <button class="dropdown-toggle" onclick="toggleDropdown()" title="My Account">
+                            <span class="user-avatar">
+                                <?php 
+                                $initials = '';
+                                $words = explode(' ', $userName);
+                                foreach ($words as $word) {
+                                    $initials .= strtoupper(substr($word, 0, 1));
+                                }
+                                echo substr($initials, 0, 2);
+                                ?>
+                            </span>
+                            <span><?php echo htmlspecialchars($userName); ?></span>
+                            <i class="fas fa-chevron-down" style="font-size: 12px;"></i>
+                        </button>
+                        <div class="dropdown-menu" id="dropdownMenu">
+                            <div class="dropdown-header">
+                                <div class="dropdown-user-name"><?php echo htmlspecialchars($userName); ?></div>
+                                <div class="dropdown-user-email"><?php echo htmlspecialchars($userEmail); ?></div>
+                            </div>
+                            <a href="profile.php" class="dropdown-item">
+                                <i class="fas fa-user"></i> My Profile
+                            </a>
+                            <a href="orders.php" class="dropdown-item">
+                                <i class="fas fa-shopping-bag"></i> My Orders
+                            </a>
+                            <a href="wishlist.php" class="dropdown-item">
+                                <i class="fas fa-heart"></i> Wishlist
+                            </a>
+                            <?php if ($isAdmin): ?>
+                                <a href="admin/dashboard.php" class="dropdown-item">
+                                    <i class="fas fa-crown"></i> Admin Dashboard
+                                </a>
+                            <?php endif; ?>
+                            <div class="dropdown-divider"></div>
+                            <a href="logout.php" class="dropdown-item text-danger" onclick="return confirm('Are you sure you want to logout?')">
+                                <i class="fas fa-sign-out-alt"></i> Logout
+                            </a>
+                        </div>
+                    </div>
                 <?php else: ?>
-                    <a href="cart.php" class="header-cart" title="View Cart">
-                        <i class="fas fa-shopping-cart cart-icon"></i>
+                    <!-- Login/Register Button -->
+                    <a href="home.php" class="login-btn" style="display:flex; align-items:center; gap:6px; padding:8px 16px; border-radius:6px; background:#05573c; color:#fff; text-decoration:none; font-weight:500; font-size:14px; transition: all 0.3s ease;">
+                        <i class="fas fa-sign-in-alt"></i> Login
                     </a>
                 <?php endif; ?>
                 
@@ -735,7 +965,7 @@ if ($isLoggedIn) {
             </div>
         </div>
         
-        <!-- BOTTOM ROW: Navigation -->
+        <!-- BOTTOM ROW: Navigation (Centered) -->
         <div class="header-bottom">
             <?php
             // Get the current page filename
@@ -760,26 +990,7 @@ if ($isLoggedIn) {
                     </a></li>
                 <?php endforeach; ?>
                 
-                <!-- Account / Login/Register link -->
-                <li>
-                    <?php if ($isLoggedIn): ?>
-                        <a href="welcome.php" class="<?php echo ($current_page == 'welcome.php') ? 'active' : ''; ?>">
-                            <i class="fas fa-user-circle"></i> <?php echo htmlspecialchars($userName); ?>
-                        </a>
-                    <?php else: ?>
-                        <a href="home.php" class="<?php echo ($current_page == 'home.php') ? 'active' : ''; ?>">
-                            <i class="fas fa-sign-in-alt"></i> Login
-                        </a>
-                    <?php endif; ?>
-                </li>
-                
-                <!-- Admin link (only for admins) -->
-                <?php if ($isAdmin): ?>
-                    <li><a href="admin/dashboard.php" class="<?php echo ($current_page == 'dashboard.php') ? 'active' : ''; ?>">
-                        <i class="fas fa-crown"></i> Admin
-                    </a></li>
-                <?php endif; ?>
-                
+                <!-- Theme Toggle moved to bottom row -->
                 <li><button class="theme-toggle" onclick="toggleTheme()" id="theme-icon" title="Switch to Dark Mode"><i class="fas fa-sun"></i></button></li>
             </ul>
             
@@ -805,7 +1016,7 @@ if ($isLoggedIn) {
                 </div>
                 <div class="user-details">
                     <p class="user-name"><?php echo htmlspecialchars($userName); ?></p>
-                    <p class="user-email"><?php echo htmlspecialchars($_SESSION['user_email'] ?? ''); ?></p>
+                    <p class="user-email"><?php echo htmlspecialchars($userEmail); ?></p>
                 </div>
             </div>
             <hr style="margin: 10px 20px; border-color: #e0e0e0;">
@@ -832,6 +1043,25 @@ if ($isLoggedIn) {
     </div>
 
     <script>
+        // ============================================
+        // USER DROPDOWN TOGGLE
+        // ============================================
+        function toggleDropdown() {
+            const dropdown = document.getElementById('dropdownMenu');
+            dropdown.classList.toggle('active');
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('userDropdown');
+            const menu = document.getElementById('dropdownMenu');
+            if (dropdown && menu && menu.classList.contains('active')) {
+                if (!dropdown.contains(event.target)) {
+                    menu.classList.remove('active');
+                }
+            }
+        });
+
         // ============================================
         // MOBILE MENU TOGGLE
         // ============================================
