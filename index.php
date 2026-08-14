@@ -91,9 +91,19 @@ try {
     error_log('Get categories error: ' . $e->getMessage());
     $categories = [];
 }
-
-// ===== NOTE: getProductImage() is now defined in config.php or cloudinary_helper.php =====
-// Do not redeclare it here to avoid conflicts
+function getProductImage($image_name, $image_url = null) {
+    // If Cloudinary URL exists, use it
+    if (!empty($image_url)) {
+        return $image_url;
+    }
+    
+    // Fallback to local image
+    if (!empty($image_name) && file_exists(UPLOAD_DIR . $image_name)) {
+        return '../uploads/products/' . $image_name;
+    }
+    
+    return '../uploads/products/no-image.png';
+}
 
 // Function to get products by category
 function getProductsByCategory($category_id, $limit = 6) {
