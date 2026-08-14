@@ -1,6 +1,4 @@
 <?php
-
-require_once 'config.php';
 function getProductImage($image_name, $image_url = null) {
     // If Cloudinary URL exists, use it
     if (!empty($image_url)) {
