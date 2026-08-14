@@ -92,7 +92,7 @@ if ($cloudinary) {
 // INCLUDE CLOUDINARY HELPER
 // ============================================
 // Load Cloudinary helper functions (must be after $cloudinary is initialized)
-require_once __DIR__ . '/includes/cloudinary_helper.php';
+require_once 'cloudinary_helper.php';
 
 // Get database URL from environment variable (Render)
 $database_url = getenv('DATABASE_URL');
