@@ -401,10 +401,30 @@ function getProductImage($image, $image_url = null) {
     return UPLOAD_URL . 'no-image.png';
 }
 
-// ============================================
-// NOTE: getProductImageUrl() is now in cloudinary_helper.php
-// Do not redeclare it here!
-// ============================================
+/**
+ * Get product image URL with Cloudinary support (for product arrays)
+ * This is the main function used in templates
+ * @param array $product - Product data array
+ * @return string - Full image URL
+ */
+function getProductImageUrl($product) {
+    if (!is_array($product)) {
+        return UPLOAD_URL . 'no-image.png';
+    }
+    
+    // Check for Cloudinary URL first
+    if (!empty($product['image_url'])) {
+        return $product['image_url'];
+    }
+    
+    // Fallback to local image
+    if (!empty($product['image']) && file_exists(UPLOAD_DIR . $product['image'])) {
+        return UPLOAD_URL . $product['image'];
+    }
+    
+    // Default no-image placeholder
+    return UPLOAD_URL . 'no-image.png';
+}
 
 /**
  * Upload image to Cloudinary (if available) or local storage
