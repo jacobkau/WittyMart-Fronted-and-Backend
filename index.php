@@ -1,7 +1,9 @@
 <?php
 // ===== IMPORTANT: Include config first =====
 require_once __DIR__ . '/includes/config.php';
-
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 // ===== CHECK IF PDO IS AVAILABLE =====
 if (!isset($pdo)) {
     error_log('PDO not available in index.php');
