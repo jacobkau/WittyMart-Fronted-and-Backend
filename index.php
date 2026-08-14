@@ -1,10 +1,12 @@
-
 <?php
-// ===== IMPORTANT: Include config first =====
-require_once __DIR__ . '/includes/config.php';
+// ===== ENABLE ERROR REPORTING FOR DEBUGGING =====
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
+
+// ===== IMPORTANT: Include config first =====
+require_once __DIR__ . '/includes/config.php';
+
 // ===== CHECK IF PDO IS AVAILABLE =====
 if (!isset($pdo)) {
     error_log('PDO not available in index.php');
