@@ -5,7 +5,6 @@ ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
 require_once 'includes/config.php';
-require_once 'includes/cloudinary_helper.php'; 
 
 // ===== CHECK IF PDO IS AVAILABLE =====
 if (!isset($pdo)) {
