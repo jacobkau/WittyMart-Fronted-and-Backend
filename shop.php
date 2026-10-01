@@ -19,42 +19,18 @@ try {
 
 // Check if user is logged in
 $isLoggedIn = isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
-/**
- * Get product image URL from a product row (array)
- * Handles Cloudinary URLs, local images, and placeholders.
- *
- * @param array $product  Product row from DB (must include 'image' and/or 'image_url')
- * @return string         Resolved image URL
- */
-function getProductImageUrl($product) {
-    // If $product is a string, treat it as a local image filename
-    if (is_string($product)) {
-        if (filter_var($product, FILTER_VALIDATE_URL)) {
-            return $product;
-        }
-        return !empty($product) ? UPLOAD_URL . $product : UPLOAD_URL . 'no-image.png';
+
+// ===== FETCH WISHLIST IDS FOR LOGGED-IN USER =====
+$wishlistIds = [];
+if ($isLoggedIn) {
+    try {
+        $stmt = $pdo->prepare("SELECT product_id FROM wishlist WHERE user_id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $wishlistIds = array_column($stmt->fetchAll(), 'product_id');
+    } catch (PDOException $e) {
+        error_log('Get wishlist error: ' . $e->getMessage());
+        $wishlistIds = [];
     }
-    
-    // If $product is an array (normal case)
-    if (is_array($product)) {
-        $image_url = $product['image_url'] ?? null;
-        $image     = $product['image'] ?? null;
-        
-        // Priority: Cloudinary URL > local filename > placeholder
-        if (!empty($image_url)) {
-            return $image_url;
-        }
-        
-        if (!empty($image)) {
-            // Already a full URL?
-            if (filter_var($image, FILTER_VALIDATE_URL)) {
-                return $image;
-            }
-            return UPLOAD_URL . $image;
-        }
-    }
-    
-    return UPLOAD_URL . 'no-image.png';
 }
 ?>
 <!DOCTYPE html>
@@ -103,6 +79,43 @@ function getProductImageUrl($product) {
             z-index: 2;
         }
         
+        /* Top-left heart on the image */
+        .wishlist-btn {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.95);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            font-size: 15px;
+            transition: all 0.25s ease;
+            z-index: 3;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+        }
+        
+        .wishlist-btn:hover {
+            transform: scale(1.1);
+            color: #e91e63;
+            background: #fff;
+        }
+        
+        .wishlist-btn.active {
+            color: #e91e63;
+            background: #fff;
+        }
+        
+        .wishlist-btn.loading {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+        
         .product {
             background: #fff;
             border-radius: 10px;
@@ -111,6 +124,8 @@ function getProductImageUrl($product) {
             transition: transform 0.3s ease, box-shadow 0.3s ease;
             padding: 15px;
             text-align: center;
+            display: flex;
+            flex-direction: column;
         }
         
         .product:hover {
@@ -149,18 +164,34 @@ function getProductImageUrl($product) {
             margin: 8px 0;
         }
         
+        /* ===== ACTION ROW ===== */
+        .product-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: auto;
+            align-items: stretch;
+            width: 100%;
+        }
+        
         .product .add-to-cart {
             background: #05573c;
             color: #fff;
             border: none;
-            padding: 8px 20px;
+            padding: 10px 12px;
             border-radius: 6px;
             cursor: pointer;
             font-weight: 600;
             transition: all 0.3s ease;
-            width: 100%;
-            max-width: 200px;
-            margin-top: 5px;
+            flex: 1;
+            min-width: 0;
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
         }
         
         .product .add-to-cart:hover:not(:disabled) {
@@ -180,6 +211,52 @@ function getProductImageUrl($product) {
             background: #dc3545;
         }
         
+        /* ===== ICON-ONLY WISHLIST BUTTON (SQUARE) ===== */
+        .product .add-to-wishlist-inline {
+            background: #fff;
+            color: #e91e63;
+            border: 1.5px solid #e91e63;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.25s ease;
+            width: 42px;
+            min-width: 42px;
+            height: 42px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        
+        .product .add-to-wishlist-inline:hover:not(:disabled) {
+            background: #e91e63;
+            color: #fff;
+            transform: scale(1.05);
+        }
+        
+        .product .add-to-wishlist-inline.active {
+            background: #e91e63;
+            color: #fff;
+        }
+        
+        .product .add-to-wishlist-inline.active i {
+            animation: heartPop 0.4s ease;
+        }
+        
+        .product .add-to-wishlist-inline:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        
+        @keyframes heartPop {
+            0%   { transform: scale(1); }
+            50%  { transform: scale(1.4); }
+            100% { transform: scale(1); }
+        }
+        
         .product .stock-badge {
             display: inline-block;
             padding: 2px 10px;
@@ -187,6 +264,8 @@ function getProductImageUrl($product) {
             font-size: 11px;
             font-weight: 600;
             margin-top: 5px;
+            margin-bottom: 8px;
+            align-self: center;
         }
         
         .stock-badge.in-stock {
@@ -246,17 +325,9 @@ function getProductImageUrl($product) {
             opacity: 1;
         }
         
-        .toast.success {
-            background: #28a745;
-        }
-        
-        .toast.error {
-            background: #dc3545;
-        }
-        
-        .toast.info {
-            background: #17a2b8;
-        }
+        .toast.success { background: #28a745; }
+        .toast.error   { background: #dc3545; }
+        .toast.info    { background: #17a2b8; }
         
         @media (max-width: 768px) {
             .products-grid {
@@ -266,6 +337,23 @@ function getProductImageUrl($product) {
             
             .product-image-container {
                 height: 150px;
+            }
+            
+            .product-actions {
+                flex-direction: row;
+                gap: 6px;
+            }
+            
+            .product .add-to-cart {
+                font-size: 12px;
+                padding: 8px 8px;
+            }
+            
+            .product .add-to-wishlist-inline {
+                width: 38px;
+                min-width: 38px;
+                height: 38px;
+                font-size: 14px;
             }
         }
     </style>
@@ -285,34 +373,63 @@ function getProductImageUrl($product) {
             <?php if (!empty($products)): ?>
                 <div class="products-grid">
                     <?php foreach ($products as $product): ?>
-                        <div class="product">
-                            <a href="product.php?id=<?php echo $product['id']; ?>" class="product-link">
-                                <div class="product-image-container">
-                                        <img src="<?php echo htmlspecialchars(getProductImage($product['image'] ?? null, $product['image_url'] ?? null)); ?>" 
+                        <?php 
+                        $pid = $product['id'];
+                        $in_wishlist = in_array($pid, $wishlistIds);
+                        $stock_val = intval($product['stock'] ?? 0);
+                        $is_cloudinary = !empty($product['image_url']) && strpos($product['image_url'], 'cloudinary.com') !== false;
+                        ?>
+                        <div class="product" data-product-id="<?php echo $pid; ?>">
+                            <div class="product-image-container">
+                                <!-- Top-left heart -->
+                                <button class="wishlist-btn <?php echo $in_wishlist ? 'active' : ''; ?>"
+                                        data-product-id="<?php echo $pid; ?>"
+                                        data-product-name="<?php echo htmlspecialchars($product['name']); ?>"
+                                        title="<?php echo $in_wishlist ? 'Remove from wishlist' : 'Add to wishlist'; ?>"
+                                        aria-label="Toggle wishlist">
+                                    <i class="<?php echo $in_wishlist ? 'fas' : 'far'; ?> fa-heart"></i>
+                                </button>
+                                
+                                <a href="product.php?id=<?php echo $pid; ?>" class="product-link">
+                                    <img src="<?php echo htmlspecialchars(getProductImage($product['image'] ?? null, $product['image_url'] ?? null)); ?>" 
                                          alt="<?php echo htmlspecialchars($product['name']); ?>"
                                          onerror="this.onerror=null; this.src='uploads/products/no-image.png';">
-                                    <?php if (!empty($product['image_url'])): ?>
-                                        <span class="cloudinary-badge">
-                                            <i class="fas fa-cloud"></i> Cloud
-                                        </span>
-                                    <?php endif; ?>
-                                </div>
-                            </a>
-                            <a href="product.php?id=<?php echo $product['id']; ?>" class="product-link">
+                                </a>
+                                
+                                <?php if ($is_cloudinary): ?>
+                                    <span class="cloudinary-badge">
+                                        <i class="fas fa-cloud"></i> Cloud
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                            
+                            <a href="product.php?id=<?php echo $pid; ?>" class="product-link">
                                 <h3><?php echo htmlspecialchars($product['name']); ?></h3>
                             </a>
                             <p><?php echo htmlspecialchars(substr($product['description'] ?? '', 0, 60)); ?>...</p>
                             <span class="price">Ksh <?php echo number_format($product['price'], 0); ?></span>
-                            <span class="stock-badge <?php echo ($product['stock'] ?? 0) > 0 ? 'in-stock' : 'out-of-stock'; ?>">
-                                <?php echo ($product['stock'] ?? 0) > 0 ? 'In Stock' : 'Out of Stock'; ?>
+                            <span class="stock-badge <?php echo $stock_val > 0 ? 'in-stock' : 'out-of-stock'; ?>">
+                                <?php echo $stock_val > 0 ? 'In Stock' : 'Out of Stock'; ?>
                             </span>
-                            <button class="add-to-cart" 
-                                    data-product-id="<?php echo $product['id']; ?>"
-                                    data-product-name="<?php echo htmlspecialchars($product['name']); ?>"
-                                    <?php echo ($product['stock'] ?? 0) <= 0 ? 'disabled' : ''; ?>>
-                                <i class="fas fa-shopping-cart"></i> 
-                                <?php echo ($product['stock'] ?? 0) > 0 ? 'Add to Cart' : 'Out of Stock'; ?>
-                            </button>
+                            
+                            <!-- Action row -->
+                            <div class="product-actions">
+                                <button class="add-to-cart" 
+                                        data-product-id="<?php echo $pid; ?>"
+                                        data-product-name="<?php echo htmlspecialchars($product['name']); ?>"
+                                        <?php echo $stock_val <= 0 ? 'disabled' : ''; ?>>
+                                    <i class="fas fa-shopping-cart"></i> 
+                                    <?php echo $stock_val > 0 ? 'Add to Cart' : 'Out of Stock'; ?>
+                                </button>
+                                
+                                <button class="add-to-wishlist-inline <?php echo $in_wishlist ? 'active' : ''; ?>"
+                                        data-product-id="<?php echo $pid; ?>"
+                                        data-product-name="<?php echo htmlspecialchars($product['name']); ?>"
+                                        title="<?php echo $in_wishlist ? 'Remove from wishlist' : 'Add to wishlist'; ?>"
+                                        aria-label="Toggle wishlist">
+                                    <i class="<?php echo $in_wishlist ? 'fas' : 'far'; ?> fa-heart"></i>
+                                </button>
+                            </div>
                         </div>
                     <?php endforeach; ?>
                 </div>
@@ -339,33 +456,22 @@ function getProductImageUrl($product) {
             const toast = document.getElementById('toast');
             toast.textContent = message;
             toast.className = 'toast ' + type;
-            
-            // Trigger reflow
             void toast.offsetWidth;
-            
             toast.classList.add('show');
-            
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
+            setTimeout(() => toast.classList.remove('show'), 3000);
         }
 
         // ============================================
-        // ADD TO CART FUNCTION
+        // ADD TO CART
         // ============================================
         document.querySelectorAll('.add-to-cart').forEach(button => {
             button.addEventListener('click', function(e) {
                 e.preventDefault();
-                e.stopPropagation(); // Prevent triggering the product link
+                e.stopPropagation();
                 
-                // Prevent double click
-                if (this.disabled) {
-                    return;
-                }
+                if (this.disabled) return;
                 
-                // Check if user is logged in
                 if (!isLoggedIn) {
-                    // Show info message and redirect to login
                     showToast('Please login to add items to your cart', 'info');
                     setTimeout(function() {
                         window.location.href = 'home.php';
@@ -378,11 +484,9 @@ function getProductImageUrl($product) {
                 const originalText = this.innerHTML;
                 const originalClass = this.className;
                 
-                // Disable button and show loading state
                 this.disabled = true;
                 this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
                 
-                // Send AJAX request
                 const formData = new FormData();
                 formData.append('ajax_action', 'add_to_cart');
                 formData.append('product_id', productId);
@@ -395,27 +499,23 @@ function getProductImageUrl($product) {
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        // Success state
                         this.innerHTML = '<i class="fas fa-check"></i> Added!';
                         this.className = originalClass + ' added';
                         showToast(productName + ' added to cart!', 'success');
                         
-                        // Update cart count if available
                         if (data.cart_count !== undefined) {
-                            const cartBadge = document.querySelector('.cart-count, .cart-badge');
+                            const cartBadge = document.querySelector('.cart-count, .cart-badge, .cart-badge-sm');
                             if (cartBadge) {
                                 cartBadge.textContent = data.cart_count;
                             }
                         }
                         
-                        // Reset after 2 seconds
                         setTimeout(() => {
                             this.innerHTML = originalText;
                             this.className = originalClass;
                             this.disabled = false;
                         }, 2000);
                     } else {
-                        // Error state
                         this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Failed!';
                         this.className = originalClass + ' error';
                         showToast(data.message || 'Failed to add to cart', 'error');
@@ -439,6 +539,83 @@ function getProductImageUrl($product) {
                         this.disabled = false;
                     }, 2000);
                 });
+            });
+        });
+
+        // ============================================
+        // ADD TO WISHLIST (icon-only buttons)
+        // ============================================
+        function toggleWishlist(btn) {
+            const productId = btn.dataset.productId;
+            const productName = btn.dataset.productName;
+            const wrapper = btn.closest('.product');
+            
+            if (!isLoggedIn) {
+                showToast('Please login to use your wishlist', 'info');
+                setTimeout(() => window.location.href = 'home.php', 1500);
+                return;
+            }
+            
+            const heartBtn = wrapper.querySelector('.wishlist-btn');
+            const inlineBtn = wrapper.querySelector('.add-to-wishlist-inline');
+            
+            heartBtn.classList.add('loading');
+            inlineBtn.disabled = true;
+            
+            const formData = new FormData();
+            formData.append('ajax_action', 'toggle_wishlist');
+            formData.append('product_id', productId);
+            
+            fetch('wishlist.php', { method: 'POST', body: formData })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const added = data.added;
+                        
+                        if (added) {
+                            heartBtn.classList.add('active');
+                            heartBtn.querySelector('i').className = 'fas fa-heart';
+                            heartBtn.title = 'Remove from wishlist';
+                            
+                            inlineBtn.classList.add('active');
+                            inlineBtn.querySelector('i').className = 'fas fa-heart';
+                            inlineBtn.title = 'Remove from wishlist';
+                            
+                            showToast(productName + ' added to wishlist', 'success');
+                        } else {
+                            heartBtn.classList.remove('active');
+                            heartBtn.querySelector('i').className = 'far fa-heart';
+                            heartBtn.title = 'Add to wishlist';
+                            
+                            inlineBtn.classList.remove('active');
+                            inlineBtn.querySelector('i').className = 'far fa-heart';
+                            inlineBtn.title = 'Add to wishlist';
+                            
+                            showToast(productName + ' removed from wishlist', 'info');
+                        }
+                        
+                        if (data.wishlist_count !== undefined) {
+                            const badge = document.querySelector('.wishlist-badge, .wishlist-count');
+                            if (badge) badge.textContent = data.wishlist_count;
+                        }
+                    } else {
+                        showToast(data.message || 'Could not update wishlist', 'error');
+                    }
+                })
+                .catch(() => {
+                    showToast('An error occurred. Please try again.', 'error');
+                })
+                .finally(() => {
+                    heartBtn.classList.remove('loading');
+                    inlineBtn.disabled = false;
+                });
+        }
+        
+        document.querySelectorAll('.wishlist-btn, .add-to-wishlist-inline').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleWishlist(this);
             });
         });
     </script>
