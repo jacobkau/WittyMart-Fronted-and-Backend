@@ -1,17 +1,23 @@
 <?php
 
 error_reporting(E_ALL);
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
+if (getenv('APP_DEBUG') === 'true') {
+    ini_set('display_errors', 1);
+    ini_set('display_startup_errors', 1);
+} else {
+    ini_set('display_errors', 0);
+    ini_set('display_startup_errors', 0);
+}
+
+ini_set('log_errors', 1);
 
 // ============================================
 // COMPOSER AUTOLOADER
 // ============================================
-// Load Composer autoloader for Cloudinary and other dependencies
 $autoload_paths = [
-    __DIR__ . '/vendor/autoload.php',           // From root folder
-    __DIR__ . '/../vendor/autoload.php',        // From subfolder
-    $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php', // From document root
+    __DIR__ . '/vendor/autoload.php',           
+    __DIR__ . '/../vendor/autoload.php',        
+    $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php', 
 ];
 
 $autoload_loaded = false;
