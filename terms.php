@@ -72,7 +72,7 @@ require_once 'includes/config.php';
                 </li>
                 <li>
                     <strong> Your Rights:</strong> You have the right to access, correct, update, and delete your personal data at any time. If you wish to review, modify, or delete your information, or if you have any concerns about how we handle your data, please contact us at
-                    s<a href="mailto:kaujacob4@gmail.com" style="color:#33ffbc" >kaujacob4@gmail.com</a>. You also have the right to opt-out of receiving marketing communications from us by clicking the unsubscribe link in our emails.
+                    <a href="mailto:kaujacob4@gmail.com" >kaujacob4@gmail.com</a>. You also have the right to opt-out of receiving marketing communications from us by clicking the unsubscribe link in our emails.
                 </li>
                 <li>
                     <strong> Changes to This Privacy Policy:</strong>
