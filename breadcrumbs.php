@@ -50,12 +50,9 @@ try {
 
 // ===== HELPER: Convert category name to slug (matches sidebar hrefs) =====
 function categoryToSlug($name) {
-    // "Home & Living" → "home-living"
-    // "Beauty & Health" → "beauty-health"
-    // "Books & Stationery" → "books-stationery"
     $slug = strtolower($name);
-    $slug = preg_replace('/\s*&\s*/', '-', $slug);   // "&" → "-"
-    $slug = preg_replace('/[^a-z0-9]+/', '-', $slug); // non-alphanumerics → "-"
+    $slug = preg_replace('/\s*&\s*/', '-', $slug);
+    $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
     $slug = trim($slug, '-');
     return $slug;
 }
@@ -155,9 +152,9 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
             <button class="add-to-wishlist-inline <?php echo $in_wishlist ? 'active' : ''; ?>"
                     data-product-id="<?php echo $pid; ?>"
                     data-product-name="<?php echo htmlspecialchars($product['name']); ?>"
-                    title="<?php echo $in_wishlist ? 'Remove from wishlist' : 'Add to wishlist'; ?>">
+                    title="<?php echo $in_wishlist ? 'Remove from wishlist' : 'Add to wishlist'; ?>"
+                    aria-label="Toggle wishlist">
                 <i class="<?php echo $in_wishlist ? 'fas' : 'far'; ?> fa-heart"></i>
-                <span class="wishlist-label"><?php echo $in_wishlist ? 'Saved' : 'Wishlist'; ?></span>
             </button>
         </div>
     </div>
@@ -210,6 +207,7 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
             z-index: 2;
         }
         
+        /* Top-left heart on the image */
         .wishlist-btn {
             position: absolute;
             top: 8px;
@@ -294,25 +292,34 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
             margin: 8px 0;
         }
         
+        /* ===== ACTION ROW ===== */
         .product-actions {
             display: flex;
             gap: 8px;
             margin-top: auto;
             align-items: stretch;
+            width: 100%;
         }
         
         .product .add-to-cart {
             background: #05573c;
             color: #fff;
             border: none;
-            padding: 8px 14px;
+            padding: 10px 12px;
             border-radius: 6px;
             cursor: pointer;
             font-weight: 600;
             transition: all 0.3s ease;
             flex: 1;
+            min-width: 0;
             font-size: 13px;
             white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
         }
         
         .product .add-to-cart:hover:not(:disabled) { background: #03402c; }
@@ -320,25 +327,51 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
         .product .add-to-cart.added { background: #28a745; }
         .product .add-to-cart.error { background: #dc3545; }
         
+        /* ===== ICON-ONLY WISHLIST BUTTON (SQUARE) ===== */
         .product .add-to-wishlist-inline {
             background: #fff;
             color: #e91e63;
             border: 1.5px solid #e91e63;
-            padding: 8px 12px;
             border-radius: 6px;
             cursor: pointer;
             font-weight: 600;
-            transition: all 0.3s ease;
-            font-size: 13px;
-            white-space: nowrap;
+            transition: all 0.25s ease;
+            width: 42px;
+            min-width: 42px;
+            height: 42px;
             display: flex;
             align-items: center;
-            gap: 4px;
+            justify-content: center;
+            padding: 0;
+            font-size: 16px;
+            flex-shrink: 0;
         }
         
-        .product .add-to-wishlist-inline:hover:not(:disabled) { background: #e91e63; color: #fff; }
-        .product .add-to-wishlist-inline.active { background: #e91e63; color: #fff; }
-        .product .add-to-wishlist-inline:disabled { opacity: 0.7; cursor: not-allowed; }
+        .product .add-to-wishlist-inline:hover:not(:disabled) {
+            background: #e91e63;
+            color: #fff;
+            transform: scale(1.05);
+        }
+        
+        .product .add-to-wishlist-inline.active {
+            background: #e91e63;
+            color: #fff;
+        }
+        
+        .product .add-to-wishlist-inline.active i {
+            animation: heartPop 0.4s ease;
+        }
+        
+        .product .add-to-wishlist-inline:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        
+        @keyframes heartPop {
+            0%   { transform: scale(1); }
+            50%  { transform: scale(1.4); }
+            100% { transform: scale(1); }
+        }
         
         .product .stock-badge {
             display: inline-block;
@@ -386,10 +419,9 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
         
         .linkerbtn:hover { background: #03402c; }
         
-        /* ===== SECTION: scroll-margin-top for sticky header ===== */
         section {
             margin-bottom: 30px;
-            scroll-margin-top: 140px; /* ensures hash scroll lands below sticky header */
+            scroll-margin-top: 140px;
         }
         
         section h2 {
@@ -401,7 +433,6 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
             margin-right: 10px;
         }
         
-        /* Featured / Hot Deals section highlight */
         #deals h2 {
             color: #d97706;
         }
@@ -453,14 +484,21 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
             
             .product-image-container { height: 150px; }
             
-            .product-actions { flex-direction: column; }
+            .product-actions {
+                flex-direction: row;
+                gap: 6px;
+            }
             
-            .product .add-to-cart,
-            .product .add-to-wishlist-inline {
-                width: 100%;
-                justify-content: center;
+            .product .add-to-cart {
                 font-size: 12px;
-                padding: 8px 10px;
+                padding: 8px 8px;
+            }
+            
+            .product .add-to-wishlist-inline {
+                width: 38px;
+                min-width: 38px;
+                height: 38px;
+                font-size: 14px;
             }
             
             section { scroll-margin-top: 180px; }
@@ -627,7 +665,7 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
         });
 
         // ============================================
-        // ADD TO WISHLIST
+        // ADD TO WISHLIST (icon-only buttons)
         // ============================================
         function toggleWishlist(btn) {
             const productId = btn.dataset.productId;
@@ -657,23 +695,27 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
                         const added = data.added;
                         
                         if (added) {
+                            // Update top-left heart
                             heartBtn.classList.add('active');
                             heartBtn.querySelector('i').className = 'fas fa-heart';
                             heartBtn.title = 'Remove from wishlist';
                             
+                            // Update inline icon-only button
                             inlineBtn.classList.add('active');
                             inlineBtn.querySelector('i').className = 'fas fa-heart';
-                            inlineBtn.querySelector('.wishlist-label').textContent = 'Saved';
+                            inlineBtn.title = 'Remove from wishlist';
                             
                             showToast(productName + ' added to wishlist', 'success');
                         } else {
+                            // Update top-left heart
                             heartBtn.classList.remove('active');
                             heartBtn.querySelector('i').className = 'far fa-heart';
                             heartBtn.title = 'Add to wishlist';
                             
+                            // Update inline icon-only button
                             inlineBtn.classList.remove('active');
                             inlineBtn.querySelector('i').className = 'far fa-heart';
-                            inlineBtn.querySelector('.wishlist-label').textContent = 'Wishlist';
+                            inlineBtn.title = 'Add to wishlist';
                             
                             showToast(productName + ' removed from wishlist', 'info');
                         }
@@ -717,11 +759,8 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
                     return;
                 }
                 
-                // Let CSS scroll-margin-top handle the offset.
-                // Just use scrollIntoView for accuracy.
                 target.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 
-                // Brief highlight so user sees where they landed
                 target.style.transition = 'background-color 0.4s ease';
                 const originalBg = target.style.backgroundColor;
                 target.style.backgroundColor = 'rgba(5, 87, 60, 0.06)';
@@ -730,7 +769,6 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
                 }, 1200);
             }
             
-            // Close sidebar helper
             function closeSidebar() {
                 const sidebar = document.getElementById('sidebar');
                 const overlay = document.getElementById('sidebarOverlay');
@@ -743,7 +781,6 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
                 document.body.classList.remove('sidebar-open');
             }
             
-            // Attach handler to any link that points to a hash on this page
             document.querySelectorAll('a[href*="breadcrumbs.php?#"], a[href^="#"]').forEach(function(link) {
                 link.addEventListener('click', function(e) {
                     const href = this.getAttribute('href');
@@ -752,23 +789,19 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
                     const hash = '#' + href.split('#')[1];
                     const currentPage = window.location.pathname.split('/').pop();
                     
-                    // If we're already on this page, prevent reload & just scroll
                     if (currentPage === 'breadcrumbs.php' || href.startsWith('#')) {
                         e.preventDefault();
                         history.pushState(null, null, hash);
                         closeSidebar();
                         setTimeout(() => scrollToHash(hash), 200);
                     }
-                    // Otherwise let browser navigate — the load handler below will scroll
                 });
             });
             
-            // If landing on breadcrumbs.php with a #hash (from another page's sidebar), scroll
             if (window.location.hash) {
                 setTimeout(() => scrollToHash(window.location.hash), 300);
             }
             
-            // Browser back/forward with hash changes
             window.addEventListener('hashchange', function() {
                 scrollToHash(window.location.hash);
             });
