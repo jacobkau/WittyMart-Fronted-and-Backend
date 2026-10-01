@@ -180,6 +180,29 @@ if (!file_exists($no_image_path)) {
     }
 }
 
+
+/**
+ * Get product image URL (supports both local and Cloudinary)
+ */
+function getProductImage($image = null, $image_url = null) {
+    // Priority: Cloudinary URL > local image > placeholder
+    if (!empty($image_url)) {
+        return $image_url;
+    }
+    
+    if (!empty($image)) {
+        // If it's already a full URL
+        if (filter_var($image, FILTER_VALIDATE_URL)) {
+            return $image;
+        }
+        // Local image path
+        return UPLOAD_URL . $image;
+    }
+    
+    return UPLOAD_URL . 'no-image.png';
+}
+
+
 // ============================================
 // AUTHENTICATION FUNCTIONS
 // ============================================
