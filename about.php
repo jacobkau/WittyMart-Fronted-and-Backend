@@ -11,7 +11,6 @@ require_once 'includes/config.php';
     <link rel="icon" type="image/png" href="images/logo.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
-   
 </head>
 <body>
    <?php include "header.php"; ?>
@@ -28,21 +27,21 @@ require_once 'includes/config.php';
             <p>To provide customers with a seamless, user-friendly, and intelligent shopping experience powered by modern web technology. We aim to empower every shopper with the tools to make informed decisions, enjoy fast delivery, and feel confident in their online purchases.</p>
             
             <h2>What We Offer</h2>
-            <ul>
-                <li><i class="fas fa-shopping-bag"></i> A wide range of curated products from verified vendors and brands.</li>
-                <li><i class="fas fa-truck"></i> Reliable nationwide delivery services with real-time tracking.</li>
-                <li><i class="fas fa-lock"></i> Secure payments via M-Pesa, cards, PayPal, and bank transfer.</li>
-                <li><i class="fas fa-undo"></i> Easy return and refund policies with dedicated customer support.</li>
-                <li><i class="fas fa-mobile-alt"></i> A responsive shopping interface for both mobile and desktop users.</li>
+            <ul style="list-style: disc; padding-left: 20px;">
+                <li>A wide range of curated products from verified vendors and brands.</li>
+                <li>Reliable nationwide delivery services with real-time tracking.</li>
+                <li>Secure payments via M-Pesa, cards, PayPal, and bank transfer.</li>
+                <li>Easy return and refund policies with dedicated customer support.</li>
+                <li>A responsive shopping interface for both mobile and desktop users.</li>
             </ul>
             
             <h2> Why Choose Us?</h2>
-            <ul>
-                <li><i class="fas fa-check-circle"></i> <strong>Wide selection:</strong> Browse thousands of top-rated, affordable products across multiple categories.</li>
-                <li><i class="fas fa-lightbulb"></i> <strong>Smart features:</strong> Wishlist, product comparisons, reviews, and intelligent recommendations to help you shop better.</li>
-                <li><i class="fas fa-bolt"></i> <strong>Fast and secure checkout:</strong> Optimized for speed, trust, and simplicity – no stress, no delays.</li>
-                <li><i class="fas fa-headset"></i> <strong>Friendly local support:</strong> Our Kenyan-based support team is available 7 days a week for any issues or inquiries.</li>
-                <li><i class="fas fa-heart" style="color:#05573c;"></i> <strong>Built with 💙:</strong> WittyMart is proudly powered by <em>Witty Highbrow Technologies</em>, a tech-driven company passionate about innovation and customer happiness.</li>
+            <ul style="list-style: disc; padding-left: 20px;">
+                <li><strong>Wide selection:</strong> Browse thousands of top-rated, affordable products across multiple categories.</li>
+                <li><strong>Smart features:</strong> Wishlist, product comparisons, reviews, and intelligent recommendations to help you shop better.</li>
+                <li><strong>Fast and secure checkout:</strong> Optimized for speed, trust, and simplicity – no stress, no delays.</li>
+                <li><strong>Friendly local support:</strong> Our Kenyan-based support team is available 7 days a week for any issues or inquiries.</li>
+                <li><strong>Built with care:</strong> WittyMart is proudly powered by <em>Witty Highbrow Technologies</em>, a tech-driven company passionate about innovation and customer happiness.</li>
             </ul>
             
             <h2> Join the WittyMart Experience</h2>
