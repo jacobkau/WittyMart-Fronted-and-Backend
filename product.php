@@ -72,6 +72,7 @@ if ($isLoggedIn) {
 $page_title = $product['name'];
 $stock_val = intval($product['stock'] ?? 0);
 $is_cloudinary = !empty($product['image_url']) && strpos($product['image_url'], 'cloudinary.com') !== false;
+$in_cart = $cart_quantity > 0;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -176,6 +177,14 @@ $is_cloudinary = !empty($product['image_url']) && strpos($product['image_url'], 
             margin: 20px 0;
         }
         
+        /* ===== ACTION BUTTONS ===== */
+        .product-actions {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
         .product-info .add-to-cart {
             background: #05573c;
             color: #fff;
@@ -186,8 +195,11 @@ $is_cloudinary = !empty($product['image_url']) && strpos($product['image_url'], 
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
-            width: 100%;
-            max-width: 300px;
+            min-width: 200px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
         
         .product-info .add-to-cart:hover:not(:disabled) {
@@ -207,7 +219,64 @@ $is_cloudinary = !empty($product['image_url']) && strpos($product['image_url'], 
             background: #dc3545;
         }
         
-        /* Wishlist button - matches homepage style */
+        /* ===== IN-CART STATE ===== */
+        .product-info .in-cart-btn {
+            background: #e8f5f0;
+            color: #05573c;
+            border: 2px solid #05573c;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: default;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 200px;
+            justify-content: center;
+        }
+        
+        .product-info .in-cart-btn i {
+            color: #05573c;
+        }
+        
+        /* + button */
+        .product-info .add-more-btn {
+            background: #05573c;
+            color: #fff;
+            border: none;
+            width: 48px;
+            height: 48px;
+            border-radius: 6px;
+            font-size: 20px;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.25s ease;
+            box-shadow: 0 2px 6px rgba(5, 87, 60, 0.25);
+        }
+        
+        .product-info .add-more-btn:hover:not(:disabled) {
+            background: #03402c;
+            transform: scale(1.06);
+        }
+        
+        .product-info .add-more-btn:active:not(:disabled) {
+            transform: scale(0.96);
+        }
+        
+        .product-info .add-more-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .product-info .add-more-btn.loading {
+            pointer-events: none;
+        }
+        
+        /* Wishlist button */
         .product-info .wishlist-btn {
             background: #fff;
             border: 2px solid #e91e63;
@@ -279,13 +348,23 @@ $is_cloudinary = !empty($product['image_url']) && strpos($product['image_url'], 
         
         /* Cart status hint */
         .cart-hint {
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
             font-size: 13px;
             color: #05573c;
             background: #e8f5f0;
-            padding: 4px 12px;
+            padding: 6px 12px;
             border-radius: 12px;
-            margin-left: 10px;
+            font-weight: 600;
+        }
+        
+        .cart-hint .qty-badge {
+            background: #05573c;
+            color: #fff;
+            border-radius: 10px;
+            padding: 1px 8px;
+            font-size: 12px;
         }
         
         /* Related Products */
@@ -384,8 +463,10 @@ $is_cloudinary = !empty($product['image_url']) && strpos($product['image_url'], 
                 font-size: 24px;
             }
             
-            .product-info .add-to-cart {
-                max-width: 100%;
+            .product-info .add-to-cart,
+            .product-info .in-cart-btn {
+                width: 100%;
+                min-width: 0;
             }
             
             .related-products .products-grid {
@@ -448,32 +529,51 @@ $is_cloudinary = !empty($product['image_url']) && strpos($product['image_url'], 
                         <?php echo nl2br(htmlspecialchars($product['description'] ?? 'No description available for this product.')); ?>
                     </div>
                     
-                    <!-- ===== QUANTITY SELECTOR ===== -->
-                    <div class="quantity-selector">
-                        <label for="quantity">Quantity:</label>
-                        <input type="number" id="quantity" value="1" min="1" max="<?php echo max(1, $stock_val); ?>">
-                        <?php if ($cart_quantity > 0): ?>
-                            <span class="cart-hint">
-                                <i class="fas fa-shopping-cart"></i>
-                                <?php echo $cart_quantity; ?> already in cart
-                            </span>
-                        <?php endif; ?>
-                    </div>
+                    <!-- ===== QUANTITY SELECTOR (only when NOT in cart) ===== -->
+                    <?php if (!$in_cart && $stock_val > 0): ?>
+                        <div class="quantity-selector">
+                            <label for="quantity">Quantity:</label>
+                            <input type="number" id="quantity" value="1" min="1" max="<?php echo max(1, $stock_val); ?>">
+                        </div>
+                    <?php endif; ?>
                     
                     <!-- ===== ACTION BUTTONS ===== -->
-                    <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 10px;">
-                        <?php if ($stock_val > 0): ?>
+                    <div class="product-actions">
+                        <?php if ($stock_val <= 0): ?>
+                            <button class="add-to-cart" disabled>
+                                <i class="fas fa-times-circle"></i> Out of Stock
+                            </button>
+                        <?php elseif ($in_cart): ?>
+                            <!-- Product already in cart: show In Cart + "+" button -->
+                            <span class="in-cart-btn" title="Item is in your cart">
+                                <i class="fas fa-check-circle"></i> 
+                                In Cart
+                            </span>
+                            
+                            <button type="button" 
+                                    class="add-more-btn"
+                                    id="addMoreBtn"
+                                    data-product-id="<?php echo $product['id']; ?>"
+                                    data-product-name="<?php echo htmlspecialchars($product['name']); ?>"
+                                    title="Add one more to cart">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                            
+                            <span class="cart-hint">
+                                <i class="fas fa-shopping-cart"></i>
+                                <span class="qty-badge" id="cartQtyBadge"><?php echo $cart_quantity; ?></span> in cart
+                            </span>
+                        <?php else: ?>
+                            <!-- Normal Add to Cart -->
                             <button class="add-to-cart" 
+                                    id="addToCartBtn"
                                     data-product-id="<?php echo $product['id']; ?>"
                                     data-product-name="<?php echo htmlspecialchars($product['name']); ?>">
                                 <i class="fas fa-shopping-cart"></i> Add to Cart
                             </button>
-                        <?php else: ?>
-                            <button class="add-to-cart" disabled>
-                                <i class="fas fa-times-circle"></i> Out of Stock
-                            </button>
                         <?php endif; ?>
                         
+                        <!-- Wishlist button -->
                         <button class="wishlist-btn <?php echo $in_wishlist ? 'active' : ''; ?>"
                                 id="wishlistBtn"
                                 data-product-id="<?php echo $product['id']; ?>"
@@ -525,6 +625,7 @@ $is_cloudinary = !empty($product['image_url']) && strpos($product['image_url'], 
         // ============================================
         const isLoggedIn = <?php echo $isLoggedIn ? 'true' : 'false'; ?>;
         const productId = <?php echo $product['id']; ?>;
+        const stockAvailable = <?php echo $stock_val; ?>;
 
         // ============================================
         // TOAST NOTIFICATION
@@ -539,71 +640,176 @@ $is_cloudinary = !empty($product['image_url']) && strpos($product['image_url'], 
         }
 
         // ============================================
-        // ADD TO CART
+        // HELPER: update header cart badge
         // ============================================
-        document.querySelector('.add-to-cart')?.addEventListener('click', function() {
-            if (this.disabled) return;
+        function updateCartBadge(count) {
+            if (count === undefined) return;
+            const badge = document.querySelector('.cart-badge-sm, .cart-badge');
+            if (badge) badge.textContent = count;
+        }
+
+        // ============================================
+        // REPLACE add-to-cart button with in-cart UI
+        // (called after a successful add)
+        // ============================================
+        function switchToInCartUI(initialQty) {
+            const container = document.querySelector('.product-actions');
+            const addBtn = document.getElementById('addToCartBtn');
             
-            const pid = this.dataset.productId;
-            const productName = this.dataset.productName;
-            const quantity = parseInt(document.getElementById('quantity').value) || 1;
+            if (addBtn) addBtn.remove();
             
-            if (!isLoggedIn) {
-                showToast('Please login to add items to your cart', 'info');
-                setTimeout(() => window.location.href = 'home.php', 1500);
-                return;
+            // Remove quantity selector (no longer needed)
+            const qtySel = document.querySelector('.quantity-selector');
+            if (qtySel) qtySel.remove();
+            
+            // Build new UI
+            const inCartHTML = `
+                <span class="in-cart-btn" title="Item is in your cart">
+                    <i class="fas fa-check-circle"></i> In Cart
+                </span>
+                <button type="button" 
+                        class="add-more-btn"
+                        id="addMoreBtn"
+                        data-product-id="${productId}"
+                        title="Add one more to cart">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <span class="cart-hint">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span class="qty-badge" id="cartQtyBadge">${initialQty}</span> in cart
+                </span>
+            `;
+            
+            // Insert before wishlist button
+            const wishlistBtn = document.getElementById('wishlistBtn');
+            if (wishlistBtn) {
+                wishlistBtn.insertAdjacentHTML('beforebegin', inCartHTML);
+            } else {
+                container.insertAdjacentHTML('afterbegin', inCartHTML);
             }
             
-            const originalText = this.innerHTML;
-            this.disabled = true;
-            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
-            
-            const formData = new FormData();
-            formData.append('ajax_action', 'add_to_cart');
-            formData.append('product_id', pid);
-            formData.append('quantity', quantity);
-            
-            fetch('cart.php', { method: 'POST', body: formData })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        this.innerHTML = '<i class="fas fa-check"></i> Added!';
-                        this.className = 'add-to-cart added';
-                        showToast(productName + ' added to cart!', 'success');
-                        
-                        if (data.cart_count !== undefined) {
-                            const cartBadge = document.querySelector('.cart-badge-sm, .cart-badge');
-                            if (cartBadge) cartBadge.textContent = data.cart_count;
+            // Attach listener to the new + button
+            attachAddMoreHandler();
+        }
+
+        // ============================================
+        // ADD TO CART (initial add)
+        // ============================================
+        const addToCartBtn = document.getElementById('addToCartBtn');
+        if (addToCartBtn) {
+            addToCartBtn.addEventListener('click', function() {
+                if (this.disabled) return;
+                
+                const pid = this.dataset.productId;
+                const productName = this.dataset.productName;
+                const qtyInput = document.getElementById('quantity');
+                const quantity = qtyInput ? (parseInt(qtyInput.value) || 1) : 1;
+                
+                if (!isLoggedIn) {
+                    showToast('Please login to add items to your cart', 'info');
+                    setTimeout(() => window.location.href = 'home.php', 1500);
+                    return;
+                }
+                
+                const originalText = this.innerHTML;
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+                
+                const formData = new FormData();
+                formData.append('ajax_action', 'add_to_cart');
+                formData.append('product_id', pid);
+                formData.append('quantity', quantity);
+                
+                fetch('cart.php', { method: 'POST', body: formData })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.innerHTML = '<i class="fas fa-check"></i> Added!';
+                            this.className = 'add-to-cart added';
+                            showToast(productName + ' added to cart!', 'success');
+                            
+                            updateCartBadge(data.cart_count);
+                            
+                            // Brief "Added!" confirmation, then swap to In Cart UI
+                            setTimeout(() => {
+                                switchToInCartUI(quantity);
+                            }, 700);
+                        } else {
+                            this.innerHTML = originalText;
+                            this.className = 'add-to-cart';
+                            this.disabled = false;
+                            showToast(data.message || 'Failed to add to cart', 'error');
                         }
-                        
-                        setTimeout(() => {
-                            this.innerHTML = originalText;
-                            this.className = 'add-to-cart';
-                            this.disabled = false;
-                        }, 2000);
-                    } else {
-                        this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Failed!';
-                        this.className = 'add-to-cart error';
-                        showToast(data.message || 'Failed to add to cart', 'error');
-                        setTimeout(() => {
-                            this.innerHTML = originalText;
-                            this.className = 'add-to-cart';
-                            this.disabled = false;
-                        }, 2000);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error!';
-                    this.className = 'add-to-cart error';
-                    showToast('An error occurred. Please try again.', 'error');
-                    setTimeout(() => {
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
                         this.innerHTML = originalText;
                         this.className = 'add-to-cart';
                         this.disabled = false;
-                    }, 2000);
-                });
-        });
+                        showToast('An error occurred. Please try again.', 'error');
+                    });
+            });
+        }
+
+        // ============================================
+        // ADD ONE MORE (+ button)
+        // ============================================
+        function attachAddMoreHandler() {
+            const btn = document.getElementById('addMoreBtn');
+            if (!btn) return;
+            
+            btn.addEventListener('click', function() {
+                if (this.disabled) return;
+                
+                if (!isLoggedIn) {
+                    showToast('Please login to add items to your cart', 'info');
+                    setTimeout(() => window.location.href = 'home.php', 1500);
+                    return;
+                }
+                
+                const pid = this.dataset.productId;
+                const productName = this.dataset.productName;
+                const originalHTML = this.innerHTML;
+                
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                
+                const formData = new FormData();
+                formData.append('ajax_action', 'add_to_cart');
+                formData.append('product_id', pid);
+                formData.append('quantity', 1);
+                
+                fetch('cart.php', { method: 'POST', body: formData })
+                    .then(response => response.json())
+                    .then(data => {
+                        this.disabled = false;
+                        this.innerHTML = originalHTML;
+                        
+                        if (data.success) {
+                            // Update the qty badge
+                            const badge = document.getElementById('cartQtyBadge');
+                            if (badge) {
+                                const current = parseInt(badge.textContent) || 0;
+                                badge.textContent = current + 1;
+                            }
+                            
+                            updateCartBadge(data.cart_count);
+                            showToast('1 more ' + productName + ' added to cart', 'success');
+                        } else {
+                            showToast(data.message || 'Could not add more', 'error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        this.disabled = false;
+                        this.innerHTML = originalHTML;
+                        showToast('An error occurred. Please try again.', 'error');
+                    });
+            });
+        }
+        
+        // Attach on page load (if + button already exists from PHP)
+        attachAddMoreHandler();
 
         // ============================================
         // TOGGLE WISHLIST
@@ -648,7 +854,6 @@ $is_cloudinary = !empty($product['image_url']) && strpos($product['image_url'], 
                                 showToast(productName + ' removed from wishlist', 'info');
                             }
                             
-                            // Update header wishlist badge if present
                             if (data.wishlist_count !== undefined) {
                                 const badge = document.querySelector('.wishlist-badge, .wishlist-count');
                                 if (badge) badge.textContent = data.wishlist_count;
