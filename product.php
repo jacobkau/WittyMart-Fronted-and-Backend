@@ -73,6 +73,7 @@ $page_title = $product['name'];
 $stock_val = intval($product['stock'] ?? 0);
 $is_cloudinary = !empty($product['image_url']) && strpos($product['image_url'], 'cloudinary.com') !== false;
 $in_cart = $cart_quantity > 0;
+$product_image = getProductImage($product['image'] ?? null, $product['image_url'] ?? null);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -103,6 +104,10 @@ $in_cart = $cart_quantity > 0;
         
         .product-image {
             position: relative;
+            cursor: zoom-in;
+            overflow: hidden;
+            border-radius: 8px;
+            background: #f5f5f5;
         }
         
         .product-image img {
@@ -110,7 +115,12 @@ $in_cart = $cart_quantity > 0;
             height: 400px;
             object-fit: cover;
             border-radius: 8px;
-            background: #f5f5f5;
+            transition: transform 0.4s ease;
+            display: block;
+        }
+        
+        .product-image:hover img {
+            transform: scale(1.04);
         }
         
         .product-image .cloudinary-badge {
@@ -124,6 +134,30 @@ $in_cart = $cart_quantity > 0;
             border-radius: 12px;
             font-weight: 600;
             letter-spacing: 0.5px;
+            z-index: 2;
+        }
+        
+        /* Zoom hint overlay on the image */
+        .product-image .zoom-hint {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            font-size: 11px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            z-index: 2;
+        }
+        
+        .product-image:hover .zoom-hint {
+            opacity: 0;
         }
         
         .product-info h1 {
@@ -202,22 +236,10 @@ $in_cart = $cart_quantity > 0;
             gap: 8px;
         }
         
-        .product-info .add-to-cart:hover:not(:disabled) {
-            background: #03402c;
-        }
-        
-        .product-info .add-to-cart:disabled {
-            opacity: 0.7;
-            cursor: not-allowed;
-        }
-        
-        .product-info .add-to-cart.added {
-            background: #28a745;
-        }
-        
-        .product-info .add-to-cart.error {
-            background: #dc3545;
-        }
+        .product-info .add-to-cart:hover:not(:disabled) { background: #03402c; }
+        .product-info .add-to-cart:disabled { opacity: 0.7; cursor: not-allowed; }
+        .product-info .add-to-cart.added { background: #28a745; }
+        .product-info .add-to-cart.error { background: #dc3545; }
         
         /* ===== IN-CART STATE ===== */
         .product-info .in-cart-btn {
@@ -270,10 +292,6 @@ $in_cart = $cart_quantity > 0;
         .product-info .add-more-btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
-        }
-        
-        .product-info .add-more-btn.loading {
-            pointer-events: none;
         }
         
         /* Wishlist button */
@@ -346,7 +364,6 @@ $in_cart = $cart_quantity > 0;
             border-color: #05573c;
         }
         
-        /* Cart status hint */
         .cart-hint {
             display: inline-flex;
             align-items: center;
@@ -444,6 +461,154 @@ $in_cart = $cart_quantity > 0;
         .toast.error   { background: #dc3545; }
         .toast.info    { background: #17a2b8; }
         
+        /* ============================================
+           IMAGE LIGHTBOX / ZOOM OVERLAY
+           ============================================ */
+        .lightbox-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.92);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .lightbox-overlay.active {
+            display: flex;
+            opacity: 1;
+        }
+        
+        .lightbox-overlay .lightbox-img-wrapper {
+            max-width: 95vw;
+            max-height: 90vh;
+            overflow: hidden;
+            position: relative;
+            border-radius: 8px;
+            cursor: grab;
+            background: #111;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            user-select: none;
+        }
+        
+        .lightbox-overlay .lightbox-img-wrapper.grabbing {
+            cursor: grabbing;
+        }
+        
+        .lightbox-overlay .lightbox-img-wrapper img {
+            max-width: 95vw;
+            max-height: 90vh;
+            object-fit: contain;
+            transition: transform 0.2s ease;
+            transform-origin: center center;
+            user-select: none;
+            -webkit-user-drag: none;
+            pointer-events: none; /* wrapper handles drag */
+        }
+        
+        .lightbox-close {
+            position: absolute;
+            top: 20px;
+            right: 24px;
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+            border: none;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.25s ease;
+            z-index: 10002;
+            backdrop-filter: blur(10px);
+        }
+        
+        .lightbox-close:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: rotate(90deg);
+        }
+        
+        /* Zoom controls */
+        .lightbox-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.15);
+            padding: 8px 12px;
+            border-radius: 30px;
+            backdrop-filter: blur(10px);
+            z-index: 10002;
+        }
+        
+        .lightbox-controls button {
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        
+        .lightbox-controls button:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.35);
+            transform: scale(1.08);
+        }
+        
+        .lightbox-controls button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        
+        .lightbox-controls .zoom-level {
+            display: flex;
+            align-items: center;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            min-width: 50px;
+            justify-content: center;
+            padding: 0 6px;
+        }
+        
+        /* Zoom hint top-left */
+        .lightbox-hint {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            color: rgba(255, 255, 255, 0.75);
+            font-size: 12px;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 8px 14px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            z-index: 10002;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        /* Prevent body scroll when lightbox is open */
+        body.lightbox-open {
+            overflow: hidden;
+        }
+        
         @media (max-width: 768px) {
             .product-detail-grid {
                 grid-template-columns: 1fr;
@@ -472,6 +637,31 @@ $in_cart = $cart_quantity > 0;
             .related-products .products-grid {
                 grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
             }
+            
+            .lightbox-close {
+                top: 12px;
+                right: 12px;
+                width: 40px;
+                height: 40px;
+            }
+            
+            .lightbox-hint {
+                top: 12px;
+                left: 12px;
+                font-size: 10px;
+                padding: 6px 10px;
+            }
+            
+            .lightbox-controls {
+                bottom: 12px;
+                padding: 6px 10px;
+            }
+            
+            .lightbox-controls button {
+                width: 36px;
+                height: 36px;
+                font-size: 14px;
+            }
         }
     </style>
 </head>
@@ -482,20 +672,57 @@ $in_cart = $cart_quantity > 0;
     <!-- Toast Notification -->
     <div id="toast" class="toast"></div>
     
+    <!-- ============================================
+         IMAGE LIGHTBOX / ZOOM OVERLAY
+         ============================================ -->
+    <div class="lightbox-overlay" id="lightbox" onclick="if(event.target===this) closeLightbox()">
+        <div class="lightbox-hint">
+            <i class="fas fa-search-plus"></i>
+            Scroll to zoom · Drag to pan · Esc to close
+        </div>
+        
+        <button class="lightbox-close" onclick="closeLightbox()" aria-label="Close">
+            <i class="fas fa-times"></i>
+        </button>
+        
+        <div class="lightbox-img-wrapper" id="lightboxWrapper">
+            <img src="<?php echo htmlspecialchars($product_image); ?>" 
+                 alt="<?php echo htmlspecialchars($product['name']); ?>"
+                 id="lightboxImg">
+        </div>
+        
+        <div class="lightbox-controls">
+            <button type="button" onclick="zoomOut()" title="Zoom out" id="zoomOutBtn">
+                <i class="fas fa-search-minus"></i>
+            </button>
+            <span class="zoom-level" id="zoomLevel">100%</span>
+            <button type="button" onclick="zoomIn()" title="Zoom in" id="zoomInBtn">
+                <i class="fas fa-search-plus"></i>
+            </button>
+            <button type="button" onclick="resetZoom()" title="Reset zoom" id="resetZoomBtn">
+                <i class="fas fa-compress"></i>
+            </button>
+        </div>
+    </div>
+    
     <main>
         <div class="product-detail">
             <div class="product-detail-grid">
                 
                 <!-- ===== PRODUCT IMAGE ===== -->
-                <div class="product-image">
-                    <img src="<?php echo htmlspecialchars(getProductImage($product['image'] ?? null, $product['image_url'] ?? null)); ?>" 
+                <div class="product-image" id="productImageBox" title="Click to view full image">
+                    <img src="<?php echo htmlspecialchars($product_image); ?>" 
                          alt="<?php echo htmlspecialchars($product['name']); ?>"
-                         onerror="this.src='uploads/products/no-image.png'">
+                         onerror="this.src='uploads/products/no-image.png'"
+                         id="mainProductImage">
                     <?php if ($is_cloudinary): ?>
                         <span class="cloudinary-badge">
                             <i class="fas fa-cloud"></i> Cloud
                         </span>
                     <?php endif; ?>
+                    <span class="zoom-hint">
+                        <i class="fas fa-expand"></i> Click to zoom
+                    </span>
                 </div>
                 
                 <!-- ===== PRODUCT INFO ===== -->
@@ -529,7 +756,6 @@ $in_cart = $cart_quantity > 0;
                         <?php echo nl2br(htmlspecialchars($product['description'] ?? 'No description available for this product.')); ?>
                     </div>
                     
-                    <!-- ===== QUANTITY SELECTOR (only when NOT in cart) ===== -->
                     <?php if (!$in_cart && $stock_val > 0): ?>
                         <div class="quantity-selector">
                             <label for="quantity">Quantity:</label>
@@ -537,14 +763,12 @@ $in_cart = $cart_quantity > 0;
                         </div>
                     <?php endif; ?>
                     
-                    <!-- ===== ACTION BUTTONS ===== -->
                     <div class="product-actions">
                         <?php if ($stock_val <= 0): ?>
                             <button class="add-to-cart" disabled>
                                 <i class="fas fa-times-circle"></i> Out of Stock
                             </button>
                         <?php elseif ($in_cart): ?>
-                            <!-- Product already in cart: show In Cart + "+" button -->
                             <span class="in-cart-btn" title="Item is in your cart">
                                 <i class="fas fa-check-circle"></i> 
                                 In Cart
@@ -564,7 +788,6 @@ $in_cart = $cart_quantity > 0;
                                 <span class="qty-badge" id="cartQtyBadge"><?php echo $cart_quantity; ?></span> in cart
                             </span>
                         <?php else: ?>
-                            <!-- Normal Add to Cart -->
                             <button class="add-to-cart" 
                                     id="addToCartBtn"
                                     data-product-id="<?php echo $product['id']; ?>"
@@ -573,7 +796,6 @@ $in_cart = $cart_quantity > 0;
                             </button>
                         <?php endif; ?>
                         
-                        <!-- Wishlist button -->
                         <button class="wishlist-btn <?php echo $in_wishlist ? 'active' : ''; ?>"
                                 id="wishlistBtn"
                                 data-product-id="<?php echo $product['id']; ?>"
@@ -649,8 +871,192 @@ $in_cart = $cart_quantity > 0;
         }
 
         // ============================================
+        // IMAGE LIGHTBOX / ZOOM
+        // ============================================
+        const lightbox = document.getElementById('lightbox');
+        const lightboxImg = document.getElementById('lightboxImg');
+        const lightboxWrapper = document.getElementById('lightboxWrapper');
+        const zoomLevelEl = document.getElementById('zoomLevel');
+        const zoomInBtn = document.getElementById('zoomInBtn');
+        const zoomOutBtn = document.getElementById('zoomOutBtn');
+        
+        let currentScale = 1;
+        let translateX = 0;
+        let translateY = 0;
+        const MIN_SCALE = 1;
+        const MAX_SCALE = 5;
+        const SCALE_STEP = 0.3;
+        
+        // Drag state
+        let isDragging = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let dragStartTranslateX = 0;
+        let dragStartTranslateY = 0;
+        
+        function applyTransform() {
+            lightboxImg.style.transform = `translate(${translateX}px, ${translateY}px) scale(${currentScale})`;
+            zoomLevelEl.textContent = Math.round(currentScale * 100) + '%';
+            zoomInBtn.disabled = currentScale >= MAX_SCALE;
+            zoomOutBtn.disabled = currentScale <= MIN_SCALE;
+        }
+        
+        function openLightbox() {
+            lightbox.classList.add('active');
+            document.body.classList.add('lightbox-open');
+            resetZoom();
+        }
+        
+        function closeLightbox() {
+            lightbox.classList.remove('active');
+            document.body.classList.remove('lightbox-open');
+            resetZoom();
+        }
+        
+        function zoomIn() {
+            if (currentScale >= MAX_SCALE) return;
+            currentScale = Math.min(MAX_SCALE, currentScale + SCALE_STEP);
+            applyTransform();
+        }
+        
+        function zoomOut() {
+            if (currentScale <= MIN_SCALE) return;
+            currentScale = Math.max(MIN_SCALE, currentScale - SCALE_STEP);
+            // When resetting scale to min, also reset pan
+            if (currentScale === MIN_SCALE) {
+                translateX = 0;
+                translateY = 0;
+            }
+            applyTransform();
+        }
+        
+        function resetZoom() {
+            currentScale = 1;
+            translateX = 0;
+            translateY = 0;
+            applyTransform();
+        }
+        
+        // Open lightbox on product image click
+        document.getElementById('productImageBox')?.addEventListener('click', function(e) {
+            // Prevent opening if the click came from the wishlist button etc.
+            if (e.target.closest('.cloudinary-badge')) return;
+            openLightbox();
+        });
+        
+        // Close on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && lightbox.classList.contains('active')) {
+                closeLightbox();
+            }
+            // Keyboard shortcuts inside lightbox
+            if (lightbox.classList.contains('active')) {
+                if (e.key === '+' || e.key === '=') zoomIn();
+                if (e.key === '-' || e.key === '_') zoomOut();
+                if (e.key === '0') resetZoom();
+            }
+        });
+        
+        // Mouse wheel zoom inside lightbox
+        lightboxWrapper?.addEventListener('wheel', function(e) {
+            if (!lightbox.classList.contains('active')) return;
+            e.preventDefault();
+            
+            if (e.deltaY < 0) {
+                // Scroll up → zoom in
+                currentScale = Math.min(MAX_SCALE, currentScale + 0.15);
+            } else {
+                // Scroll down → zoom out
+                currentScale = Math.max(MIN_SCALE, currentScale - 0.15);
+                if (currentScale === MIN_SCALE) {
+                    translateX = 0;
+                    translateY = 0;
+                }
+            }
+            applyTransform();
+        }, { passive: false });
+        
+        // Mouse drag to pan
+        lightboxWrapper?.addEventListener('mousedown', function(e) {
+            if (currentScale <= MIN_SCALE) return;
+            e.preventDefault();
+            isDragging = true;
+            lightboxWrapper.classList.add('grabbing');
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            dragStartTranslateX = translateX;
+            dragStartTranslateY = translateY;
+        });
+        
+        document.addEventListener('mousemove', function(e) {
+            if (!isDragging) return;
+            translateX = dragStartTranslateX + (e.clientX - dragStartX);
+            translateY = dragStartTranslateY + (e.clientY - dragStartY);
+            applyTransform();
+        });
+        
+        document.addEventListener('mouseup', function() {
+            if (isDragging) {
+                isDragging = false;
+                lightboxWrapper.classList.remove('grabbing');
+            }
+        });
+        
+        // ===== Touch support (pinch zoom + pan) =====
+        let touchStartDist = 0;
+        let touchStartScale = 1;
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let touchStartTranslateX = 0;
+        let touchStartTranslateY = 0;
+        let isPinching = false;
+        
+        lightboxWrapper?.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 2) {
+                // Two-finger pinch
+                isPinching = true;
+                touchStartDist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                touchStartScale = currentScale;
+            } else if (e.touches.length === 1 && currentScale > MIN_SCALE) {
+                // Single-finger pan
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+                touchStartTranslateX = translateX;
+                touchStartTranslateY = translateY;
+            }
+        }, { passive: true });
+        
+        lightboxWrapper?.addEventListener('touchmove', function(e) {
+            if (isPinching && e.touches.length === 2) {
+                e.preventDefault();
+                const dist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                const ratio = dist / touchStartDist;
+                currentScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, touchStartScale * ratio));
+                if (currentScale === MIN_SCALE) {
+                    translateX = 0;
+                    translateY = 0;
+                }
+                applyTransform();
+            } else if (e.touches.length === 1 && currentScale > MIN_SCALE) {
+                e.preventDefault();
+                translateX = touchStartTranslateX + (e.touches[0].clientX - touchStartX);
+                translateY = touchStartTranslateY + (e.touches[0].clientY - touchStartY);
+                applyTransform();
+            }
+        }, { passive: false });
+        
+        lightboxWrapper?.addEventListener('touchend', function(e) {
+            if (e.touches.length < 2) isPinching = false;
+        });
+
+        // ============================================
         // REPLACE add-to-cart button with in-cart UI
-        // (called after a successful add)
         // ============================================
         function switchToInCartUI(initialQty) {
             const container = document.querySelector('.product-actions');
@@ -658,11 +1064,9 @@ $in_cart = $cart_quantity > 0;
             
             if (addBtn) addBtn.remove();
             
-            // Remove quantity selector (no longer needed)
             const qtySel = document.querySelector('.quantity-selector');
             if (qtySel) qtySel.remove();
             
-            // Build new UI
             const inCartHTML = `
                 <span class="in-cart-btn" title="Item is in your cart">
                     <i class="fas fa-check-circle"></i> In Cart
@@ -680,7 +1084,6 @@ $in_cart = $cart_quantity > 0;
                 </span>
             `;
             
-            // Insert before wishlist button
             const wishlistBtn = document.getElementById('wishlistBtn');
             if (wishlistBtn) {
                 wishlistBtn.insertAdjacentHTML('beforebegin', inCartHTML);
@@ -688,7 +1091,6 @@ $in_cart = $cart_quantity > 0;
                 container.insertAdjacentHTML('afterbegin', inCartHTML);
             }
             
-            // Attach listener to the new + button
             attachAddMoreHandler();
         }
 
@@ -730,7 +1132,6 @@ $in_cart = $cart_quantity > 0;
                             
                             updateCartBadge(data.cart_count);
                             
-                            // Brief "Added!" confirmation, then swap to In Cart UI
                             setTimeout(() => {
                                 switchToInCartUI(quantity);
                             }, 700);
@@ -786,7 +1187,6 @@ $in_cart = $cart_quantity > 0;
                         this.innerHTML = originalHTML;
                         
                         if (data.success) {
-                            // Update the qty badge
                             const badge = document.getElementById('cartQtyBadge');
                             if (badge) {
                                 const current = parseInt(badge.textContent) || 0;
@@ -808,7 +1208,6 @@ $in_cart = $cart_quantity > 0;
             });
         }
         
-        // Attach on page load (if + button already exists from PHP)
         attachAddMoreHandler();
 
         // ============================================
