@@ -5,8 +5,7 @@ ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
 require_once 'includes/config.php';
-require_once 'includes/cloudinary_helper.php'; // Add Cloudinary helper
-
+require_once 'includes/cloudinary_helper.php';
 requireAdmin();
 
 global $pdo;
@@ -14,344 +13,294 @@ global $pdo;
 $message = '';
 $messageType = '';
 
-// ===== IMAGE UPLOAD DIRECTORY =====
-$upload_dir = UPLOAD_DIR; // Use the constant from config.php
-if (!file_exists($upload_dir)) {
-    mkdir($upload_dir, 0777, true);
-}
-
-// ============================================
-// CLOUDINARY IMAGE FUNCTIONS
-// ============================================
-
-/**
- * Upload product image to Cloudinary (with local fallback)
- */
-function uploadProductImageToCloudinary($file, $folder = 'products') {
-    global $cloudinary;
-    
-    $result = [
-        'success' => false,
-        'path' => '',
-        'url' => '',
-        'public_id' => '',
-        'error' => ''
-    ];
-    
-    // Validate file
-    if (!isset($file) || $file['error'] !== UPLOAD_ERR_OK) {
-        $result['error'] = 'No file uploaded or upload error.';
-        return $result;
-    }
-    
-    // Validate file type
-    $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    $file_type = mime_content_type($file['tmp_name']);
-    if (!in_array($file_type, $allowed_types)) {
-        $result['error'] = 'Invalid file type. Only JPG, PNG, GIF, and WEBP are allowed.';
-        return $result;
-    }
-    
-    // Validate file size (5MB max)
-    if ($file['size'] > 5 * 1024 * 1024) {
-        $result['error'] = 'File size exceeds 5MB limit.';
-        return $result;
-    }
-    
-    // Generate unique filename for local storage
-    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
-    $filename = time() . '_' . uniqid() . '.' . $extension;
-    $filename = preg_replace('/[^a-zA-Z0-9._-]/', '', $filename);
-    
-    // Try Cloudinary first if available
-    if ($cloudinary) {
-        try {
-            $upload_result = uploadToCloudinary($file['tmp_name'], $folder);
-            
-            if ($upload_result['success']) {
-                $result['success'] = true;
-                $result['url'] = $upload_result['url'];
-                $result['public_id'] = $upload_result['public_id'];
-                $result['path'] = 'uploads/products/' . $filename; // Keep for fallback
-                
-                // Also save locally as fallback
-                $target_path = UPLOAD_DIR . $filename;
-                move_uploaded_file($file['tmp_name'], $target_path);
-                
-                error_log('Cloudinary upload successful: ' . $upload_result['public_id']);
-                return $result;
-            } else {
-                error_log('Cloudinary upload failed: ' . ($upload_result['error'] ?? 'Unknown error'));
-                // Fall through to local upload
-            }
-        } catch (Exception $e) {
-            error_log('Cloudinary upload exception: ' . $e->getMessage());
-            // Fall through to local upload
-        }
-    }
-    
-    // Fallback to local upload
-    $target_path = UPLOAD_DIR . $filename;
-    if (move_uploaded_file($file['tmp_name'], $target_path)) {
-        $result['success'] = true;
-        $result['path'] = 'uploads/products/' . $filename;
-        $result['url'] = UPLOAD_URL . $filename;
-        error_log('Local upload successful: ' . $filename);
-    } else {
-        $result['error'] = 'Failed to save file locally.';
-        error_log('Failed to move uploaded file to: ' . $target_path);
-    }
-    
-    return $result;
-}
-
-/**
- * Delete product image from Cloudinary (if exists)
- */
-function deleteProductImageFromCloudinary($image_path) {
-    global $cloudinary;
-    
-    if (empty($image_path)) {
-        return true;
-    }
-    
-    // Check if it's a Cloudinary URL by looking for cloudinary.com in the path
-    if (strpos($image_path, 'cloudinary.com') !== false) {
-        // Try to extract public_id from URL
-        $pattern = '/\/upload\/(?:v\d+\/)?([^\/]+\/[^\/]+)(?:\.[^.]+)?$/';
-        if (preg_match($pattern, $image_path, $matches)) {
-            $public_id = $matches[1];
-            return deleteFromCloudinary($public_id);
-        }
-        // Try alternative pattern for direct URLs
-        $parsed_url = parse_url($image_path);
-        $path = ltrim($parsed_url['path'] ?? '', '/');
-        $parts = explode('/', $path);
-        $upload_index = array_search('upload', $parts);
-        if ($upload_index !== false && isset($parts[$upload_index + 1])) {
-            $start = $upload_index + 1;
-            if (isset($parts[$start]) && strpos($parts[$start], 'v') === 0) {
-                $start++;
-            }
-            if (isset($parts[$start])) {
-                $public_id = implode('/', array_slice($parts, $start));
-                $public_id = preg_replace('/\.[^.]+$/', '', $public_id);
-                return deleteFromCloudinary($public_id);
-            }
-        }
-    }
-    
-    // Local file deletion
-    $filename = basename($image_path);
-    $full_path = UPLOAD_DIR . $filename;
-    
-    if (file_exists($full_path) && is_file($full_path)) {
-        if (unlink($full_path)) {
-            error_log('Deleted local image: ' . $full_path);
-            return true;
-        } else {
-            error_log('Failed to delete local image: ' . $full_path);
-        }
-    } else {
-        error_log('Local image not found for deletion: ' . $full_path);
-    }
-    
-    return false;
-}
-
-
-// ============================================
-// HANDLE FORM SUBMISSIONS
-// ============================================
-
+// ===== HANDLE FORM SUBMISSIONS =====
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['action'])) {
-        switch ($_POST['action']) {
+    $action = $_POST['action'] ?? '';
+    
+    try {
+        switch ($action) {
+            
+            // ============================================
+            // ADD PRODUCT
+            // ============================================
             case 'add':
-                try {
-                    $name = sanitize($_POST['name'] ?? '');
-                    $description = sanitize($_POST['description'] ?? '');
-                    $price = floatval($_POST['price'] ?? 0);
-                    $category_id = intval($_POST['category_id'] ?? 0);
-                    $stock = intval($_POST['stock'] ?? 0);
-                    $supplier = sanitize($_POST['supplier'] ?? '');
-                    $sku = sanitize(trim($_POST['sku'] ?? ''));
-
-                    if ($sku === '') {
-                        $stmt = $pdo->prepare("SELECT name FROM categories WHERE id = ?");
-                        $stmt->execute([$category_id]);
-                        $category = $stmt->fetch();
-                        $prefix = 'PRD';
-                        if ($category) {
-                            $prefix = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $category['name']), 0, 3));
-                            $prefix = str_pad($prefix, 3, 'X');
+                $name = sanitize($_POST['name'] ?? '');
+                $description = sanitize($_POST['description'] ?? '');
+                $price = floatval($_POST['price'] ?? 0);
+                $category_id = intval($_POST['category_id'] ?? 0);
+                $status = sanitize($_POST['status'] ?? 'active');
+                $stock = intval($_POST['stock'] ?? 0);
+                $supplier = sanitize($_POST['supplier'] ?? '');
+                $sku = sanitize(trim($_POST['sku'] ?? ''));
+                
+                // Auto-generate SKU if empty
+                if ($sku === '') {
+                    $stmt = $pdo->prepare("SELECT name FROM categories WHERE id = ?");
+                    $stmt->execute([$category_id]);
+                    $category = $stmt->fetch();
+                    $prefix = 'PRD';
+                    if ($category) {
+                        $prefix = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $category['name']), 0, 3));
+                        $prefix = str_pad($prefix, 3, 'X');
+                    }
+                    do {
+                        $sku = $prefix . '-' . random_int(100000, 999999);
+                        $check = $pdo->prepare("SELECT COUNT(*) FROM products WHERE sku = ?");
+                        $check->execute([$sku]);
+                    } while ($check->fetchColumn() > 0);
+                }
+                
+                // Handle image upload
+                $image_url = null;
+                $image_public_id = null;
+                $image_name = null;
+                $upload_message = '';
+                
+                if (isset($_FILES['product_image']) && $_FILES['product_image']['error'] === UPLOAD_ERR_OK) {
+                    // Upload to Cloudinary
+                    $upload_result = uploadToCloudinary($_FILES['product_image']['tmp_name'], 'products');
+                    
+                    if ($upload_result['success']) {
+                        $image_url = $upload_result['url'];
+                        $image_public_id = $upload_result['public_id'];
+                        $upload_message = 'Image uploaded to Cloudinary.';
+                        
+                        // Also save locally as fallback
+                        $upload_dir = UPLOAD_DIR;
+                        if (!file_exists($upload_dir)) {
+                            mkdir($upload_dir, 0777, true);
                         }
-                        do {
-                            $sku = $prefix . '-' . random_int(100000, 999999);
-                            $check = $pdo->prepare("SELECT COUNT(*) FROM products WHERE sku = ?");
-                            $check->execute([$sku]);
-                        } while ($check->fetchColumn() > 0);
+                        $image_name = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', basename($_FILES['product_image']['name']));
+                        move_uploaded_file($_FILES['product_image']['tmp_name'], $upload_dir . $image_name);
                     } else {
-                        $sku = sanitize($sku);
-                    }
-                    
-                    // Handle image upload with Cloudinary
-                    $image_path = '';
-                    if (isset($_FILES['product_image']) && $_FILES['product_image']['error'] === UPLOAD_ERR_OK) {
-                        $upload_result = uploadProductImageToCloudinary($_FILES['product_image']);
-                        if ($upload_result['success']) {
-                            // Store the URL or path - prefer Cloudinary URL
-                            $image_path = !empty($upload_result['url']) ? $upload_result['url'] : $upload_result['path'];
+                        // Fallback to local
+                        $upload_dir = UPLOAD_DIR;
+                        if (!file_exists($upload_dir)) {
+                            mkdir($upload_dir, 0777, true);
+                        }
+                        $image_name = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', basename($_FILES['product_image']['name']));
+                        if (move_uploaded_file($_FILES['product_image']['tmp_name'], $upload_dir . $image_name)) {
+                            $upload_message = 'Image saved locally (Cloudinary upload failed).';
                         } else {
-                            $message = 'Image upload failed: ' . $upload_result['error'];
-                            $messageType = 'error';
+                            $image_name = null;
+                            $upload_message = 'Image upload failed.';
                         }
                     }
-                    
+                }
+                
+                if ($name && $price > 0) {
                     $stmt = $pdo->prepare("
-                        INSERT INTO products (name, description, price, image, category_id, stock, supplier, sku) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO products 
+                        (name, description, price, category_id, image, image_url, image_public_id, status, stock, supplier, sku) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ");
-                    
-                    if ($stmt->execute([$name, $description, $price, $image_path, $category_id, $stock, $supplier, $sku])) {
-                        logActivity(
-                            'add_product',
-                            'Added product: ' . $name . ' (SKU: ' . $sku . ')',
-                            $_SESSION['user_id'],
-                            $_SESSION['user_name']
-                        );
-                        $message = 'Product added successfully!';
+                    if ($stmt->execute([
+                        $name, $description, $price, $category_id,
+                        $image_name, $image_url, $image_public_id, $status,
+                        $stock, $supplier, $sku
+                    ])) {
+                        if (function_exists('logActivity')) {
+                            logActivity('add_product', 'Added product: ' . $name . ' (SKU: ' . $sku . ')',
+                                $_SESSION['user_id'], $_SESSION['user_name']);
+                        }
+                        $message = 'Product added successfully! ' . $upload_message;
                         $messageType = 'success';
                     } else {
                         $message = 'Failed to add product.';
                         $messageType = 'error';
                     }
-                } catch (PDOException $e) {
-                    error_log('Add product error: ' . $e->getMessage());
-                    $message = 'Database error: ' . $e->getMessage();
+                } else {
+                    $message = 'Product name and price are required.';
                     $messageType = 'error';
                 }
                 break;
                 
-            case 'delete':
-                try {
-                    $id = intval($_POST['id'] ?? 0);
-                    
-                    $stmt = $pdo->prepare("SELECT image, name FROM products WHERE id = ?");
-                    $stmt->execute([$id]);
-                    $product = $stmt->fetch();
-                    
-                    if ($product && $product['image']) {
-                        deleteProductImageFromCloudinary($product['image']);
-                    }
-                    
-                    $stmt = $pdo->prepare("DELETE FROM products WHERE id = ?");
-                    if ($stmt->execute([$id])) {
-                        logActivity(
-                            'delete_product',
-                            'Deleted product: ' . ($product['name'] ?? 'Unknown') . ' (ID: ' . $id . ')',
-                            $_SESSION['user_id'],
-                            $_SESSION['user_name']
-                        );
-                        $message = 'Product deleted successfully!';
-                        $messageType = 'success';
-                    } else {
-                        $message = 'Failed to delete product.';
-                        $messageType = 'error';
-                    }
-                } catch (PDOException $e) {
-                    error_log('Delete product error: ' . $e->getMessage());
-                    $message = 'Database error: ' . $e->getMessage();
-                    $messageType = 'error';
-                }
-                break;
-                
+            // ============================================
+            // EDIT PRODUCT
+            // ============================================
             case 'edit':
-                try {
-                    $id = intval($_POST['id'] ?? 0);
-                    $name = sanitize($_POST['name'] ?? '');
-                    $description = sanitize($_POST['description'] ?? '');
-                    $price = floatval($_POST['price'] ?? 0);
-                    $category_id = intval($_POST['category_id'] ?? 0);
-                    $stock = intval($_POST['stock'] ?? 0);
-                    $supplier = sanitize($_POST['supplier'] ?? '');
-                    $sku = sanitize(trim($_POST['sku'] ?? ''));
-
-                    if ($sku === '') {
-                        $stmt = $pdo->prepare("SELECT name FROM categories WHERE id = ?");
-                        $stmt->execute([$category_id]);
-                        $category = $stmt->fetch();
-                        $prefix = 'PRD';
-                        if ($category) {
-                            $prefix = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $category['name']), 0, 3));
-                            $prefix = str_pad($prefix, 3, 'X');
+                $id = intval($_POST['id'] ?? 0);
+                $name = sanitize($_POST['name'] ?? '');
+                $description = sanitize($_POST['description'] ?? '');
+                $price = floatval($_POST['price'] ?? 0);
+                $category_id = intval($_POST['category_id'] ?? 0);
+                $status = sanitize($_POST['status'] ?? 'active');
+                $stock = intval($_POST['stock'] ?? 0);
+                $supplier = sanitize($_POST['supplier'] ?? '');
+                $sku = sanitize(trim($_POST['sku'] ?? ''));
+                
+                // Auto-generate SKU if empty
+                if ($sku === '') {
+                    $stmt = $pdo->prepare("SELECT name FROM categories WHERE id = ?");
+                    $stmt->execute([$category_id]);
+                    $category = $stmt->fetch();
+                    $prefix = 'PRD';
+                    if ($category) {
+                        $prefix = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $category['name']), 0, 3));
+                        $prefix = str_pad($prefix, 3, 'X');
+                    }
+                    do {
+                        $sku = $prefix . '-' . random_int(100000, 999999);
+                        $check = $pdo->prepare("SELECT COUNT(*) FROM products WHERE sku = ? AND id != ?");
+                        $check->execute([$sku, $id]);
+                    } while ($check->fetchColumn() > 0);
+                }
+                
+                // Get existing product to handle old image
+                $stmt = $pdo->prepare("SELECT image, image_url, image_public_id FROM products WHERE id = ?");
+                $stmt->execute([$id]);
+                $existing = $stmt->fetch();
+                
+                $image_url = null;
+                $image_public_id = null;
+                $image_name = null;
+                $upload_message = '';
+                
+                if (isset($_FILES['edit_product_image']) && $_FILES['edit_product_image']['error'] === UPLOAD_ERR_OK) {
+                    // Delete old Cloudinary image
+                    if (!empty($existing['image_public_id'])) {
+                        $delete_result = deleteFromCloudinary($existing['image_public_id']);
+                        if ($delete_result['success']) {
+                            $upload_message = 'Old Cloudinary image deleted. ';
                         }
-                        do {
-                            $sku = $prefix . '-' . random_int(100000, 999999);
-                            $check = $pdo->prepare("SELECT COUNT(*) FROM products WHERE sku = ?");
-                            $check->execute([$sku]);
-                        } while ($check->fetchColumn() > 0);
-                    } else {
-                        $sku = sanitize($sku);
                     }
                     
-                    $stmt = $pdo->prepare("SELECT image FROM products WHERE id = ?");
-                    $stmt->execute([$id]);
-                    $current = $stmt->fetch();
-                    $image_path = $current['image'] ?? '';
+                    // Delete old local image
+                    if (!empty($existing['image']) && file_exists(UPLOAD_DIR . $existing['image'])) {
+                        @unlink(UPLOAD_DIR . $existing['image']);
+                    }
                     
-                    if (isset($_FILES['edit_product_image']) && $_FILES['edit_product_image']['error'] === UPLOAD_ERR_OK) {
-                        // Delete old image
-                        if (!empty($image_path)) {
-                            deleteProductImageFromCloudinary($image_path);
-                        }
+                    // Upload new image to Cloudinary
+                    $upload_result = uploadToCloudinary($_FILES['edit_product_image']['tmp_name'], 'products');
+                    
+                    if ($upload_result['success']) {
+                        $image_url = $upload_result['url'];
+                        $image_public_id = $upload_result['public_id'];
+                        $upload_message .= 'New image uploaded to Cloudinary.';
                         
-                        $upload_result = uploadProductImageToCloudinary($_FILES['edit_product_image']);
-                        if ($upload_result['success']) {
-                            $image_path = !empty($upload_result['url']) ? $upload_result['url'] : $upload_result['path'];
+                        $upload_dir = UPLOAD_DIR;
+                        if (!file_exists($upload_dir)) {
+                            mkdir($upload_dir, 0777, true);
+                        }
+                        $image_name = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', basename($_FILES['edit_product_image']['name']));
+                        move_uploaded_file($_FILES['edit_product_image']['tmp_name'], $upload_dir . $image_name);
+                    } else {
+                        // Local fallback
+                        $upload_dir = UPLOAD_DIR;
+                        if (!file_exists($upload_dir)) {
+                            mkdir($upload_dir, 0777, true);
+                        }
+                        $image_name = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', basename($_FILES['edit_product_image']['name']));
+                        if (move_uploaded_file($_FILES['edit_product_image']['tmp_name'], $upload_dir . $image_name)) {
+                            $upload_message = 'Image saved locally (Cloudinary upload failed).';
                         } else {
-                            $message = 'Image upload failed: ' . $upload_result['error'];
-                            $messageType = 'error';
+                            $image_name = null;
+                            $upload_message = 'Image upload failed.';
                         }
                     }
+                }
+                
+                if ($name && $price > 0 && $id) {
+                    // Build dynamic update
+                    $sql = "UPDATE products SET name = ?, description = ?, price = ?, category_id = ?, status = ?, stock = ?, supplier = ?, sku = ?";
+                    $params = [$name, $description, $price, $category_id, $status, $stock, $supplier, $sku];
                     
-                    $stmt = $pdo->prepare("
-                        UPDATE products 
-                        SET name = ?, description = ?, price = ?, image = ?, category_id = ?, stock = ?, supplier = ?, sku = ?
-                        WHERE id = ?
-                    ");
+                    if ($image_url !== null || $image_name !== null) {
+                        $sql .= ", image = ?, image_url = ?, image_public_id = ?";
+                        $params[] = $image_name;
+                        $params[] = $image_url;
+                        $params[] = $image_public_id;
+                    }
                     
-                    if ($stmt->execute([$name, $description, $price, $image_path, $category_id, $stock, $supplier, $sku, $id])) {
-                        logActivity(
-                            'update_product',
-                            'Updated product: ' . $name . ' (ID: ' . $id . ')',
-                            $_SESSION['user_id'],
-                            $_SESSION['user_name']
-                        );
-                        $message = 'Product updated successfully!';
+                    $sql .= " WHERE id = ?";
+                    $params[] = $id;
+                    
+                    $stmt = $pdo->prepare($sql);
+                    if ($stmt->execute($params)) {
+                        if (function_exists('logActivity')) {
+                            logActivity('update_product', 'Updated product: ' . $name . ' (ID: ' . $id . ')',
+                                $_SESSION['user_id'], $_SESSION['user_name']);
+                        }
+                        $message = 'Product updated successfully! ' . $upload_message;
                         $messageType = 'success';
                     } else {
                         $message = 'Failed to update product.';
                         $messageType = 'error';
                     }
-                } catch (PDOException $e) {
-                    error_log('Edit product error: ' . $e->getMessage());
-                    $message = 'Database error: ' . $e->getMessage();
+                } else {
+                    $message = 'Product name and price are required.';
+                    $messageType = 'error';
+                }
+                break;
+                
+            // ============================================
+            // DELETE PRODUCT
+            // ============================================
+            case 'delete':
+                $id = intval($_POST['id'] ?? 0);
+                
+                // Check if product is in cart
+                $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM cart WHERE product_id = ?");
+                $stmt->execute([$id]);
+                $cart_count = $stmt->fetch()['count'];
+                
+                if ($cart_count > 0) {
+                    $message = 'Cannot delete product — it is currently in a customer cart.';
+                    $messageType = 'error';
+                    break;
+                }
+                
+                // Get product info
+                $stmt = $pdo->prepare("SELECT image, image_public_id, name FROM products WHERE id = ?");
+                $stmt->execute([$id]);
+                $product = $stmt->fetch();
+                
+                $delete_message = '';
+                
+                // Delete from Cloudinary
+                if (!empty($product['image_public_id'])) {
+                    $delete_result = deleteFromCloudinary($product['image_public_id']);
+                    if ($delete_result['success']) {
+                        $delete_message = 'Cloudinary image deleted. ';
+                    }
+                }
+                
+                // Delete local file
+                if (!empty($product['image']) && file_exists(UPLOAD_DIR . $product['image'])) {
+                    @unlink(UPLOAD_DIR . $product['image']);
+                }
+                
+                // Delete from DB
+                $stmt = $pdo->prepare("DELETE FROM products WHERE id = ?");
+                if ($stmt->execute([$id])) {
+                    if (function_exists('logActivity')) {
+                        logActivity('delete_product', 'Deleted product: ' . ($product['name'] ?? 'Unknown') . ' (ID: ' . $id . ')',
+                            $_SESSION['user_id'], $_SESSION['user_name']);
+                    }
+                    $message = 'Product deleted successfully! ' . $delete_message;
+                    $messageType = 'success';
+                } else {
+                    $message = 'Failed to delete product.';
                     $messageType = 'error';
                 }
                 break;
         }
+    } catch (PDOException $e) {
+        error_log('Product action error: ' . $e->getMessage());
+        $message = 'Database error: ' . $e->getMessage();
+        $messageType = 'error';
     }
 }
 
 // ===== GET PRODUCTS =====
 try {
-    $stmt = $pdo->query("
+    $stmt = $pdo->prepare("
         SELECT p.*, c.name as category_name 
-        FROM products p 
-        LEFT JOIN categories c ON p.category_id = c.id 
+        FROM products p
+        LEFT JOIN categories c ON p.category_id = c.id
         ORDER BY p.created_at DESC
     ");
+    $stmt->execute();
     $products = $stmt->fetchAll();
 } catch (PDOException $e) {
     error_log('Get products error: ' . $e->getMessage());
@@ -367,6 +316,34 @@ try {
     $categories = [];
 }
 
+// ===== HELPER: Resolve product image URL =====
+if (!function_exists('getAdminProductImage')) {
+    function getAdminProductImage($image_name, $image_url = null) {
+        // Priority: Cloudinary URL > local file > placeholder
+        if (!empty($image_url)) {
+            return $image_url;
+        }
+        if (!empty($image_name) && file_exists(UPLOAD_DIR . $image_name)) {
+            return '../uploads/products/' . $image_name;
+        }
+        return '../uploads/products/no-image.png';
+    }
+}
+
+// ===== HELPER: Escape JS strings =====
+if (!function_exists('jsEscape')) {
+    function jsEscape($str) {
+        if ($str === null) return '';
+        $str = str_replace("\\", "\\\\", $str);
+        $str = str_replace("'", "\\'", $str);
+        $str = str_replace('"', '\\"', $str);
+        $str = str_replace("\r", "\\r", $str);
+        $str = str_replace("\n", "\\n", $str);
+        $str = str_replace("\t", "\\t", $str);
+        return $str;
+    }
+}
+
 $page_title = 'Products';
 ?>
 <!DOCTYPE html>
@@ -378,16 +355,104 @@ $page_title = 'Products';
     <link rel="stylesheet" href="admin.css">
     <link rel="shortcut icon" href="images/logo.png" type="image/x-icon">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .product-image-thumb {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 4px;
+            background: #f0f0f0;
+        }
+        .status-badge {
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            color: white;
+        }
+        .status-active { background-color: #28a745; }
+        .status-inactive { background-color: #dc3545; }
+        .status-draft { background-color: #ffc107; color: #333; }
+        .status-deleted { background-color: #6c757d; }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .image-preview {
+            max-height: 100px;
+            margin: 10px 0;
+        }
+        .image-preview img {
+            max-height: 100px;
+            border-radius: 4px;
+        }
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        .btn-edit {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn-delete {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        .action-buttons form {
+            display: inline;
+        }
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+        .cloudinary-badge {
+            background-color: #3448C5;
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 5px;
+        }
+    </style>
 </head>
 <body>
-    <?php include "header.php"?>
+    <?php include "header.php"; ?>
     <div class="admin-wrapper">
         <?php include "sidebar.php"; ?>
-      
+
         <!-- Main Content -->
         <main class="admin-main">
-            <header class="admin-header" style="margin-bottom:20px; display: flex; justify-content: space-between; align-items: center;">
-                <span class="badge badge-info">Total: <?php echo count($products); ?> products</span>
+            <header class="admin-header" style="margin-bottom:20px">
                 <button class="btn-primary" onclick="openModal('addProductModal')">
                     <i class="fas fa-plus"></i> Add Product
                 </button>
@@ -401,38 +466,10 @@ $page_title = 'Products';
             <?php endif; ?>
 
             <!-- Products Table -->
-            <div class="admin-card">
-                <div class="card-body">
-                    <!-- Search Toolbar -->
-                    <div class="table-toolbar" style="padding:14px;">
-                        <div class="search-box">
-                            <i class="fas fa-search"></i>
-                            <input type="text" id="searchProducts" placeholder="Search products by name, SKU, supplier, or category..." onkeyup="filterTable('searchProducts', 'productsTable')">
-                            <span class="result-count" style="font-size: 12px; color: var(--text-muted); margin-left: 10px;"></span>
-                            <button class="clear-search-btn" onclick="clearSearch('searchProducts', 'productsTable')" style="background: none; border: none; color: var(--text-muted); cursor: pointer; display: none;">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                        <div class="filter-box" style="display: flex; gap: 10px; align-items: center;">
-                            <select id="categoryFilter" onchange="filterProducts()" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
-                                <option value="">All Categories</option>
-                                <?php foreach ($categories as $cat): ?>
-                                    <option value="<?php echo htmlspecialchars($cat['name']); ?>">
-                                        <?php echo htmlspecialchars($cat['name']); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <select id="stockFilter" onchange="filterProducts()" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
-                                <option value="">All Stock</option>
-                                <option value="in-stock">In Stock (&gt;0)</option>
-                                <option value="low-stock">Low Stock (&lt;=5)</option>
-                                <option value="out-of-stock">Out of Stock (0)</option>
-                            </select>
-                        </div>
-                    </div>
-
+            <div class="admin-card" style="padding:14px">
+                <div class="card-body" style="padding:14px">
                     <?php if (count($products) > 0): ?>
-                        <table class="admin-table" id="productsTable">
+                        <table class="admin-table">
                             <thead>
                                 <tr>
                                     <th>Image</th>
@@ -440,60 +477,59 @@ $page_title = 'Products';
                                     <th>SKU</th>
                                     <th>Price</th>
                                     <th>Stock</th>
-                                    <th>Supplier</th>
                                     <th>Category</th>
+                                    <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php foreach ($products as $product): ?>
+                                    <?php 
+                                    $img_src = getAdminProductImage($product['image'] ?? null, $product['image_url'] ?? null);
+                                    $is_cloudinary = !empty($product['image_url']) && strpos($product['image_url'], 'cloudinary.com') !== false;
+                                    ?>
                                     <tr>
                                         <td>
-                                            <?php 
-                                            $image_url = getProductImageUrl($product['image'] ?? '');
-                                            ?>
-                                            <img src="<?php echo htmlspecialchars($image_url); ?>" 
-                                                 alt="<?php echo htmlspecialchars($product['name']); ?>" 
-                                                 class="product-thumb"
-                                                 style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px; background: #f0f0f0;"
-                                                 onerror="this.src='https://wittymart.onrender.com/uploads/products/no-image.png'">
-                                            <?php if (strpos($image_url, 'cloudinary.com') !== false): ?>
-                                                <span style="display: inline-block; font-size: 8px; background: #3448C5; color: #fff; padding: 1px 4px; border-radius: 3px; margin-top: 2px;">Cloud</span>
+                                            <img src="<?php echo htmlspecialchars($img_src); ?>" 
+                                                 alt="<?php echo htmlspecialchars($product['name']); ?>"
+                                                 class="product-image-thumb"
+                                                 onerror="this.src='../uploads/products/no-image.png'">
+                                            <?php if ($is_cloudinary): ?>
+                                                <br><span class="cloudinary-badge">Cloud</span>
                                             <?php endif; ?>
                                         </td>
                                         <td><strong><?php echo htmlspecialchars($product['name']); ?></strong></td>
                                         <td><code><?php echo htmlspecialchars($product['sku'] ?? 'N/A'); ?></code></td>
-                                        <td><?php echo formatPrice($product['price']); ?></td>
+                                        <td>Ksh <?php echo number_format($product['price'], 0); ?></td>
                                         <td>
-                                            <span class="badge <?php echo $product['stock'] > 0 ? 'badge-success' : 'badge-danger'; ?>">
-                                                <?php echo htmlspecialchars($product['stock']); ?>
+                                            <span class="status-badge <?php echo ($product['stock'] ?? 0) > 0 ? 'status-active' : 'status-inactive'; ?>">
+                                                <?php echo htmlspecialchars($product['stock'] ?? 0); ?>
                                             </span>
                                         </td>
-                                        <td><?php echo htmlspecialchars($product['supplier'] ?? 'N/A'); ?></td>
                                         <td><?php echo htmlspecialchars($product['category_name'] ?? 'Uncategorized'); ?></td>
                                         <td>
-                                            <button class="btn-sm btn-edit" onclick="editProduct(<?php echo $product['id']; ?>)">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                            <form method="POST" style="display:inline;">
-                                                <input type="hidden" name="action" value="delete">
-                                                <input type="hidden" name="id" value="<?php echo $product['id']; ?>">
-                                                <button type="submit" class="btn-sm btn-delete" onclick="return confirm('Are you sure you want to delete this product?')">
-                                                    <i class="fas fa-trash"></i>
+                                            <span class="status-badge status-<?php echo htmlspecialchars($product['status'] ?? 'active'); ?>">
+                                                <?php echo htmlspecialchars($product['status'] ?? 'active'); ?>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="action-buttons">
+                                                <button class="btn-edit" onclick="editProduct(<?php echo $product['id']; ?>)">
+                                                    <i class="fas fa-edit"></i>
                                                 </button>
-                                            </form>
+                                                <form method="POST" onsubmit="return confirm('Are you sure you want to delete this product?')">
+                                                    <input type="hidden" name="action" value="delete">
+                                                    <input type="hidden" name="id" value="<?php echo $product['id']; ?>">
+                                                    <button type="submit" class="btn-delete">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
-                        
-                        <!-- No results message -->
-                        <div class="no-results-message" style="display: none; text-align: center; padding: 40px 20px; color: var(--text-muted);">
-                            <i class="fas fa-search" style="font-size: 48px; display: block; margin-bottom: 10px; opacity: 0.3;"></i>
-                            <h3>No products found</h3>
-                            <p>Try adjusting your search terms or filters</p>
-                        </div>
                     <?php else: ?>
                         <p class="text-muted text-center" style="padding: 40px 0;">
                             <i class="fas fa-box" style="font-size: 48px; display: block; margin-bottom: 10px; opacity: 0.5;"></i>
@@ -507,7 +543,7 @@ $page_title = 'Products';
 
     <!-- Add Product Modal -->
     <div id="addProductModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width: 600px;">
             <div class="modal-header">
                 <h2><i class="fas fa-plus-circle"></i> Add Product</h2>
                 <span class="close" onclick="closeModal('addProductModal')">&times;</span>
@@ -516,13 +552,31 @@ $page_title = 'Products';
                 <input type="hidden" name="action" value="add">
                 
                 <div class="form-group">
-                    <label><i class="fas fa-tag"></i> Product Name</label>
+                    <label><i class="fas fa-tag"></i> Product Name *</label>
                     <input type="text" name="name" required placeholder="Enter product name">
                 </div>
                 
                 <div class="form-group">
-                    <label><i class="fas fa-barcode"></i> SKU (Optional)</label>
+                    <label><i class="fas fa-barcode"></i> SKU (Optional — auto-generated if blank)</label>
                     <input type="text" name="sku" placeholder="e.g., PRD-001">
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-money-bill"></i> Price (Ksh) *</label>
+                        <input type="number" name="price" required step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-folder"></i> Category</label>
+                        <select name="category_id">
+                            <option value="">Select Category</option>
+                            <?php foreach ($categories as $category): ?>
+                                <option value="<?php echo $category['id']; ?>">
+                                    <?php echo htmlspecialchars($category['name']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 </div>
                 
                 <div class="form-group">
@@ -530,47 +584,41 @@ $page_title = 'Products';
                     <textarea name="description" rows="3" placeholder="Enter product description"></textarea>
                 </div>
                 
-                <div class="form-group">
-                    <label><i class="fas fa-money-bill-wave"></i> Price (Ksh)</label>
-                    <input type="number" name="price" step="0.01" required placeholder="0.00">
-                </div>
-                
-                <div class="form-group">
-                    <label><i class="fas fa-image"></i> Product Image</label>
-                    <div class="image-upload-wrapper">
-                        <input type="file" name="product_image" id="product_image" accept="image/*" onchange="previewImage(this, 'imagePreview')">
-                        <label for="product_image" class="upload-btn">
-                            <i class="fas fa-cloud-upload-alt"></i> Choose Image
-                        </label>
-                        <div id="imagePreview" class="image-preview">
-                            <i class="fas fa-image" style="font-size: 40px; color: #ddd;"></i>
-                            <p>No image selected</p>
-                        </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-cubes"></i> Stock Quantity</label>
+                        <input type="number" name="stock" value="0">
                     </div>
-                    <small class="form-text text-muted">Supported formats: JPG, PNG, GIF, WEBP. Max size: 5MB</small>
+                    <div class="form-group">
+                        <label><i class="fas fa-truck"></i> Supplier / Seller</label>
+                        <input type="text" name="supplier" placeholder="Enter supplier name">
+                    </div>
                 </div>
                 
-                <div class="form-group">
-                    <label><i class="fas fa-folder"></i> Category</label>
-                    <select name="category_id">
-                        <option value="">Select Category</option>
-                        <?php foreach ($categories as $cat): ?>
-                            <option value="<?php echo $cat['id']; ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-image"></i> Product Image</label>
+                        <div class="file-input-wrapper">
+                            <button type="button" class="btn-secondary" style="width:100%;">
+                                <i class="fas fa-upload"></i> Choose Image
+                            </button>
+                            <input type="file" name="product_image" accept="image/*">
+                        </div>
+                        <small style="display:block; margin-top:5px; color:#666;">
+                            <i class="fas fa-cloud-upload-alt"></i> Will be uploaded to Cloudinary
+                        </small>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-toggle-on"></i> Status</label>
+                        <select name="status">
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="draft">Draft</option>
+                        </select>
+                    </div>
                 </div>
                 
-                <div class="form-group">
-                    <label><i class="fas fa-cubes"></i> Stock Quantity</label>
-                    <input type="number" name="stock" value="0">
-                </div>
-                
-                <div class="form-group">
-                    <label><i class="fas fa-truck"></i> Supplier / Seller</label>
-                    <input type="text" name="supplier" placeholder="Enter supplier name">
-                </div>
-                
-                <button type="submit" class="btn-primary">
+                <button type="submit" class="btn-primary" style="width:100%; margin-top:10px;">
                     <i class="fas fa-save"></i> Add Product
                 </button>
             </form>
@@ -579,470 +627,193 @@ $page_title = 'Products';
 
     <!-- Edit Product Modal -->
     <div id="editProductModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width: 600px;">
             <div class="modal-header">
                 <h2><i class="fas fa-edit"></i> Edit Product</h2>
                 <span class="close" onclick="closeModal('editProductModal')">&times;</span>
             </div>
-            <form method="POST" id="editProductForm" enctype="multipart/form-data">
+            <form method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="action" value="edit">
-                <input type="hidden" name="id" id="edit_product_id">
+                <input type="hidden" name="id" id="editProductId">
                 
                 <div class="form-group">
-                    <label><i class="fas fa-tag"></i> Product Name</label>
-                    <input type="text" name="name" id="edit_product_name" required>
+                    <label><i class="fas fa-tag"></i> Product Name *</label>
+                    <input type="text" name="name" id="editProductName" required placeholder="Enter product name">
                 </div>
                 
                 <div class="form-group">
                     <label><i class="fas fa-barcode"></i> SKU</label>
-                    <input type="text" name="sku" id="edit_product_sku" placeholder="e.g., PRD-001">
+                    <input type="text" name="sku" id="editProductSku" placeholder="e.g., PRD-001">
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-money-bill"></i> Price (Ksh) *</label>
+                        <input type="number" name="price" id="editProductPrice" required step="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-folder"></i> Category</label>
+                        <select name="category_id" id="editProductCategory">
+                            <option value="">Select Category</option>
+                            <?php foreach ($categories as $category): ?>
+                                <option value="<?php echo $category['id']; ?>">
+                                    <?php echo htmlspecialchars($category['name']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 </div>
                 
                 <div class="form-group">
                     <label><i class="fas fa-align-left"></i> Description</label>
-                    <textarea name="description" id="edit_product_description" rows="3"></textarea>
+                    <textarea name="description" id="editProductDescription" rows="3" placeholder="Enter product description"></textarea>
                 </div>
                 
-                <div class="form-group">
-                    <label><i class="fas fa-money-bill-wave"></i> Price (Ksh)</label>
-                    <input type="number" name="price" id="edit_product_price" step="0.01" required>
-                </div>
-                
-                <div class="form-group">
-                    <label><i class="fas fa-image"></i> Product Image</label>
-                    <div class="image-upload-wrapper">
-                        <div id="editImagePreview" class="image-preview">
-                            <i class="fas fa-image" style="font-size: 40px; color: #ddd;"></i>
-                            <p>No image</p>
-                        </div>
-                        <input type="file" name="edit_product_image" id="edit_product_image" accept="image/*" onchange="previewImage(this, 'editImagePreview')">
-                        <label for="edit_product_image" class="upload-btn">
-                            <i class="fas fa-cloud-upload-alt"></i> Change Image
-                        </label>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-cubes"></i> Stock Quantity</label>
+                        <input type="number" name="stock" id="editProductStock" value="0">
                     </div>
-                    <small class="form-text text-muted">Leave empty to keep current image</small>
+                    <div class="form-group">
+                        <label><i class="fas fa-truck"></i> Supplier / Seller</label>
+                        <input type="text" name="supplier" id="editProductSupplier" placeholder="Enter supplier name">
+                    </div>
                 </div>
                 
-                <div class="form-group">
-                    <label><i class="fas fa-folder"></i> Category</label>
-                    <select name="category_id" id="edit_product_category">
-                        <option value="">Select Category</option>
-                        <?php foreach ($categories as $cat): ?>
-                            <option value="<?php echo $cat['id']; ?>"><?php echo htmlspecialchars($cat['name']); ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fas fa-image"></i> Product Image</label>
+                        <div id="editProductImagePreview" style="margin-bottom:10px;"></div>
+                        <div class="file-input-wrapper">
+                            <button type="button" class="btn-secondary" style="width:100%;">
+                                <i class="fas fa-upload"></i> Change Image
+                            </button>
+                            <input type="file" name="edit_product_image" accept="image/*">
+                        </div>
+                        <small style="display:block; margin-top:5px; color:#666;">
+                            Leave empty to keep current image
+                        </small>
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-toggle-on"></i> Status</label>
+                        <select name="status" id="editProductStatus">
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="draft">Draft</option>
+                        </select>
+                    </div>
                 </div>
                 
-                <div class="form-group">
-                    <label><i class="fas fa-cubes"></i> Stock Quantity</label>
-                    <input type="number" name="stock" id="edit_product_stock">
-                </div>
-                
-                <div class="form-group">
-                    <label><i class="fas fa-truck"></i> Supplier / Seller</label>
-                    <input type="text" name="supplier" id="edit_product_supplier" placeholder="Enter supplier name">
-                </div>
-                
-                <button type="submit" class="btn-primary">
+                <button type="submit" class="btn-primary" style="width:100%; margin-top:10px;">
                     <i class="fas fa-save"></i> Update Product
                 </button>
             </form>
         </div>
     </div>
 
-    <style>
-        /* Image Upload Styles */
-        .image-upload-wrapper {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
+    <script>
+        // Store product data for editing
+        var productData = {};
+        
+        <?php foreach ($products as $product): ?>
+            productData[<?php echo $product['id']; ?>] = {
+                id: <?php echo $product['id']; ?>,
+                name: '<?php echo jsEscape($product['name']); ?>',
+                description: '<?php echo jsEscape($product['description'] ?? ''); ?>',
+                price: '<?php echo $product['price']; ?>',
+                category_id: '<?php echo $product['category_id'] ?? ''; ?>',
+                status: '<?php echo jsEscape($product['status'] ?? 'active'); ?>',
+                stock: '<?php echo intval($product['stock'] ?? 0); ?>',
+                supplier: '<?php echo jsEscape($product['supplier'] ?? ''); ?>',
+                sku: '<?php echo jsEscape($product['sku'] ?? ''); ?>',
+                image: '<?php echo $product['image'] ? jsEscape($product['image']) : ''; ?>',
+                image_url: '<?php echo $product['image_url'] ? jsEscape($product['image_url']) : ''; ?>'
+            };
+        <?php endforeach; ?>
+        
+        function openModal(id) {
+            document.getElementById(id).style.display = 'block';
+            document.body.style.overflow = 'hidden';
         }
         
-        .upload-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 20px;
-            background: #f8f9fa;
-            border: 2px dashed #ccc;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            color: #555;
-            font-weight: 500;
-            justify-content: center;
-        }
-        
-        .upload-btn:hover {
-            background: #e8f5f0;
-            border-color: #05573c;
-            color: #05573c;
-        }
-        
-        .upload-btn i {
-            font-size: 20px;
-        }
-        
-        .image-preview {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            border: 1px solid #eee;
-            min-height: 150px;
-        }
-        
-        .image-preview img {
-            max-width: 150px;
-            max-height: 150px;
-            object-fit: cover;
-            border-radius: 8px;
-        }
-        
-        .image-preview p {
-            margin: 10px 0 0;
-            color: #999;
-            font-size: 14px;
-        }
-        
-        input[type="file"] {
-            display: none;
-        }
-        
-        .form-text {
-            display: block;
-            font-size: 12px;
-            color: #6c757d;
-            margin-top: 4px;
-        }
-
-        .product-thumb {
-            width: 50px;
-            height: 50px;
-            object-fit: cover;
-            border-radius: 4px;
-            border: 1px solid #e0e0e0;
-        }
-
-        .table-toolbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
-            padding: 14px;
-            background: var(--bg);
-            border-radius: 8px 8px 0 0;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .search-box {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            background: var(--white);
-            padding: 6px 14px;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-            transition: all 0.3s ease;
-            flex: 1;
-            min-width: 200px;
-            max-width: 400px;
-        }
-
-        .search-box:focus-within {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(5, 87, 60, 0.1);
-        }
-
-        .search-box i {
-            color: var(--text-muted);
-            font-size: 14px;
-        }
-
-        .search-box input {
-            border: none;
-            background: transparent;
-            padding: 8px 0;
-            outline: none;
-            color: var(--text);
-            width: 100%;
-            font-size: 14px;
-        }
-
-        .search-box input::placeholder {
-            color: var(--text-muted);
-        }
-
-        .clear-search-btn {
-            display: none;
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            cursor: pointer;
-            padding: 4px;
-            border-radius: 4px;
-            transition: all 0.3s ease;
-        }
-
-        .clear-search-btn:hover {
-            background: rgba(0, 0, 0, 0.05);
-            color: var(--text);
-        }
-
-        .search-box input:not(:placeholder-shown) ~ .clear-search-btn {
-            display: block;
-        }
-
-        .no-results-message {
-            display: none;
-            text-align: center;
-            padding: 40px 20px;
-            color: var(--text-muted);
-        }
-
-        .no-results-message i {
-            font-size: 48px;
-            display: block;
-            margin-bottom: 10px;
-            opacity: 0.3;
-        }
-
-        /* Dark mode support */
-        body.dark-mode .search-box {
-            background: rgba(255,255,255,0.05);
-            border-color: rgba(255,255,255,0.1);
-        }
-
-        body.dark-mode .search-box:focus-within {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(5, 87, 60, 0.2);
-        }
-
-        body.dark-mode .clear-search-btn:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
-    </style>
-
-<script>
-    // ===== JAVASCRIPT HELPER FOR IMAGE URL =====
-    function getProductImageUrlJs(imagePath) {
-        if (!imagePath) {
-            return 'https://wittymart.onrender.com/uploads/products/no-image.png';
-        }
-        
-        // If it's already a full URL, return it
-        if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-            return imagePath;
-        }
-        
-        // Clean the path
-        let cleanPath = imagePath.replace(/^\/+/, '').replace(/\.\.\//g, '');
-        
-        // Return full URL
-        return 'https://wittymart.onrender.com/' + cleanPath;
-    }
-
-    // ===== IMAGE PREVIEW =====
-    function previewImage(input, previewId) {
-        const preview = document.getElementById(previewId);
-        if (input.files && input.files[0]) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                preview.innerHTML = `<img src="${e.target.result}" alt="Product Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px;"><p>New image</p>`;
-            }
-            reader.readAsDataURL(input.files[0]);
-        }
-    }
-
-    // ===== MODAL FUNCTIONS =====
-    function openModal(id) {
-        document.getElementById(id).style.display = 'block';
-        document.body.style.overflow = 'hidden';
-    }
-    
-    function closeModal(id) {
-        document.getElementById(id).style.display = 'none';
-        document.body.style.overflow = 'auto';
-    }
-    
-    window.onclick = function(event) {
-        if (event.target.classList.contains('modal')) {
-            event.target.style.display = 'none';
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
             document.body.style.overflow = 'auto';
         }
-    }
-    
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            document.querySelectorAll('.modal').forEach(modal => {
-                modal.style.display = 'none';
-            });
-            document.body.style.overflow = 'auto';
-        }
-    });
-    
-    // ===== SEARCH FUNCTIONS =====
-    function filterTable(inputId, tableId) {
-        const input = document.getElementById(inputId);
-        const table = document.getElementById(tableId);
         
-        if (!input || !table) return;
-
-        const filter = input.value.toLowerCase().trim();
-        const rows = table.querySelectorAll('tbody tr');
-        let visibleCount = 0;
-
-        rows.forEach(row => {
-            const text = row.textContent.toLowerCase();
-            const match = text.includes(filter);
-            row.style.display = match ? '' : 'none';
-            if (match) visibleCount++;
-        });
-
-        // Update result count
-        const counter = table.parentElement.querySelector('.result-count');
-        if (counter) {
-            counter.textContent = `Showing ${visibleCount} of ${rows.length} results`;
-        }
-
-        // Show/hide no results message
-        const noResultMsg = table.parentElement.querySelector('.no-results-message');
-        if (noResultMsg) {
-            noResultMsg.style.display = visibleCount === 0 ? 'block' : 'none';
-        }
-
-        // Show/hide clear button
-        const clearBtn = input.parentElement.querySelector('.clear-search-btn');
-        if (clearBtn) {
-            clearBtn.style.display = input.value.length > 0 ? 'block' : 'none';
-        }
-    }
-
-    function clearSearch(inputId, tableId) {
-        const input = document.getElementById(inputId);
-        if (input) {
-            input.value = '';
-            filterTable(inputId, tableId);
-            input.focus();
-        }
-    }
-
-    // ===== PRODUCT FILTERS =====
-    function filterProducts() {
-        const categoryFilter = document.getElementById('categoryFilter').value.toLowerCase();
-        const stockFilter = document.getElementById('stockFilter').value;
-        const searchInput = document.getElementById('searchProducts');
-        const rows = document.querySelectorAll('#productsTable tbody tr');
-        let visibleCount = 0;
-
-        rows.forEach(row => {
-            let show = true;
-            const cells = row.querySelectorAll('td');
-            
-            // Category filter
-            if (categoryFilter) {
-                const categoryCell = cells[6];
-                if (categoryCell && !categoryCell.textContent.toLowerCase().includes(categoryFilter)) {
-                    show = false;
-                }
+        function editProduct(productId) {
+            var data = productData[productId];
+            if (!data) {
+                alert('Product data not found!');
+                return;
             }
             
-            // Stock filter
-            if (stockFilter && show) {
-                const stockCell = cells[4];
-                if (stockCell) {
-                    const stockText = stockCell.textContent.trim();
-                    const stockValue = parseInt(stockText);
-                    if (stockFilter === 'in-stock' && stockValue <= 0) show = false;
-                    else if (stockFilter === 'low-stock' && (stockValue > 5 || stockValue <= 0)) show = false;
-                    else if (stockFilter === 'out-of-stock' && stockValue > 0) show = false;
-                }
+            // Populate edit form
+            document.getElementById('editProductId').value = data.id;
+            document.getElementById('editProductName').value = data.name;
+            document.getElementById('editProductDescription').value = data.description;
+            document.getElementById('editProductPrice').value = data.price;
+            document.getElementById('editProductCategory').value = data.category_id;
+            document.getElementById('editProductStatus').value = data.status;
+            document.getElementById('editProductStock').value = data.stock;
+            document.getElementById('editProductSupplier').value = data.supplier;
+            document.getElementById('editProductSku').value = data.sku;
+            
+            // Show current image
+            var imagePreview = document.getElementById('editProductImagePreview');
+            if (data.image_url) {
+                imagePreview.innerHTML = '<img src="' + data.image_url + '" alt="Current image" style="max-height:100px; border-radius:4px;">' +
+                                        '<br><small style="color:#666;">' +
+                                        '<i class="fas fa-cloud" style="color:#3448C5;"></i> Cloudinary image' +
+                                        '</small>';
+            } else if (data.image) {
+                imagePreview.innerHTML = '<img src="../uploads/products/' + data.image + '" alt="Current image" style="max-height:100px; border-radius:4px;">' +
+                                        '<br><small style="color:#666;">Local image: ' + data.image + '</small>';
+            } else {
+                imagePreview.innerHTML = '<small style="color:#666;">No image uploaded</small>';
             }
             
-            // Search filter (if search input has value)
-            if (show && searchInput && searchInput.value.trim()) {
-                const searchText = row.textContent.toLowerCase();
-                if (!searchText.includes(searchInput.value.toLowerCase().trim())) {
-                    show = false;
-                }
-            }
-            
-            row.style.display = show ? '' : 'none';
-            if (show) visibleCount++;
-        });
-
-        // Update result count
-        const table = document.getElementById('productsTable');
-        const counter = table.parentElement.querySelector('.result-count');
-        if (counter) {
-            counter.textContent = `Showing ${visibleCount} of ${rows.length} results`;
-        }
-
-        const noResultMsg = table.parentElement.querySelector('.no-results-message');
-        if (noResultMsg) {
-            noResultMsg.style.display = visibleCount === 0 ? 'block' : 'none';
-        }
-    }
-
-    // ===== EDIT PRODUCT =====
-    function editProduct(id) {
-        // Show loading state
-        const modal = document.getElementById('editProductModal');
-        if (modal) {
-            // You could show a loading spinner here
+            openModal('editProductModal');
         }
         
-        fetch('includes/ajax.php?action=get_product&id=' + id)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok: ' + response.status);
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('edit_product_id').value = data.product.id;
-                    document.getElementById('edit_product_name').value = data.product.name || '';
-                    document.getElementById('edit_product_description').value = data.product.description || '';
-                    document.getElementById('edit_product_price').value = data.product.price || 0;
-                    document.getElementById('edit_product_category').value = data.product.category_id || '';
-                    document.getElementById('edit_product_stock').value = data.product.stock || 0;
-                    document.getElementById('edit_product_sku').value = data.product.sku || '';
-                    document.getElementById('edit_product_supplier').value = data.product.supplier || '';
-                    
-                    const imgPreview = document.getElementById('editImagePreview');
-                    if (data.product.image) {
-                        const imgUrl = getProductImageUrlJs(data.product.image);
-                        imgPreview.innerHTML = `<img src="${imgUrl}" alt="Product Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px;"><p>Current image</p>`;
-                    } else {
-                        imgPreview.innerHTML = `<i class="fas fa-image" style="font-size: 40px; color: #ddd;"></i><p>No image</p>`;
-                    }
-                    
-                    openModal('editProductModal');
-                } else {
-                    alert('Failed to load product data: ' + (data.message || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error loading product data. Please check the console for details.\n\n' + error.message);
-            });
-    }
-
-    // ===== AUTO-HIDE ALERTS =====
-    setTimeout(() => {
-        document.querySelectorAll('.alert-persistent').forEach(alert => {
-            alert.style.transition = 'opacity 0.5s ease';
-            setTimeout(() => {
-                alert.style.opacity = '0';
-                setTimeout(() => alert.remove(), 500);
-            }, 5000);
+        // Close modal on outside click
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }
+        }
+        
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.modal').forEach(function(modal) {
+                    modal.style.display = 'none';
+                });
+                document.body.style.overflow = 'auto';
+            }
         });
-    }, 1000);
-</script>
+        
+        // File input styling - show filename
+        document.querySelectorAll('.file-input-wrapper input[type="file"]').forEach(function(input) {
+            input.addEventListener('change', function() {
+                var fileName = this.files[0] ? this.files[0].name : 'No file chosen';
+                var parent = this.closest('.file-input-wrapper');
+                var btn = parent.querySelector('button');
+                btn.innerHTML = '<i class="fas fa-file"></i> ' + fileName;
+            });
+        });
+        
+        // Auto-hide alerts
+        setTimeout(function() {
+            document.querySelectorAll('.alert-persistent').forEach(function(alert) {
+                alert.style.transition = 'opacity 0.5s ease';
+                setTimeout(function() {
+                    alert.style.opacity = '0';
+                    setTimeout(function() { alert.remove(); }, 500);
+                }, 5000);
+            });
+        }, 1000);
+    </script>
 </body>
 </html>
