@@ -103,10 +103,27 @@ if (isset($_SESSION['user_id'])) {
 
 $isLoggedIn = isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
 
+// ===== FETCH CART QUANTITIES =====
+$cartQuantities = [];
+if ($isLoggedIn) {
+    try {
+        $stmt = $pdo->prepare("SELECT product_id, quantity FROM cart WHERE user_id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        foreach ($stmt->fetchAll() as $row) {
+            $cartQuantities[intval($row['product_id'])] = intval($row['quantity']);
+        }
+    } catch (PDOException $e) {
+        error_log('Get cart quantities error: ' . $e->getMessage());
+        $cartQuantities = [];
+    }
+}
+
 // ===== HELPER: render a single product card (used everywhere) =====
-function renderProductCard($product, $wishlistIds, $isLoggedIn) {
+function renderProductCard($product, $wishlistIds, $cartQuantities) {
     $pid = $product['id'];
     $in_wishlist = in_array($pid, $wishlistIds);
+    $cart_qty = intval($cartQuantities[$pid] ?? 0);
+    $in_cart = $cart_qty > 0;
     $stock_val = intval($product['stock'] ?? 0);
     $is_cloudinary = !empty($product['image_url']) && strpos($product['image_url'], 'cloudinary.com') !== false;
     ?>
@@ -140,14 +157,34 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
             <?php echo $stock_val > 0 ? 'In Stock' : 'Out of Stock'; ?>
         </span>
         
-        <div class="product-actions">
-            <button class="add-to-cart" 
-                    data-product-id="<?php echo $pid; ?>"
-                    data-product-name="<?php echo htmlspecialchars($product['name']); ?>"
-                    <?php echo $stock_val <= 0 ? 'disabled' : ''; ?>>
-                <i class="fas fa-shopping-cart"></i> 
-                <?php echo $stock_val > 0 ? 'Add to Cart' : 'Out of Stock'; ?>
-            </button>
+        <!-- ===== ACTION ROW ===== -->
+        <div class="product-actions" data-product-id="<?php echo $pid; ?>">
+            <?php if ($stock_val <= 0): ?>
+                <button class="add-to-cart" disabled>
+                    <i class="fas fa-times-circle"></i> Out of Stock
+                </button>
+            <?php elseif ($in_cart): ?>
+                <!-- In-cart state: In Cart pill + Plus button -->
+                <span class="in-cart-pill" title="Item is in your cart">
+                    <i class="fas fa-check-circle"></i>
+                    In Cart
+                    <span class="qty-badge"><?php echo $cart_qty; ?></span>
+                </span>
+                
+                <button type="button"
+                        class="add-more-btn"
+                        data-product-id="<?php echo $pid; ?>"
+                        data-product-name="<?php echo htmlspecialchars($product['name']); ?>"
+                        title="Add one more to cart">
+                    <i class="fas fa-plus"></i>
+                </button>
+            <?php else: ?>
+                <button class="add-to-cart" 
+                        data-product-id="<?php echo $pid; ?>"
+                        data-product-name="<?php echo htmlspecialchars($product['name']); ?>">
+                    <i class="fas fa-shopping-cart"></i> Add to Cart
+                </button>
+            <?php endif; ?>
             
             <button class="add-to-wishlist-inline <?php echo $in_wishlist ? 'active' : ''; ?>"
                     data-product-id="<?php echo $pid; ?>"
@@ -327,6 +364,74 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
         .product .add-to-cart.added { background: #28a745; }
         .product .add-to-cart.error { background: #dc3545; }
         
+        /* ===== IN-CART PILL + PLUS BUTTON ===== */
+        .product .in-cart-pill {
+            background: #e8f5f0;
+            color: #05573c;
+            border: 1.5px solid #05573c;
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .product .in-cart-pill i {
+            color: #05573c;
+        }
+        
+        .product .in-cart-pill .qty-badge {
+            background: #05573c;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 1px 7px;
+            border-radius: 10px;
+            min-width: 20px;
+            text-align: center;
+        }
+        
+        .product .add-more-btn {
+            background: #05573c;
+            color: #fff;
+            border: none;
+            width: 42px;
+            min-width: 42px;
+            height: 42px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.25s ease;
+            flex-shrink: 0;
+            box-shadow: 0 2px 6px rgba(5, 87, 60, 0.25);
+        }
+        
+        .product .add-more-btn:hover:not(:disabled) {
+            background: #03402c;
+            transform: scale(1.06);
+        }
+        
+        .product .add-more-btn:active:not(:disabled) {
+            transform: scale(0.96);
+        }
+        
+        .product .add-more-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        
         /* ===== ICON-ONLY WISHLIST BUTTON (SQUARE) ===== */
         .product .add-to-wishlist-inline {
             background: #fff;
@@ -489,12 +594,14 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
                 gap: 6px;
             }
             
-            .product .add-to-cart {
+            .product .add-to-cart,
+            .product .in-cart-pill {
                 font-size: 12px;
                 padding: 8px 8px;
             }
             
-            .product .add-to-wishlist-inline {
+            .product .add-to-wishlist-inline,
+            .product .add-more-btn {
                 width: 38px;
                 min-width: 38px;
                 height: 38px;
@@ -525,7 +632,7 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
                     </h2>
                     <div class="products-grid">
                         <?php foreach ($featured_products as $product): ?>
-                            <?php renderProductCard($product, $wishlistIds, $isLoggedIn); ?>
+                            <?php renderProductCard($product, $wishlistIds, $cartQuantities); ?>
                         <?php endforeach; ?>
                     </div>
                     <hr class="divider">
@@ -547,7 +654,7 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
                         
                         <div class="products-grid">
                             <?php foreach ($products as $product): ?>
-                                <?php renderProductCard($product, $wishlistIds, $isLoggedIn); ?>
+                                <?php renderProductCard($product, $wishlistIds, $cartQuantities); ?>
                             <?php endforeach; ?>
                         </div>
                         
@@ -594,9 +701,56 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
         }
 
         // ============================================
-        // ADD TO CART
+        // HELPER: Update header cart badge
         // ============================================
-        document.querySelectorAll('.add-to-cart').forEach(button => {
+        function updateCartBadge(count) {
+            if (count === undefined) return;
+            const badge = document.querySelector('.cart-badge-sm, .cart-badge');
+            if (badge) badge.textContent = count;
+        }
+
+        // ============================================
+        // HELPER: Swap Add to Cart → In Cart + Plus
+        // ============================================
+        function switchCardToInCart(actionsRow, qty) {
+            const productId = actionsRow.dataset.productId;
+            const productName = actionsRow.querySelector('.add-to-cart')?.dataset.productName || '';
+            const wishlistBtn = actionsRow.querySelector('.add-to-wishlist-inline');
+            
+            // Remove the add-to-cart button
+            const addBtn = actionsRow.querySelector('.add-to-cart');
+            if (addBtn) addBtn.remove();
+            
+            // Build new HTML
+            const html = `
+                <span class="in-cart-pill" title="Item is in your cart">
+                    <i class="fas fa-check-circle"></i>
+                    In Cart
+                    <span class="qty-badge">${qty}</span>
+                </span>
+                <button type="button"
+                        class="add-more-btn"
+                        data-product-id="${productId}"
+                        data-product-name="${productName.replace(/"/g, '&quot;')}"
+                        title="Add one more to cart">
+                    <i class="fas fa-plus"></i>
+                </button>
+            `;
+            
+            if (wishlistBtn) {
+                wishlistBtn.insertAdjacentHTML('beforebegin', html);
+            } else {
+                actionsRow.insertAdjacentHTML('afterbegin', html);
+            }
+            
+            // Attach handler
+            attachAddMoreHandler(actionsRow.querySelector('.add-more-btn'));
+        }
+
+        // ============================================
+        // ADD TO CART (grid cards)
+        // ============================================
+        document.querySelectorAll('.product-actions .add-to-cart').forEach(button => {
             button.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -611,8 +765,8 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
                 
                 const productId = this.dataset.productId;
                 const productName = this.dataset.productName;
+                const actionsRow = this.closest('.product-actions');
                 const originalText = this.innerHTML;
-                const originalClass = this.className;
                 
                 this.disabled = true;
                 this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
@@ -623,46 +777,94 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
                 formData.append('quantity', 1);
                 
                 fetch('cart.php', { method: 'POST', body: formData })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        this.innerHTML = '<i class="fas fa-check"></i> Added!';
-                        this.className = originalClass + ' added';
-                        showToast(productName + ' added to cart!', 'success');
-                        
-                        if (data.cart_count !== undefined) {
-                            const cartBadge = document.querySelector('.cart-badge-sm, .cart-badge');
-                            if (cartBadge) cartBadge.textContent = data.cart_count;
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            this.innerHTML = '<i class="fas fa-check"></i> Added!';
+                            this.classList.add('added');
+                            showToast(productName + ' added to cart!', 'success');
+                            
+                            updateCartBadge(data.cart_count);
+                            
+                            // Swap to in-cart state after brief pause
+                            setTimeout(() => {
+                                switchCardToInCart(actionsRow, 1);
+                            }, 700);
+                        } else {
+                            this.innerHTML = originalText;
+                            this.disabled = false;
+                            showToast(data.message || 'Failed to add to cart', 'error');
                         }
-                        
-                        setTimeout(() => {
-                            this.innerHTML = originalText;
-                            this.className = originalClass;
-                            this.disabled = false;
-                        }, 2000);
-                    } else {
-                        this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Failed!';
-                        this.className = originalClass + ' error';
-                        showToast(data.message || 'Failed to add to cart', 'error');
-                        setTimeout(() => {
-                            this.innerHTML = originalText;
-                            this.className = originalClass;
-                            this.disabled = false;
-                        }, 2000);
-                    }
-                })
-                .catch(() => {
-                    this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error!';
-                    this.className = originalClass + ' error';
-                    showToast('An error occurred. Please try again.', 'error');
-                    setTimeout(() => {
+                    })
+                    .catch(() => {
                         this.innerHTML = originalText;
-                        this.className = originalClass;
                         this.disabled = false;
-                    }, 2000);
-                });
+                        showToast('An error occurred. Please try again.', 'error');
+                    });
             });
         });
+
+        // ============================================
+        // "+" BUTTON (add one more to cart)
+        // ============================================
+        function attachAddMoreHandler(btn) {
+            if (!btn) return;
+            
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (this.disabled) return;
+                
+                if (!isLoggedIn) {
+                    showToast('Please login to add items to your cart', 'info');
+                    setTimeout(() => window.location.href = 'home.php', 1500);
+                    return;
+                }
+                
+                const productId = this.dataset.productId;
+                const productName = this.dataset.productName;
+                const actionsRow = this.closest('.product-actions');
+                const originalHTML = this.innerHTML;
+                
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                
+                const formData = new FormData();
+                formData.append('ajax_action', 'add_to_cart');
+                formData.append('product_id', productId);
+                formData.append('quantity', 1);
+                
+                fetch('cart.php', { method: 'POST', body: formData })
+                    .then(response => response.json())
+                    .then(data => {
+                        this.disabled = false;
+                        this.innerHTML = originalHTML;
+                        
+                        if (data.success) {
+                            // Update qty badge in the pill
+                            const pill = actionsRow.querySelector('.in-cart-pill .qty-badge');
+                            if (pill) {
+                                const current = parseInt(pill.textContent) || 0;
+                                pill.textContent = current + 1;
+                            }
+                            
+                            updateCartBadge(data.cart_count);
+                            showToast('1 more ' + productName + ' added to cart', 'success');
+                        } else {
+                            showToast(data.message || 'Could not add more', 'error');
+                        }
+                    })
+                    .catch(() => {
+                        this.disabled = false;
+                        this.innerHTML = originalHTML;
+                        showToast('An error occurred. Please try again.', 'error');
+                    });
+            });
+        }
+        
+        // Attach handler to any existing + buttons rendered server-side
+        document.querySelectorAll('.product-actions .add-more-btn').forEach(attachAddMoreHandler);
 
         // ============================================
         // ADD TO WISHLIST (icon-only buttons)
@@ -671,6 +873,7 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
             const productId = btn.dataset.productId;
             const productName = btn.dataset.productName;
             const wrapper = btn.closest('.product');
+            if (!wrapper) return;
             
             if (!isLoggedIn) {
                 showToast('Please login to use your wishlist', 'info');
@@ -681,8 +884,8 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
             const heartBtn = wrapper.querySelector('.wishlist-btn');
             const inlineBtn = wrapper.querySelector('.add-to-wishlist-inline');
             
-            heartBtn.classList.add('loading');
-            inlineBtn.disabled = true;
+            if (heartBtn) heartBtn.classList.add('loading');
+            if (inlineBtn) inlineBtn.disabled = true;
             
             const formData = new FormData();
             formData.append('ajax_action', 'toggle_wishlist');
@@ -694,31 +897,22 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
                     if (data.success) {
                         const added = data.added;
                         
-                        if (added) {
-                            // Update top-left heart
-                            heartBtn.classList.add('active');
-                            heartBtn.querySelector('i').className = 'fas fa-heart';
-                            heartBtn.title = 'Remove from wishlist';
-                            
-                            // Update inline icon-only button
-                            inlineBtn.classList.add('active');
-                            inlineBtn.querySelector('i').className = 'fas fa-heart';
-                            inlineBtn.title = 'Remove from wishlist';
-                            
-                            showToast(productName + ' added to wishlist', 'success');
-                        } else {
-                            // Update top-left heart
-                            heartBtn.classList.remove('active');
-                            heartBtn.querySelector('i').className = 'far fa-heart';
-                            heartBtn.title = 'Add to wishlist';
-                            
-                            // Update inline icon-only button
-                            inlineBtn.classList.remove('active');
-                            inlineBtn.querySelector('i').className = 'far fa-heart';
-                            inlineBtn.title = 'Add to wishlist';
-                            
-                            showToast(productName + ' removed from wishlist', 'info');
+                        if (heartBtn) {
+                            heartBtn.classList.toggle('active', added);
+                            heartBtn.querySelector('i').className = added ? 'fas fa-heart' : 'far fa-heart';
+                            heartBtn.title = added ? 'Remove from wishlist' : 'Add to wishlist';
                         }
+                        
+                        if (inlineBtn) {
+                            inlineBtn.classList.toggle('active', added);
+                            inlineBtn.querySelector('i').className = added ? 'fas fa-heart' : 'far fa-heart';
+                            inlineBtn.title = added ? 'Remove from wishlist' : 'Add to wishlist';
+                        }
+                        
+                        showToast(
+                            added ? productName + ' added to wishlist' : productName + ' removed from wishlist',
+                            added ? 'success' : 'info'
+                        );
                         
                         if (data.wishlist_count !== undefined) {
                             const badge = document.querySelector('.wishlist-badge, .wishlist-count');
@@ -732,8 +926,8 @@ function renderProductCard($product, $wishlistIds, $isLoggedIn) {
                     showToast('An error occurred. Please try again.', 'error');
                 })
                 .finally(() => {
-                    heartBtn.classList.remove('loading');
-                    inlineBtn.disabled = false;
+                    if (heartBtn) heartBtn.classList.remove('loading');
+                    if (inlineBtn) inlineBtn.disabled = false;
                 });
         }
         
