@@ -3,6 +3,7 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
+
 // ============================================
 // COMPOSER AUTOLOADER
 // ============================================
@@ -45,7 +46,7 @@ if (session_status() === PHP_SESSION_NONE) {
 // DATABASE CONNECTION
 // ============================================
 
-// Get database URL from environment variable (Render)
+// Get database URL from environment variable (Render/Aiven)
 $database_url = getenv('DATABASE_URL');
 
 if (!$database_url && isset($_ENV['DATABASE_URL'])) {
@@ -58,34 +59,63 @@ if (!$database_url) {
     die('DATABASE_URL environment variable is not set');
 }
 
-// Parse the database URL
-$db_parts = parse_url($database_url);
-
-$db_config = [
-    'host' => $db_parts['host'] ?? 'localhost',
-    'port' => $db_parts['port'] ?? '5432',
-    'dbname' => ltrim($db_parts['path'] ?? '', '/'),
-    'user' => $db_parts['user'] ?? '',
-    'password' => $db_parts['pass'] ?? '',
-];
-
 try {
+    // Parse the database URL
+    // Aiven URLs look like: postgres://user:password@host:port/dbname?sslmode=require
+    $url = parse_url($database_url);
+    
+    // If parse_url failed due to special chars in password, use regex fallback
+    if ($url === false || !isset($url['host'])) {
+        $pattern = '/^(?:postgres(?:ql)?):\/\/([^:]+):(.+)@([^:\/]+)(?::(\d+))?\/(.+?)(?:\?.*)?$/';
+        if (preg_match($pattern, $database_url, $m)) {
+            $url = [
+                'user' => urldecode($m[1]),
+                'pass' => urldecode($m[2]),
+                'host' => $m[3],
+                'port' => $m[4] ?? '5432',
+                'path' => '/' . $m[5],
+            ];
+        } else {
+            throw new Exception('Could not parse DATABASE_URL');
+        }
+    }
+    
+    $host = $url['host'];
+    $port = $url['port'] ?? '5432';
+    $dbname = ltrim($url['path'] ?? '', '/');
+    $user = urldecode($url['user'] ?? '');
+    $password = urldecode($url['pass'] ?? '');
+    
+    // Strip query string from dbname if present
+    if (strpos($dbname, '?') !== false) {
+        $dbname = substr($dbname, 0, strpos($dbname, '?'));
+    }
+    
+    error_log("Connecting to DB: host=$host port=$port dbname=$dbname user=$user");
+    
+    // Aiven REQUIRES SSL — add sslmode=require to DSN
     $dsn = sprintf(
-        'pgsql:host=%s;port=%s;dbname=%s',
-        $db_config['host'],
-        $db_config['port'],
-        $db_config['dbname']
+        'pgsql:host=%s;port=%s;dbname=%s;sslmode=require',
+        $host,
+        $port,
+        $dbname
     );
     
-    $pdo = new PDO($dsn, $db_config['user'], $db_config['password'], [
+    $pdo = new PDO($dsn, $user, $password, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
+        PDO::ATTR_TIMEOUT => 10,
     ]);
+    
+    error_log('Database connected successfully to ' . $host);
     
 } catch (PDOException $e) {
     error_log('Database connection failed: ' . $e->getMessage());
-    die('Database connection error. Please try again later.');
+    die('Database connection error: ' . $e->getMessage());
+} catch (Exception $e) {
+    error_log('Config error: ' . $e->getMessage());
+    die('Configuration error: ' . $e->getMessage());
 }
 
 // ============================================
@@ -93,14 +123,11 @@ try {
 // ============================================
 
 $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
-$host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-define('SITE_URL', $protocol . $host);
+$host_url = $_SERVER['HTTP_HOST'] ?? 'localhost';
+define('SITE_URL', $protocol . $host_url);
 define('ADMIN_URL', SITE_URL . '/admin');
 define('SESSION_TIMEOUT', 1800);
 define('PASSWORD_BCRYPT_COST', 12);
-
-
-
 
 // ============================================
 // CLOUDINARY CONFIGURATION
@@ -151,8 +178,6 @@ if ($cloudinary) {
     error_log('Cloudinary is NOT available - using local storage fallback');
 }
 
-
-
 // ============================================
 // SITE CONFIGURATION
 // ============================================
@@ -163,7 +188,7 @@ define('UPLOAD_URL', BASE_URL . 'uploads/products/');
 
 // Create upload directory if it doesn't exist
 if (!file_exists(UPLOAD_DIR)) {
-    mkdir(UPLOAD_DIR, 0777, true);
+    @mkdir(UPLOAD_DIR, 0777, true);
 }
 
 // Create no-image placeholder if it doesn't exist
@@ -179,29 +204,6 @@ if (!file_exists($no_image_path)) {
         error_log('Created no-image placeholder at: ' . $no_image_path);
     }
 }
-
-
-/**
- * Get product image URL (supports both local and Cloudinary)
- */
-function getProductImage($image = null, $image_url = null) {
-    // Priority: Cloudinary URL > local image > placeholder
-    if (!empty($image_url)) {
-        return $image_url;
-    }
-    
-    if (!empty($image)) {
-        // If it's already a full URL
-        if (filter_var($image, FILTER_VALIDATE_URL)) {
-            return $image;
-        }
-        // Local image path
-        return UPLOAD_URL . $image;
-    }
-    
-    return UPLOAD_URL . 'no-image.png';
-}
-
 
 // ============================================
 // AUTHENTICATION FUNCTIONS
@@ -393,8 +395,33 @@ function verifyCSRFToken($token) {
 $csrf_token = generateCSRFToken();
 
 // ============================================
-// NOTE: getProductImageUrl() is now defined in cloudinary_helper.php
+// PRODUCT IMAGE HELPER (NEW)
 // ============================================
+
+/**
+ * Get product image URL (supports both local and Cloudinary)
+ *
+ * @param string|null $image      Local image filename
+ * @param string|null $image_url  Cloudinary / remote image URL
+ * @return string                 Resolved image URL
+ */
+function getProductImage($image = null, $image_url = null) {
+    // Priority: Cloudinary URL > local image > placeholder
+    if (!empty($image_url)) {
+        return $image_url;
+    }
+    
+    if (!empty($image)) {
+        // If it's already a full URL
+        if (filter_var($image, FILTER_VALIDATE_URL)) {
+            return $image;
+        }
+        // Local image path
+        return UPLOAD_URL . $image;
+    }
+    
+    return UPLOAD_URL . 'no-image.png';
+}
 
 // ============================================
 // SMART PICKS FUNCTIONS
