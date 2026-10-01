@@ -252,9 +252,9 @@ $isLoggedIn = isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
                         <div class="product">
                             <a href="product.php?id=<?php echo $product['id']; ?>" class="product-link">
                                 <div class="product-image-container">
-                                    <img src="<?php echo htmlspecialchars(getProductImageUrl($product)); ?>" 
+                                    <img src="<?php echo htmlspecialchars(getProductImage($product)); ?>" 
                                          alt="<?php echo htmlspecialchars($product['name']); ?>"
-                                         onerror="this.src='uploads/products/no-image.png'">
+                                         onerror="this.onerror=null; this.src='uploads/products/no-image.png';">
                                     <?php if (!empty($product['image_url'])): ?>
                                         <span class="cloudinary-badge">
                                             <i class="fas fa-cloud"></i> Cloud
