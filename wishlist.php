@@ -1,7 +1,81 @@
 <?php
 require_once 'includes/config.php';
 
-// Check if user is logged in
+// ============================================
+// AJAX HANDLER (runs before any HTML output)
+// Supports both POST (ajax_action) and GET (action) styles
+// ============================================
+
+$ajax_action = $_POST['ajax_action'] ?? $_GET['action'] ?? '';
+
+// Normalize: breadcrumbs.php sends 'toggle_wishlist', older code sends 'toggle'
+$is_toggle_request = in_array($ajax_action, ['toggle_wishlist', 'toggle'], true);
+
+if ($is_toggle_request) {
+    header('Content-Type: application/json');
+    
+    // Must be logged in
+    if (!isset($_SESSION['user_id'])) {
+        echo json_encode(['success' => false, 'message' => 'Please login to use your wishlist']);
+        exit;
+    }
+    
+    $user_id    = (int) $_SESSION['user_id'];
+    $product_id = (int) ($_POST['product_id'] ?? $_GET['product_id'] ?? 0);
+    
+    if (!$product_id) {
+        echo json_encode(['success' => false, 'message' => 'Invalid product ID']);
+        exit;
+    }
+    
+    try {
+        // Verify product exists
+        $stmt = $pdo->prepare("SELECT id FROM products WHERE id = ?");
+        $stmt->execute([$product_id]);
+        if (!$stmt->fetch()) {
+            echo json_encode(['success' => false, 'message' => 'Product not found']);
+            exit;
+        }
+        
+        // Check if already in wishlist
+        $stmt = $pdo->prepare("SELECT id FROM wishlist WHERE user_id = ? AND product_id = ?");
+        $stmt->execute([$user_id, $product_id]);
+        $exists = $stmt->fetch();
+        
+        if ($exists) {
+            // Remove from wishlist
+            $stmt = $pdo->prepare("DELETE FROM wishlist WHERE user_id = ? AND product_id = ?");
+            $stmt->execute([$user_id, $product_id]);
+            $added = false;
+        } else {
+            // Add to wishlist
+            $stmt = $pdo->prepare("INSERT INTO wishlist (user_id, product_id) VALUES (?, ?)");
+            $stmt->execute([$user_id, $product_id]);
+            $added = true;
+        }
+        
+        // Get fresh count for header badge
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM wishlist WHERE user_id = ?");
+        $stmt->execute([$user_id]);
+        $count = (int) $stmt->fetchColumn();
+        
+        echo json_encode([
+            'success'        => true,
+            'added'          => $added,
+            'wishlist_count' => $count
+        ]);
+        exit;
+        
+    } catch (PDOException $e) {
+        error_log('Wishlist toggle error: ' . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => 'Database error']);
+        exit;
+    }
+}
+
+// ============================================
+// REGULAR PAGE LOAD (must be logged in)
+// ============================================
 if (!isset($_SESSION['user_id'])) {
     header('Location: home.php');
     exit();
@@ -9,44 +83,7 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = $_SESSION['user_id'];
 
-// Handle AJAX requests
-if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action'])) {
-    header('Content-Type: application/json');
-    
-    if ($_GET['action'] === 'toggle') {
-        $product_id = intval($_GET['product_id'] ?? 0);
-        
-        if (!$product_id) {
-            echo json_encode(['success' => false, 'message' => 'Invalid product ID']);
-            exit();
-        }
-        
-        try {
-            // Check if already in wishlist
-            $stmt = $pdo->prepare("SELECT id FROM wishlist WHERE user_id = ? AND product_id = ?");
-            $stmt->execute([$user_id, $product_id]);
-            $exists = $stmt->fetch();
-            
-            if ($exists) {
-                // Remove from wishlist
-                $stmt = $pdo->prepare("DELETE FROM wishlist WHERE user_id = ? AND product_id = ?");
-                $stmt->execute([$user_id, $product_id]);
-                echo json_encode(['success' => true, 'added' => false]);
-            } else {
-                // Add to wishlist
-                $stmt = $pdo->prepare("INSERT INTO wishlist (user_id, product_id) VALUES (?, ?)");
-                $stmt->execute([$user_id, $product_id]);
-                echo json_encode(['success' => true, 'added' => true]);
-            }
-        } catch (PDOException $e) {
-            error_log('Wishlist toggle error: ' . $e->getMessage());
-            echo json_encode(['success' => false, 'message' => 'Database error']);
-        }
-        exit();
-    }
-}
-
-// Get wishlist items
+// ===== GET WISHLIST ITEMS =====
 try {
     $stmt = $pdo->prepare("
         SELECT p.*, c.name as category_name
@@ -111,6 +148,8 @@ $page_title = 'My Wishlist';
             text-align: center;
             padding: 15px;
             position: relative;
+            display: flex;
+            flex-direction: column;
         }
         
         .wishlist-item:hover {
@@ -124,6 +163,7 @@ $page_title = 'My Wishlist';
             overflow: hidden;
             border-radius: 8px;
             background: #f5f5f5;
+            position: relative;
         }
         
         .wishlist-item .image-container img {
@@ -137,10 +177,24 @@ $page_title = 'My Wishlist';
             transform: scale(1.05);
         }
         
+        .cloudinary-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(52, 72, 197, 0.9);
+            color: white;
+            font-size: 9px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            z-index: 2;
+        }
+        
         .wishlist-item .remove-btn {
             position: absolute;
             top: 10px;
-            right: 10px;
+            left: 10px;
             background: rgba(220, 53, 69, 0.9);
             color: #fff;
             border: none;
@@ -150,6 +204,7 @@ $page_title = 'My Wishlist';
             cursor: pointer;
             transition: all 0.3s ease;
             font-size: 14px;
+            z-index: 3;
         }
         
         .wishlist-item .remove-btn:hover {
@@ -161,6 +216,11 @@ $page_title = 'My Wishlist';
             font-size: 16px;
             margin: 10px 0 5px;
             color: #333;
+            text-decoration: none;
+        }
+        
+        .wishlist-item h3:hover {
+            color: #05573c;
         }
         
         .wishlist-item .price {
@@ -178,6 +238,26 @@ $page_title = 'My Wishlist';
             letter-spacing: 0.5px;
         }
         
+        .wishlist-item .stock-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            margin: 5px auto 8px;
+            align-self: center;
+        }
+        
+        .stock-badge.in-stock {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .stock-badge.out-of-stock {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
         .wishlist-item .add-to-cart {
             background: #05573c;
             color: #fff;
@@ -188,7 +268,7 @@ $page_title = 'My Wishlist';
             font-weight: 600;
             transition: all 0.3s ease;
             width: 100%;
-            margin-top: 10px;
+            margin-top: auto;
         }
         
         .wishlist-item .add-to-cart:hover:not(:disabled) {
@@ -206,25 +286,6 @@ $page_title = 'My Wishlist';
         
         .wishlist-item .add-to-cart.error {
             background: #dc3545;
-        }
-        
-        .wishlist-item .stock-badge {
-            display: inline-block;
-            padding: 2px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-            margin-top: 5px;
-        }
-        
-        .stock-badge.in-stock {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .stock-badge.out-of-stock {
-            background: #f8d7da;
-            color: #721c24;
         }
         
         .empty-wishlist {
@@ -255,6 +316,7 @@ $page_title = 'My Wishlist';
             text-decoration: none;
             font-weight: 600;
             transition: all 0.3s ease;
+            margin-top: 15px;
         }
         
         .empty-wishlist .btn-primary:hover {
@@ -281,17 +343,9 @@ $page_title = 'My Wishlist';
             opacity: 1;
         }
         
-        .toast.success {
-            background: #28a745;
-        }
-        
-        .toast.error {
-            background: #dc3545;
-        }
-        
-        .toast.info {
-            background: #17a2b8;
-        }
+        .toast.success { background: #28a745; }
+        .toast.error   { background: #dc3545; }
+        .toast.info    { background: #17a2b8; }
         
         @media (max-width: 768px) {
             .wishlist-grid {
@@ -315,28 +369,38 @@ $page_title = 'My Wishlist';
         <div class="wishlist-container">
             <div class="wishlist-header">
                 <h1><i class="fas fa-heart" style="color: #dc3545;"></i> My Wishlist</h1>
-                <p><?php echo count($wishlist_items); ?> items in your wishlist</p>
+                <p><?php echo count($wishlist_items); ?> item<?php echo count($wishlist_items) === 1 ? '' : 's'; ?> in your wishlist</p>
             </div>
             
             <?php if (!empty($wishlist_items)): ?>
-                <div class="wishlist-grid">
+                <div class="wishlist-grid" id="wishlistGrid">
                     <?php foreach ($wishlist_items as $item): ?>
+                        <?php 
+                        $is_cloudinary = !empty($item['image_url']) && strpos($item['image_url'], 'cloudinary.com') !== false;
+                        ?>
                         <div class="wishlist-item" data-product-id="<?php echo $item['id']; ?>">
-                            <button class="remove-btn" onclick="removeFromWishlist(<?php echo $item['id']; ?>)">
+                            <button class="remove-btn" 
+                                    onclick="removeFromWishlist(<?php echo $item['id']; ?>)" 
+                                    title="Remove from wishlist">
                                 <i class="fas fa-times"></i>
                             </button>
                             
                             <a href="product.php?id=<?php echo $item['id']; ?>">
                                 <div class="image-container">
-                                    <img src="<?php echo htmlspecialchars(getProductImageUrl($item)); ?>" 
+                                    <img src="<?php echo htmlspecialchars(getProductImage($item['image'] ?? null, $item['image_url'] ?? null)); ?>" 
                                          alt="<?php echo htmlspecialchars($item['name']); ?>"
                                          onerror="this.src='uploads/products/no-image.png'">
+                                    <?php if ($is_cloudinary): ?>
+                                        <span class="cloudinary-badge"><i class="fas fa-cloud"></i> Cloud</span>
+                                    <?php endif; ?>
                                 </div>
                             </a>
                             
                             <span class="category"><?php echo htmlspecialchars($item['category_name'] ?? 'Uncategorized'); ?></span>
-                            <h3><?php echo htmlspecialchars($item['name']); ?></h3>
-                            <span class="price">Ksh <?php echo number_format($item['price'], 2); ?></span>
+                            <a href="product.php?id=<?php echo $item['id']; ?>" style="text-decoration:none;">
+                                <h3><?php echo htmlspecialchars($item['name']); ?></h3>
+                            </a>
+                            <span class="price">Ksh <?php echo number_format($item['price'], 0); ?></span>
                             <span class="stock-badge <?php echo ($item['stock'] ?? 0) > 0 ? 'in-stock' : 'out-of-stock'; ?>">
                                 <?php echo ($item['stock'] ?? 0) > 0 ? 'In Stock' : 'Out of Stock'; ?>
                             </span>
@@ -388,32 +452,54 @@ $page_title = 'My Wishlist';
             
             const item = document.querySelector(`.wishlist-item[data-product-id="${productId}"]`);
             
-            fetch('wishlist.php?action=toggle&product_id=' + productId)
+            const formData = new FormData();
+            formData.append('ajax_action', 'toggle_wishlist');
+            formData.append('product_id', productId);
+            
+            fetch('wishlist.php', {
+                method: 'POST',
+                body: formData
+            })
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && !data.added) {
                         if (item) {
-                            item.style.transition = 'opacity 0.3s ease';
+                            item.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
                             item.style.opacity = '0';
+                            item.style.transform = 'scale(0.9)';
                             setTimeout(() => {
                                 item.remove();
-                                // Update count
-                                const count = document.querySelectorAll('.wishlist-item').length;
-                                document.querySelector('.wishlist-header p').textContent = count + ' items in your wishlist';
-                                if (count === 0) {
-                                    location.reload();
-                                }
+                                updateWishlistCount();
                             }, 300);
                         }
+                        
+                        // Update header badge if present
+                        if (data.wishlist_count !== undefined) {
+                            const badge = document.querySelector('.wishlist-badge, .wishlist-count');
+                            if (badge) badge.textContent = data.wishlist_count;
+                        }
+                        
                         showToast('Removed from wishlist', 'info');
                     } else {
-                        showToast('Failed to remove item', 'error');
+                        showToast(data.message || 'Failed to remove item', 'error');
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
                     showToast('An error occurred', 'error');
                 });
+        }
+        
+        // Update the "X items in your wishlist" text and handle empty state
+        function updateWishlistCount() {
+            const remaining = document.querySelectorAll('.wishlist-item').length;
+            const countEl = document.querySelector('.wishlist-header p');
+            if (countEl) {
+                countEl.textContent = remaining + ' item' + (remaining === 1 ? '' : 's') + ' in your wishlist';
+            }
+            if (remaining === 0) {
+                location.reload();
+            }
         }
         
         // ============================================
@@ -447,7 +533,7 @@ $page_title = 'My Wishlist';
                         showToast(productName + ' added to cart!', 'success');
                         
                         if (data.cart_count !== undefined) {
-                            const cartBadge = document.querySelector('.cart-badge');
+                            const cartBadge = document.querySelector('.cart-badge-sm, .cart-badge');
                             if (cartBadge) cartBadge.textContent = data.cart_count;
                         }
                         
