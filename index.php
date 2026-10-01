@@ -1122,4 +1122,521 @@ function renderHomeProductCard($product, $wishlistIds, $variant = 'featured') {
                             <div class="caption">
                                 <h2>Fitness Smartwatch</h2>
                                 <p>Track your health goals in style.</p>
-                            </div
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                </div>
+                
+                <?php if (count($slider_images) > 1): ?>
+                    <button class="slider-nav prev" onclick="prevSlide()">‹</button>
+                    <button class="slider-nav next" onclick="nextSlide()">›</button>
+                    <div class="slider-dots" id="sliderDots">
+                        <?php foreach ($slider_images as $index => $slide): ?>
+                            <button class="slider-dot <?php echo $index === 0 ? 'active' : ''; ?>" 
+                                    onclick="goToSlide(<?php echo $index; ?>)"></button>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </section>
+
+        <!-- Featured Products -->
+        <section>
+            <h2>Featured <span>Products</span></h2>
+            
+            <?php if (!empty($featured_products)): ?>
+                <div class="product-grid">
+                    <?php foreach ($featured_products as $product): ?>
+                        <?php renderHomeProductCard($product, $wishlistIds, 'featured'); ?>
+                    <?php endforeach; ?>
+                </div>
+            <?php else: ?>
+                <div class="empty-state">
+                    <i class="fas fa-box-open"></i>
+                    <h3>No Featured Products</h3>
+                    <p>Featured products will appear here soon.</p>
+                </div>
+            <?php endif; ?>
+        </section>
+
+        <!-- Categories Section -->
+        <section>
+            <h2>Shop by <span>Categories</span></h2>
+            
+            <?php if (!empty($categoriesWithProducts)): ?>
+                <?php foreach ($categoriesWithProducts as $category): ?>
+                    <?php 
+                    $products = $categoryProducts[$category['id']] ?? [];
+                    $category_slug = strtolower(str_replace(' ', '-', $category['name']));
+                    ?>
+                    <div class="category-section">
+                        <h2>
+                            <i class="fas fa-tag"></i> 
+                            <?php echo htmlspecialchars($category['name']); ?>
+                        </h2>
+                        
+                        <div class="category-products-grid">
+                            <?php foreach ($products as $product): ?>
+                                <?php renderHomeProductCard($product, $wishlistIds, 'category'); ?>
+                            <?php endforeach; ?>
+                        </div>
+                        
+                        <?php if (count($products) >= 6): ?>
+                            <div class="linker">
+                                <a href="category.php?slug=<?php echo $category_slug; ?>&id=<?php echo $category['id']; ?>" class="linkerbtn">
+                                    See More <i class="fas fa-arrow-right"></i>
+                                </a>
+                            </div>
+                        <?php endif; ?>
+                        
+                        <hr class="divider">
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <div class="no-categories-message">
+                    <i class="fas fa-folder-open"></i>
+                    <h3>No Categories Available</h3>
+                    <p>No categories with products have been created yet. Please check back later.</p>
+                </div>
+            <?php endif; ?>
+        </section>
+
+        <!-- About Section -->
+        <section class="about-shop-section">
+            <h2>Why Choose <span>WittyMart</span>?</h2>
+            <p>We offer a wide range of products across various categories, including electronics, fashion, home & living, beauty & health, sports & outdoors, and much more. Whether you're looking for the latest gadgets, trendy apparel, or everyday essentials, we've got you covered.</p>
+            <ul>
+                <li>High-quality products from trusted brands</li>
+                <li>Exclusive deals and discounts</li>
+                <li>Fast and reliable delivery</li>
+                <li>Exceptional customer service</li>
+                <li>Secure and hassle-free shopping experience</li>
+            </ul>
+            <p>Join thousands of satisfied customers who have made WittyMart their preferred shopping destination. Shop smart, shop WittyMart!</p>
+        </section>
+
+        <!-- Testimonials -->
+        <section class="testimonials-slider">
+            <h2>What Our <span>Customers Say</span></h2>
+            
+            <?php if (!empty($testimonials)): ?>
+                <div class="testimonials-grid">
+                    <?php foreach ($testimonials as $testimonial): ?>
+                        <div class="testimonial-card">
+                            <blockquote>
+                                <p>"<?php echo htmlspecialchars($testimonial['content']); ?>"</p>
+                            </blockquote>
+                            <div class="customer-info">
+                                <div class="customer-avatar">
+                                    <?php 
+                                    $name = $testimonial['customer_name'];
+                                    $initials = '';
+                                    $words = explode(' ', $name);
+                                    foreach ($words as $word) {
+                                        $initials .= strtoupper(substr($word, 0, 1));
+                                    }
+                                    echo substr($initials, 0, 2);
+                                    ?>
+                                </div>
+                                <div>
+                                    <div class="customer-name"><?php echo htmlspecialchars($testimonial['customer_name']); ?></div>
+                                    <div class="customer-stars">
+                                        <?php echo renderStars($testimonial['rating'] ?? 5); ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php else: ?>
+                <div class="empty-state">
+                    <i class="fas fa-comment-dots"></i>
+                    <h3>No Testimonials Yet</h3>
+                    <p>Customer testimonials will appear here soon.</p>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($isLoggedIn): ?>
+                <div class="testimonial-form-container">
+                    <h3><i class="fas fa-pen"></i> Share Your Experience</h3>
+                    <p style="color: #666; margin-bottom: 15px;">We'd love to hear about your experience with WittyMart!</p>
+                    
+                    <form id="testimonialForm">
+                        <div class="rating-select">
+                            <label>Your Rating</label>
+                            <div class="star-rating" id="starRating">
+                                <i class="fas fa-star" data-value="1" onclick="setRating(1)"></i>
+                                <i class="fas fa-star" data-value="2" onclick="setRating(2)"></i>
+                                <i class="fas fa-star" data-value="3" onclick="setRating(3)"></i>
+                                <i class="fas fa-star" data-value="4" onclick="setRating(4)"></i>
+                                <i class="fas fa-star" data-value="5" onclick="setRating(5)" style="color: #ffc107;"></i>
+                            </div>
+                            <input type="hidden" id="ratingValue" name="rating" value="5">
+                            <span style="font-size: 14px; color: #888;">Selected: <span id="ratingDisplay">5</span> stars</span>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="testimonialContent">Your Testimonial</label>
+                            <textarea id="testimonialContent" name="content" placeholder="Write your testimonial here..." required minlength="10"></textarea>
+                        </div>
+                        
+                        <button type="submit" class="btn-submit" id="submitTestimonial">
+                            <i class="fas fa-paper-plane"></i> Submit Testimonial
+                        </button>
+                    </form>
+                    <div id="testimonialMessage" style="margin-top: 10px; display: none;"></div>
+                </div>
+            <?php else: ?>
+                <div style="text-align: center; margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                    <p style="margin: 0;">
+                        <i class="fas fa-lock" style="color: #888;"></i> 
+                        <a href="home.php" style="color: #05573c; font-weight: 600;">Login</a> to share your experience
+                    </p>
+                </div>
+            <?php endif; ?>
+        </section>
+    </main>
+    
+    <?php include "footer.php"; ?>
+    
+<script>
+    // ============================================
+    // CONFIG
+    // ============================================
+    const isLoggedIn = <?php echo $isLoggedIn ? 'true' : 'false'; ?>;
+
+    // ============================================
+    // TOAST NOTIFICATION
+    // ============================================
+    function showToast(message, type = 'success') {
+        const toast = document.getElementById('toast');
+        toast.textContent = message;
+        toast.className = 'toast ' + type;
+        void toast.offsetWidth;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    // ============================================
+    // STAR RATING
+    // ============================================
+    function setRating(value) {
+        document.getElementById('ratingValue').value = value;
+        document.getElementById('ratingDisplay').textContent = value;
+        
+        const stars = document.querySelectorAll('#starRating i');
+        stars.forEach(star => {
+            const starValue = parseInt(star.dataset.value);
+            if (starValue <= value) {
+                star.style.color = '#ffc107';
+                star.classList.add('active');
+            } else {
+                star.style.color = '#ddd';
+                star.classList.remove('active');
+            }
+        });
+    }
+
+    // ============================================
+    // TESTIMONIAL SUBMISSION
+    // ============================================
+    document.addEventListener('DOMContentLoaded', function() {
+        const testimonialForm = document.getElementById('testimonialForm');
+        if (testimonialForm) {
+            testimonialForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const content = document.getElementById('testimonialContent');
+                const submitBtn = document.getElementById('submitTestimonial');
+                const messageDiv = document.getElementById('testimonialMessage');
+                const rating = document.getElementById('ratingValue').value;
+                
+                if (content.value.trim().length < 10) {
+                    messageDiv.style.display = 'block';
+                    messageDiv.style.color = '#dc3545';
+                    messageDiv.textContent = 'Please write at least 10 characters.';
+                    return;
+                }
+                
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+                
+                const formData = new FormData();
+                formData.append('ajax_action', 'submit_testimonial');
+                formData.append('content', content.value.trim());
+                formData.append('rating', rating);
+                
+                fetch('index.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    messageDiv.style.display = 'block';
+                    if (data.success) {
+                        messageDiv.style.color = '#28a745';
+                        messageDiv.textContent = data.message;
+                        content.value = '';
+                        setRating(5);
+                        showToast(data.message, 'success');
+                    } else {
+                        messageDiv.style.color = '#dc3545';
+                        messageDiv.textContent = data.message;
+                        showToast(data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    messageDiv.style.display = 'block';
+                    messageDiv.style.color = '#dc3545';
+                    messageDiv.textContent = 'An error occurred. Please try again.';
+                    showToast('An error occurred. Please try again.', 'error');
+                })
+                .finally(() => {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Testimonial';
+                });
+            });
+        }
+
+        // ============================================
+        // ADD TO CART
+        // ============================================
+        document.querySelectorAll('.add-to-cart').forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (this.disabled) return;
+                
+                if (!isLoggedIn) {
+                    showToast('Please login to add items to your cart', 'info');
+                    setTimeout(() => window.location.href = 'home.php', 1500);
+                    return;
+                }
+                
+                const productId = this.dataset.productId;
+                const productName = this.dataset.productName;
+                const originalText = this.innerHTML;
+                const originalClass = this.className;
+                
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+                
+                const formData = new FormData();
+                formData.append('ajax_action', 'add_to_cart');
+                formData.append('product_id', productId);
+                formData.append('quantity', 1);
+                
+                fetch('cart.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        this.innerHTML = '<i class="fas fa-check"></i> Added!';
+                        this.className = originalClass + ' added';
+                        showToast(productName + ' added to cart!', 'success');
+                        
+                        if (data.cart_count !== undefined) {
+                            const cartBadge = document.querySelector('.cart-badge-sm, .cart-badge');
+                            if (cartBadge) cartBadge.textContent = data.cart_count;
+                        }
+                        
+                        setTimeout(() => {
+                            this.innerHTML = originalText;
+                            this.className = originalClass;
+                            this.disabled = false;
+                        }, 2000);
+                    } else {
+                        this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Failed!';
+                        this.className = originalClass + ' error';
+                        showToast(data.message || 'Failed to add to cart', 'error');
+                        setTimeout(() => {
+                            this.innerHTML = originalText;
+                            this.className = originalClass;
+                            this.disabled = false;
+                        }, 2000);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error!';
+                    this.className = originalClass + ' error';
+                    showToast('An error occurred. Please try again.', 'error');
+                    setTimeout(() => {
+                        this.innerHTML = originalText;
+                        this.className = originalClass;
+                        this.disabled = false;
+                    }, 2000);
+                });
+            });
+        });
+
+        // ============================================
+        // TOGGLE WISHLIST (heart icons)
+        // ============================================
+        function toggleWishlist(btn) {
+            const productId = btn.dataset.productId;
+            const productName = btn.dataset.productName;
+            const wrapper = btn.closest('.product-card, .category-product');
+            if (!wrapper) return;
+            
+            if (!isLoggedIn) {
+                showToast('Please login to use your wishlist', 'info');
+                setTimeout(() => window.location.href = 'home.php', 1500);
+                return;
+            }
+            
+            const heartBtn = wrapper.querySelector('.wishlist-btn');
+            const inlineBtn = wrapper.querySelector('.add-to-wishlist-inline');
+            
+            if (heartBtn) heartBtn.classList.add('loading');
+            if (inlineBtn) inlineBtn.disabled = true;
+            
+            const formData = new FormData();
+            formData.append('ajax_action', 'toggle_wishlist');
+            formData.append('product_id', productId);
+            
+            fetch('wishlist.php', { method: 'POST', body: formData })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const added = data.added;
+                        
+                        if (heartBtn) {
+                            heartBtn.classList.toggle('active', added);
+                            heartBtn.querySelector('i').className = added ? 'fas fa-heart' : 'far fa-heart';
+                            heartBtn.title = added ? 'Remove from wishlist' : 'Add to wishlist';
+                        }
+                        
+                        if (inlineBtn) {
+                            inlineBtn.classList.toggle('active', added);
+                            inlineBtn.querySelector('i').className = added ? 'fas fa-heart' : 'far fa-heart';
+                            inlineBtn.title = added ? 'Remove from wishlist' : 'Add to wishlist';
+                        }
+                        
+                        showToast(
+                            added ? productName + ' added to wishlist' : productName + ' removed from wishlist',
+                            added ? 'success' : 'info'
+                        );
+                        
+                        if (data.wishlist_count !== undefined) {
+                            const badge = document.querySelector('.wishlist-badge, .wishlist-count');
+                            if (badge) badge.textContent = data.wishlist_count;
+                        }
+                    } else {
+                        showToast(data.message || 'Could not update wishlist', 'error');
+                    }
+                })
+                .catch(() => {
+                    showToast('An error occurred. Please try again.', 'error');
+                })
+                .finally(() => {
+                    if (heartBtn) heartBtn.classList.remove('loading');
+                    if (inlineBtn) inlineBtn.disabled = false;
+                });
+        }
+        
+        document.querySelectorAll('.wishlist-btn, .add-to-wishlist-inline').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleWishlist(this);
+            });
+        });
+    });
+
+    // ============================================
+    // HERO SLIDER
+    // ============================================
+    let currentSlide = 0;
+    const slides = document.querySelectorAll('#heroSlides .slide');
+    const totalSlides = slides.length;
+    let autoSlideInterval;
+
+    function showSlide(index) {
+        if (index >= totalSlides) currentSlide = 0;
+        if (index < 0) currentSlide = totalSlides - 1;
+        
+        const offset = -currentSlide * 100;
+        const slider = document.getElementById('heroSlides');
+        if (slider) {
+            slider.style.transform = `translateX(${offset}%)`;
+        }
+        
+        document.querySelectorAll('.slider-dot').forEach((dot, i) => {
+            dot.classList.toggle('active', i === currentSlide);
+        });
+    }
+
+    function nextSlide() {
+        currentSlide++;
+        showSlide(currentSlide);
+        resetAutoSlide();
+    }
+
+    function prevSlide() {
+        currentSlide--;
+        showSlide(currentSlide);
+        resetAutoSlide();
+    }
+
+    function goToSlide(index) {
+        currentSlide = index;
+        showSlide(currentSlide);
+        resetAutoSlide();
+    }
+
+    function resetAutoSlide() {
+        clearInterval(autoSlideInterval);
+        if (totalSlides > 1) {
+            autoSlideInterval = setInterval(nextSlide, 5000);
+        }
+    }
+
+    if (totalSlides > 0) {
+        showSlide(0);
+        if (totalSlides > 1) {
+            autoSlideInterval = setInterval(nextSlide, 5000);
+        }
+    }
+
+    const sliderContainer = document.querySelector('.hero-slider');
+    if (sliderContainer) {
+        sliderContainer.addEventListener('mouseenter', () => {
+            clearInterval(autoSlideInterval);
+        });
+        
+        sliderContainer.addEventListener('mouseleave', () => {
+            if (totalSlides > 1) {
+                autoSlideInterval = setInterval(nextSlide, 5000);
+            }
+        });
+    }
+
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    const sliderElement = document.getElementById('heroSlides');
+    if (sliderElement) {
+        sliderElement.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+        }, { passive: true });
+        
+        sliderElement.addEventListener('touchend', (e) => {
+            touchEndX = e.changedTouches[0].screenX;
+            const diff = touchStartX - touchEndX;
+            if (Math.abs(diff) > 50) {
+                if (diff > 0) {
+                    nextSlide();
+                } else {
+                    prevSlide();
+                }
+            }
+        }, { passive: true });
+    }
+</script>
+</body>
+</html>
