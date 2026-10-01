@@ -1,11 +1,11 @@
 <?php
-// ===== TURN OFF ERROR DISPLAY FOR PRODUCTION =====
+ob_start();
+
+// ===== TURN OFF ERROR DISPLAY =====
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
-
-// ===== CLEAN OUTPUT BUFFER =====
-ob_clean();
-
+ini_set('display_startup_errors', 0);
+ini_set('log_errors', 1);
 // Include config for database connection and functions
 require_once 'includes/config.php';
 
