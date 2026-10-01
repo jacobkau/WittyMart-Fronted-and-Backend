@@ -41,7 +41,7 @@ require_once 'includes/config.php';
                 <li><strong>Smart features:</strong> Wishlist, product comparisons, reviews, and intelligent recommendations to help you shop better.</li>
                 <li><strong>Fast and secure checkout:</strong> Optimized for speed, trust, and simplicity – no stress, no delays.</li>
                 <li><strong>Friendly local support:</strong> Our Kenyan-based support team is available 7 days a week for any issues or inquiries.</li>
-                <li><strong>Built with care:</strong> WittyMart is proudly powered by <em>Witty Highbrow Technologies</em>, a tech-driven company passionate about innovation and customer happiness.</li>
+                <li><strong>Built with care:</strong> WittyMart is proudly powered by <em><b style="color:#05573c;">Witty Highbrow Technologies</b></em>, a tech-driven company passionate about innovation and customer happiness.</li>
             </ul>
             
             <h2> Join the WittyMart Experience</h2>
