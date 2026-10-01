@@ -137,7 +137,6 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
             z-index: 2;
         }
         
-        /* Zoom hint overlay on the image */
         .product-image .zoom-hint {
             position: absolute;
             bottom: 12px;
@@ -262,7 +261,6 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
             color: #05573c;
         }
         
-        /* + button */
         .product-info .add-more-btn {
             background: #05573c;
             color: #fff;
@@ -294,7 +292,6 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
             cursor: not-allowed;
         }
         
-        /* Wishlist button */
         .product-info .wishlist-btn {
             background: #fff;
             border: 2px solid #e91e63;
@@ -468,51 +465,56 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.92);
+            background: rgba(0, 0, 0, 0.95);
             z-index: 10000;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
+            overflow: hidden;
             opacity: 0;
             transition: opacity 0.3s ease;
         }
         
         .lightbox-overlay.active {
-            display: flex;
+            display: block;
             opacity: 1;
         }
         
-        .lightbox-overlay .lightbox-img-wrapper {
-            max-width: 95vw;
-            max-height: 90vh;
-            overflow: hidden;
-            position: relative;
-            border-radius: 8px;
-            cursor: grab;
-            background: #111;
+        .lightbox-stage {
+            position: absolute;
+            inset: 0;
             display: flex;
             justify-content: center;
             align-items: center;
+            cursor: grab;
+            overflow: hidden;
+            touch-action: none;
             user-select: none;
         }
         
-        .lightbox-overlay .lightbox-img-wrapper.grabbing {
+        .lightbox-stage.grabbing {
             cursor: grabbing;
         }
         
-        .lightbox-overlay .lightbox-img-wrapper img {
-            max-width: 95vw;
-            max-height: 90vh;
+        .lightbox-stage img {
+            max-width: 92vw;
+            max-height: 88vh;
+            width: auto;
+            height: auto;
             object-fit: contain;
-            transition: transform 0.2s ease;
             transform-origin: center center;
+            transition: transform 0.15s ease-out;
+            will-change: transform;
             user-select: none;
             -webkit-user-drag: none;
-            pointer-events: none; /* wrapper handles drag */
+            pointer-events: none;
+            border-radius: 4px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+        
+        .lightbox-stage img.dragging {
+            transition: none;
         }
         
         .lightbox-close {
-            position: absolute;
+            position: fixed;
             top: 20px;
             right: 24px;
             background: rgba(255, 255, 255, 0.15);
@@ -536,10 +538,9 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
             transform: rotate(90deg);
         }
         
-        /* Zoom controls */
         .lightbox-controls {
-            position: absolute;
-            bottom: 20px;
+            position: fixed;
+            bottom: 24px;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
@@ -587,9 +588,8 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
             padding: 0 6px;
         }
         
-        /* Zoom hint top-left */
         .lightbox-hint {
-            position: absolute;
+            position: fixed;
             top: 24px;
             left: 24px;
             color: rgba(255, 255, 255, 0.75);
@@ -602,9 +602,9 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
             display: flex;
             align-items: center;
             gap: 6px;
+            pointer-events: none;
         }
         
-        /* Prevent body scroll when lightbox is open */
         body.lightbox-open {
             overflow: hidden;
         }
@@ -639,28 +639,24 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
             }
             
             .lightbox-close {
-                top: 12px;
-                right: 12px;
-                width: 40px;
-                height: 40px;
+                top: 12px; right: 12px;
+                width: 40px; height: 40px;
             }
-            
             .lightbox-hint {
-                top: 12px;
-                left: 12px;
+                top: 12px; left: 12px;
                 font-size: 10px;
                 padding: 6px 10px;
             }
-            
             .lightbox-controls {
                 bottom: 12px;
                 padding: 6px 10px;
             }
-            
             .lightbox-controls button {
-                width: 36px;
-                height: 36px;
-                font-size: 14px;
+                width: 36px; height: 36px; font-size: 14px;
+            }
+            .lightbox-stage img {
+                max-width: 96vw;
+                max-height: 82vh;
             }
         }
     </style>
@@ -675,7 +671,7 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
     <!-- ============================================
          IMAGE LIGHTBOX / ZOOM OVERLAY
          ============================================ -->
-    <div class="lightbox-overlay" id="lightbox" onclick="if(event.target===this) closeLightbox()">
+    <div class="lightbox-overlay" id="lightbox">
         <div class="lightbox-hint">
             <i class="fas fa-search-plus"></i>
             Scroll to zoom · Drag to pan · Esc to close
@@ -685,7 +681,7 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
             <i class="fas fa-times"></i>
         </button>
         
-        <div class="lightbox-img-wrapper" id="lightboxWrapper">
+        <div class="lightbox-stage" id="lightboxStage">
             <img src="<?php echo htmlspecialchars($product_image); ?>" 
                  alt="<?php echo htmlspecialchars($product['name']); ?>"
                  id="lightboxImg">
@@ -873,136 +869,140 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
         // ============================================
         // IMAGE LIGHTBOX / ZOOM
         // ============================================
-        const lightbox = document.getElementById('lightbox');
-        const lightboxImg = document.getElementById('lightboxImg');
-        const lightboxWrapper = document.getElementById('lightboxWrapper');
-        const zoomLevelEl = document.getElementById('zoomLevel');
-        const zoomInBtn = document.getElementById('zoomInBtn');
-        const zoomOutBtn = document.getElementById('zoomOutBtn');
-        
+        const lightbox      = document.getElementById('lightbox');
+        const lightboxImg   = document.getElementById('lightboxImg');
+        const lightboxStage = document.getElementById('lightboxStage');
+        const zoomLevelEl   = document.getElementById('zoomLevel');
+        const zoomInBtn     = document.getElementById('zoomInBtn');
+        const zoomOutBtn    = document.getElementById('zoomOutBtn');
+
         let currentScale = 1;
         let translateX = 0;
         let translateY = 0;
         const MIN_SCALE = 1;
-        const MAX_SCALE = 5;
+        const MAX_SCALE = 6;
         const SCALE_STEP = 0.3;
-        
+
         // Drag state
         let isDragging = false;
         let dragStartX = 0;
         let dragStartY = 0;
         let dragStartTranslateX = 0;
         let dragStartTranslateY = 0;
-        
-        function applyTransform() {
-            lightboxImg.style.transform = `translate(${translateX}px, ${translateY}px) scale(${currentScale})`;
+
+        function applyTransform(animate = true) {
+            if (!animate) {
+                lightboxImg.classList.add('dragging');
+            } else {
+                lightboxImg.classList.remove('dragging');
+            }
+            lightboxImg.style.transform =
+                `translate(${translateX}px, ${translateY}px) scale(${currentScale})`;
             zoomLevelEl.textContent = Math.round(currentScale * 100) + '%';
-            zoomInBtn.disabled = currentScale >= MAX_SCALE;
+            zoomInBtn.disabled  = currentScale >= MAX_SCALE;
             zoomOutBtn.disabled = currentScale <= MIN_SCALE;
         }
-        
+
         function openLightbox() {
             lightbox.classList.add('active');
             document.body.classList.add('lightbox-open');
             resetZoom();
         }
-        
+
         function closeLightbox() {
             lightbox.classList.remove('active');
             document.body.classList.remove('lightbox-open');
             resetZoom();
         }
-        
+
         function zoomIn() {
             if (currentScale >= MAX_SCALE) return;
             currentScale = Math.min(MAX_SCALE, currentScale + SCALE_STEP);
             applyTransform();
         }
-        
+
         function zoomOut() {
             if (currentScale <= MIN_SCALE) return;
             currentScale = Math.max(MIN_SCALE, currentScale - SCALE_STEP);
-            // When resetting scale to min, also reset pan
             if (currentScale === MIN_SCALE) {
                 translateX = 0;
                 translateY = 0;
             }
             applyTransform();
         }
-        
+
         function resetZoom() {
             currentScale = 1;
             translateX = 0;
             translateY = 0;
             applyTransform();
         }
-        
+
         // Open lightbox on product image click
         document.getElementById('productImageBox')?.addEventListener('click', function(e) {
-            // Prevent opening if the click came from the wishlist button etc.
             if (e.target.closest('.cloudinary-badge')) return;
             openLightbox();
         });
-        
-        // Close on Escape key
+
+        // Click on empty stage area → close
+        lightboxStage?.addEventListener('click', function(e) {
+            if (e.target === lightboxStage && !isDragging) {
+                closeLightbox();
+            }
+        });
+
+        // Esc + keyboard shortcuts
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape' && lightbox.classList.contains('active')) {
                 closeLightbox();
             }
-            // Keyboard shortcuts inside lightbox
             if (lightbox.classList.contains('active')) {
                 if (e.key === '+' || e.key === '=') zoomIn();
                 if (e.key === '-' || e.key === '_') zoomOut();
                 if (e.key === '0') resetZoom();
             }
         });
-        
-        // Mouse wheel zoom inside lightbox
-        lightboxWrapper?.addEventListener('wheel', function(e) {
+
+        // Wheel zoom
+        lightboxStage?.addEventListener('wheel', function(e) {
             if (!lightbox.classList.contains('active')) return;
             e.preventDefault();
-            
             if (e.deltaY < 0) {
-                // Scroll up → zoom in
                 currentScale = Math.min(MAX_SCALE, currentScale + 0.15);
             } else {
-                // Scroll down → zoom out
                 currentScale = Math.max(MIN_SCALE, currentScale - 0.15);
-                if (currentScale === MIN_SCALE) {
-                    translateX = 0;
-                    translateY = 0;
-                }
+                if (currentScale === MIN_SCALE) { translateX = 0; translateY = 0; }
             }
             applyTransform();
         }, { passive: false });
-        
+
         // Mouse drag to pan
-        lightboxWrapper?.addEventListener('mousedown', function(e) {
+        lightboxStage?.addEventListener('mousedown', function(e) {
             if (currentScale <= MIN_SCALE) return;
             e.preventDefault();
             isDragging = true;
-            lightboxWrapper.classList.add('grabbing');
+            lightboxStage.classList.add('grabbing');
             dragStartX = e.clientX;
             dragStartY = e.clientY;
             dragStartTranslateX = translateX;
             dragStartTranslateY = translateY;
         });
-        
+
         document.addEventListener('mousemove', function(e) {
             if (!isDragging) return;
             translateX = dragStartTranslateX + (e.clientX - dragStartX);
             translateY = dragStartTranslateY + (e.clientY - dragStartY);
-            applyTransform();
+            applyTransform(false);
         });
-        
+
         document.addEventListener('mouseup', function() {
             if (isDragging) {
                 isDragging = false;
-                lightboxWrapper.classList.remove('grabbing');
+                lightboxStage.classList.remove('grabbing');
             }
         });
-        
-        // ===== Touch support (pinch zoom + pan) =====
+
+        // Touch pinch + pan
         let touchStartDist = 0;
         let touchStartScale = 1;
         let touchStartX = 0;
@@ -1010,10 +1010,9 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
         let touchStartTranslateX = 0;
         let touchStartTranslateY = 0;
         let isPinching = false;
-        
-        lightboxWrapper?.addEventListener('touchstart', function(e) {
+
+        lightboxStage?.addEventListener('touchstart', function(e) {
             if (e.touches.length === 2) {
-                // Two-finger pinch
                 isPinching = true;
                 touchStartDist = Math.hypot(
                     e.touches[0].clientX - e.touches[1].clientX,
@@ -1021,15 +1020,14 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
                 );
                 touchStartScale = currentScale;
             } else if (e.touches.length === 1 && currentScale > MIN_SCALE) {
-                // Single-finger pan
                 touchStartX = e.touches[0].clientX;
                 touchStartY = e.touches[0].clientY;
                 touchStartTranslateX = translateX;
                 touchStartTranslateY = translateY;
             }
         }, { passive: true });
-        
-        lightboxWrapper?.addEventListener('touchmove', function(e) {
+
+        lightboxStage?.addEventListener('touchmove', function(e) {
             if (isPinching && e.touches.length === 2) {
                 e.preventDefault();
                 const dist = Math.hypot(
@@ -1038,20 +1036,17 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
                 );
                 const ratio = dist / touchStartDist;
                 currentScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, touchStartScale * ratio));
-                if (currentScale === MIN_SCALE) {
-                    translateX = 0;
-                    translateY = 0;
-                }
-                applyTransform();
+                if (currentScale === MIN_SCALE) { translateX = 0; translateY = 0; }
+                applyTransform(false);
             } else if (e.touches.length === 1 && currentScale > MIN_SCALE) {
                 e.preventDefault();
                 translateX = touchStartTranslateX + (e.touches[0].clientX - touchStartX);
                 translateY = touchStartTranslateY + (e.touches[0].clientY - touchStartY);
-                applyTransform();
+                applyTransform(false);
             }
         }, { passive: false });
-        
-        lightboxWrapper?.addEventListener('touchend', function(e) {
+
+        lightboxStage?.addEventListener('touchend', function(e) {
             if (e.touches.length < 2) isPinching = false;
         });
 
