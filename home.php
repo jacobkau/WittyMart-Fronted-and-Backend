@@ -1,14 +1,10 @@
 <?php
-
-ob_start();
-
-// ============================================
-// ERROR HANDLING FOR PRODUCTION
-// ============================================
+// ===== TURN OFF ERROR DISPLAY FOR PRODUCTION =====
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
-ini_set('display_startup_errors', 0);
-ini_set('log_errors', 1);
+
+// ===== CLEAN OUTPUT BUFFER =====
+ob_clean();
 
 // Include config for database connection and functions
 require_once 'includes/config.php';
@@ -20,28 +16,19 @@ $isLoggedIn = isset($_SESSION['user_id']);
 
 // If user is already logged in, redirect to home
 if ($isLoggedIn) {
-    // Discard any buffered output before redirect
-    if (ob_get_length()) {
-        ob_end_clean();
-    }
     header('Location: welcome.php');
     exit();
 }
 
-// ============================================
-// HANDLE AJAX REQUESTS
-// ============================================
+// ===== HANDLE AJAX REQUESTS =====
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
-    // Discard anything PHP buffered (warnings, notices, BOMs, whitespace)
-    if (ob_get_length()) {
-        ob_clean();
-    }
+    // Set JSON header before any output
+    header('Content-Type: application/json');
     
-    // Send JSON headers
-    header('Content-Type: application/json; charset=utf-8');
-    header('X-Content-Type-Options: nosniff');
+    // Clean output buffer again
+    ob_clean();
     
-    $action = $_POST['ajax_action'] ?? '';
+    $action = $_POST['ajax_action'];
     $response = ['success' => false, 'message' => 'Invalid action'];
     
     try {
@@ -54,10 +41,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
             case 'register':
                 // Get and sanitize input
                 $username = sanitize($_POST['username'] ?? '');
-                $name     = sanitize($_POST['name'] ?? '');
-                $phone    = sanitize($_POST['phone'] ?? '');
-                $email    = sanitize($_POST['email'] ?? '');
-                $password        = $_POST['password'] ?? '';
+                $name = sanitize($_POST['name'] ?? '');
+                $phone = sanitize($_POST['phone'] ?? '');
+                $email = sanitize($_POST['email'] ?? '');
+                $password = $_POST['password'] ?? '';
                 $confirmPassword = $_POST['confirmPassword'] ?? '';
                 
                 // Validate input
@@ -113,15 +100,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
                     $userId = $pdo->lastInsertId();
                     
                     // Log the user in immediately after registration
-                    $_SESSION['user_id']    = $userId;
-                    $_SESSION['user_name']  = $name;
+                    $_SESSION['user_id'] = $userId;
+                    $_SESSION['user_name'] = $name;
                     $_SESSION['user_email'] = $email;
-                    $_SESSION['user_role']  = 'user';
-                    $_SESSION['is_admin']   = false;
+                    $_SESSION['user_role'] = 'user';
+                    $_SESSION['is_admin'] = false;
                     
                     $response = [
-                        'success'  => true,
-                        'message'  => 'Registration successful! Welcome ' . $name . '!',
+                        'success' => true, 
+                        'message' => 'Registration successful! Welcome ' . $name . '!',
                         'redirect' => 'welcome.php'
                     ];
                 } else {
@@ -130,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
                 break;
                 
             case 'login':
-                $email    = sanitize($_POST['email'] ?? '');
+                $email = sanitize($_POST['email'] ?? '');
                 $password = $_POST['password'] ?? '';
                 
                 if (empty($email) || empty($password)) {
@@ -153,16 +140,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
                     // Verify password
                     if (password_verify($password, $user['password'])) {
                         // Set session variables
-                        $_SESSION['user_id']    = $user['id'];
-                        $_SESSION['user_name']  = $user['name'];
+                        $_SESSION['user_id'] = $user['id'];
+                        $_SESSION['user_name'] = $user['name'];
                         $_SESSION['user_email'] = $user['email'];
                         $_SESSION['user_phone'] = $user['phone'] ?? '';
-                        $_SESSION['user_role']  = $user['role'] ?? 'user';
-                        $_SESSION['is_admin']   = ($user['role'] === 'admin');
+                        $_SESSION['user_role'] = $user['role'] ?? 'user';
+                        $_SESSION['is_admin'] = ($user['role'] === 'admin');
                         
                         $response = [
-                            'success'  => true,
-                            'message'  => 'Login successful! Welcome back ' . $user['name'] . '!',
+                            'success' => true,
+                            'message' => 'Login successful! Welcome back ' . $user['name'] . '!',
                             'redirect' => ($user['role'] === 'admin') ? 'admin/dashboard.php' : 'welcome.php'
                         ];
                     } else {
@@ -177,31 +164,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
                 $response = ['success' => false, 'message' => 'Invalid action'];
         }
     } catch (PDOException $e) {
-        error_log('Auth PDO error: ' . $e->getMessage());
+        error_log('Auth error: ' . $e->getMessage());
         $response = ['success' => false, 'message' => 'Database error. Please try again.'];
-    } catch (Throwable $e) {
-        // Catches both Exception AND Error (e.g. "Call to undefined function")
-        error_log('Auth error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+    } catch (Exception $e) {
+        error_log('Auth error: ' . $e->getMessage());
         $response = ['success' => false, 'message' => 'Server error. Please try again.'];
     }
     
-    // Discard any accidental output that may have leaked in
-    if (ob_get_length()) {
-        ob_clean();
-    }
-    
+    // Clean buffer and output JSON
+    ob_clean();
     echo json_encode($response);
     exit();
 }
 
-// ============================================
-// NORMAL PAGE RENDER — flush clean buffer
-// ============================================
-if (ob_get_length()) {
-    ob_end_clean();
-}
-
-// Recheck login state for page load
+// Check if user is logged in (again, for page load)
 $isLoggedIn = isset($_SESSION['user_id']);
 ?>
 <!DOCTYPE html>
@@ -710,6 +686,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
                 </button>
             </form>
             
+
             <!-- Register Form - Two Columns -->
             <form id="signupForm" method="POST">
                 <div class="form-row">
@@ -792,19 +769,19 @@ $isLoggedIn = isset($_SESSION['user_id']);
         // ============================================
         // DOM ELEMENTS
         // ============================================
-        const signupForm       = document.getElementById('signupForm');
-        const loginForm        = document.getElementById('loginForm');
-        const switchToLogin    = document.getElementById('switchToLogin');
+        const signupForm = document.getElementById('signupForm');
+        const loginForm = document.getElementById('loginForm');
+        const switchToLogin = document.getElementById('switchToLogin');
         const switchToRegister = document.getElementById('switchToRegister');
-        const formTitle        = document.getElementById('formTitle');
-        const messageDiv       = document.getElementById('message');
-        const progressFill     = document.getElementById('progressFill');
-        const themeToggleBtn   = document.getElementById('themeToggleBtn');
-        const confirmModal     = document.getElementById('confirmModal');
-        const confirmBtn       = document.getElementById('confirmBtn');
-        const cancelBtn        = document.getElementById('cancelBtn');
-        const registerBtn      = document.getElementById('registerBtn');
-        const loginBtn         = document.getElementById('loginBtn');
+        const formTitle = document.getElementById('formTitle');
+        const messageDiv = document.getElementById('message');
+        const progressFill = document.getElementById('progressFill');
+        const themeToggleBtn = document.getElementById('themeToggleBtn');
+        const confirmModal = document.getElementById('confirmModal');
+        const confirmBtn = document.getElementById('confirmBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const registerBtn = document.getElementById('registerBtn');
+        const loginBtn = document.getElementById('loginBtn');
 
         // ============================================
         // PREVENT DOUBLE CLICK ON BUTTONS
@@ -899,27 +876,13 @@ $isLoggedIn = isset($_SESSION['user_id']);
         }
 
         // ============================================
-        // SAFE JSON PARSER — handles non-JSON responses gracefully
-        // ============================================
-        async function safeJsonParse(response) {
-            const text = await response.text();
-            try {
-                return JSON.parse(text);
-            } catch (e) {
-                // Log the raw response so you can see what PHP sent
-                console.error('Non-JSON response from server:', text.substring(0, 500));
-                throw new Error('Server returned invalid response. Check browser console for details.');
-            }
-        }
-
-        // ============================================
         // HANDLE REGISTER FORM SUBMISSION
         // ============================================
         signupForm.addEventListener('submit', function(e) {
             e.preventDefault();
             
             // Validate passwords match
-            const password        = document.getElementById('password').value;
+            const password = document.getElementById('password').value;
             const confirmPassword = document.getElementById('confirmPassword').value;
             
             if (password !== confirmPassword) {
@@ -956,7 +919,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
                 method: 'POST',
                 body: formData
             })
-            .then(safeJsonParse)
+            .then(response => response.json())
             .then(data => {
                 hideProgress();
                 setButtonLoading(registerBtn, false);
@@ -974,7 +937,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
             .catch(error => {
                 hideProgress();
                 setButtonLoading(registerBtn, false);
-                console.error('Register error:', error);
+                console.error('Error:', error);
                 showMessage('An error occurred. Please try again.', 'error');
             });
         });
@@ -1011,7 +974,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
                 method: 'POST',
                 body: formData
             })
-            .then(safeJsonParse)
+            .then(response => response.json())
             .then(data => {
                 hideProgress();
                 setButtonLoading(loginBtn, false);
@@ -1028,7 +991,7 @@ $isLoggedIn = isset($_SESSION['user_id']);
             .catch(error => {
                 hideProgress();
                 setButtonLoading(loginBtn, false);
-                console.error('Login error:', error);
+                console.error('Error:', error);
                 showMessage('An error occurred. Please try again.', 'error');
             });
         });
