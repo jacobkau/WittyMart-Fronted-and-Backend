@@ -100,6 +100,21 @@ try {
     $wishlist_items = [];
 }
 
+// ===== FETCH CART QUANTITIES FOR LOGGED-IN USER =====
+$cartQuantities = [];
+if (!empty($wishlist_items)) {
+    try {
+        $stmt = $pdo->prepare("SELECT product_id, quantity FROM cart WHERE user_id = ?");
+        $stmt->execute([$user_id]);
+        foreach ($stmt->fetchAll() as $row) {
+            $cartQuantities[intval($row['product_id'])] = intval($row['quantity']);
+        }
+    } catch (PDOException $e) {
+        error_log('Get cart quantities error: ' . $e->getMessage());
+        $cartQuantities = [];
+    }
+}
+
 $page_title = 'My Wishlist';
 ?>
 <!DOCTYPE html>
@@ -258,17 +273,34 @@ $page_title = 'My Wishlist';
             color: #721c24;
         }
         
+        /* ===== ACTION ROW ===== */
+        .wishlist-item .card-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: auto;
+            align-items: stretch;
+            width: 100%;
+        }
+        
         .wishlist-item .add-to-cart {
             background: #05573c;
             color: #fff;
             border: none;
-            padding: 8px 20px;
+            padding: 10px 12px;
             border-radius: 6px;
             cursor: pointer;
             font-weight: 600;
             transition: all 0.3s ease;
-            width: 100%;
-            margin-top: auto;
+            flex: 1;
+            min-width: 0;
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
         }
         
         .wishlist-item .add-to-cart:hover:not(:disabled) {
@@ -286,6 +318,74 @@ $page_title = 'My Wishlist';
         
         .wishlist-item .add-to-cart.error {
             background: #dc3545;
+        }
+        
+        /* ===== IN-CART PILL + PLUS BUTTON ===== */
+        .wishlist-item .in-cart-pill {
+            background: #e8f5f0;
+            color: #05573c;
+            border: 1.5px solid #05573c;
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .wishlist-item .in-cart-pill i {
+            color: #05573c;
+        }
+        
+        .wishlist-item .in-cart-pill .qty-badge {
+            background: #05573c;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 1px 7px;
+            border-radius: 10px;
+            min-width: 20px;
+            text-align: center;
+        }
+        
+        .wishlist-item .add-more-btn {
+            background: #05573c;
+            color: #fff;
+            border: none;
+            width: 42px;
+            min-width: 42px;
+            height: 42px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.25s ease;
+            flex-shrink: 0;
+            box-shadow: 0 2px 6px rgba(5, 87, 60, 0.25);
+        }
+        
+        .wishlist-item .add-more-btn:hover:not(:disabled) {
+            background: #03402c;
+            transform: scale(1.06);
+        }
+        
+        .wishlist-item .add-more-btn:active:not(:disabled) {
+            transform: scale(0.96);
+        }
+        
+        .wishlist-item .add-more-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
         }
         
         .empty-wishlist {
@@ -356,6 +456,19 @@ $page_title = 'My Wishlist';
             .wishlist-item .image-container {
                 height: 140px;
             }
+            
+            .wishlist-item .add-to-cart,
+            .wishlist-item .in-cart-pill {
+                font-size: 12px;
+                padding: 8px 8px;
+            }
+            
+            .wishlist-item .add-more-btn {
+                width: 38px;
+                min-width: 38px;
+                height: 38px;
+                font-size: 14px;
+            }
         }
     </style>
 </head>
@@ -376,16 +489,20 @@ $page_title = 'My Wishlist';
                 <div class="wishlist-grid" id="wishlistGrid">
                     <?php foreach ($wishlist_items as $item): ?>
                         <?php 
+                        $pid = $item['id'];
+                        $cart_qty = intval($cartQuantities[$pid] ?? 0);
+                        $in_cart = $cart_qty > 0;
+                        $stock_val = intval($item['stock'] ?? 0);
                         $is_cloudinary = !empty($item['image_url']) && strpos($item['image_url'], 'cloudinary.com') !== false;
                         ?>
-                        <div class="wishlist-item" data-product-id="<?php echo $item['id']; ?>">
+                        <div class="wishlist-item" data-product-id="<?php echo $pid; ?>">
                             <button class="remove-btn" 
-                                    onclick="removeFromWishlist(<?php echo $item['id']; ?>)" 
+                                    onclick="removeFromWishlist(<?php echo $pid; ?>)" 
                                     title="Remove from wishlist">
                                 <i class="fas fa-times"></i>
                             </button>
                             
-                            <a href="product.php?id=<?php echo $item['id']; ?>">
+                            <a href="product.php?id=<?php echo $pid; ?>">
                                 <div class="image-container">
                                     <img src="<?php echo htmlspecialchars(getProductImage($item['image'] ?? null, $item['image_url'] ?? null)); ?>" 
                                          alt="<?php echo htmlspecialchars($item['name']); ?>"
@@ -397,20 +514,42 @@ $page_title = 'My Wishlist';
                             </a>
                             
                             <span class="category"><?php echo htmlspecialchars($item['category_name'] ?? 'Uncategorized'); ?></span>
-                            <a href="product.php?id=<?php echo $item['id']; ?>" style="text-decoration:none;">
+                            <a href="product.php?id=<?php echo $pid; ?>" style="text-decoration:none;">
                                 <h3><?php echo htmlspecialchars($item['name']); ?></h3>
                             </a>
                             <span class="price">Ksh <?php echo number_format($item['price'], 0); ?></span>
-                            <span class="stock-badge <?php echo ($item['stock'] ?? 0) > 0 ? 'in-stock' : 'out-of-stock'; ?>">
-                                <?php echo ($item['stock'] ?? 0) > 0 ? 'In Stock' : 'Out of Stock'; ?>
+                            <span class="stock-badge <?php echo $stock_val > 0 ? 'in-stock' : 'out-of-stock'; ?>">
+                                <?php echo $stock_val > 0 ? 'In Stock' : 'Out of Stock'; ?>
                             </span>
-                            <button class="add-to-cart" 
-                                    data-product-id="<?php echo $item['id']; ?>"
-                                    data-product-name="<?php echo htmlspecialchars($item['name']); ?>"
-                                    <?php echo ($item['stock'] ?? 0) <= 0 ? 'disabled' : ''; ?>>
-                                <i class="fas fa-shopping-cart"></i> 
-                                <?php echo ($item['stock'] ?? 0) > 0 ? 'Add to Cart' : 'Out of Stock'; ?>
-                            </button>
+                            
+                            <!-- ===== ACTION ROW ===== -->
+                            <div class="card-actions" data-product-id="<?php echo $pid; ?>">
+                                <?php if ($stock_val <= 0): ?>
+                                    <button class="add-to-cart" disabled>
+                                        <i class="fas fa-times-circle"></i> Out of Stock
+                                    </button>
+                                <?php elseif ($in_cart): ?>
+                                    <span class="in-cart-pill" title="Item is in your cart">
+                                        <i class="fas fa-check-circle"></i>
+                                        In Cart
+                                        <span class="qty-badge"><?php echo $cart_qty; ?></span>
+                                    </span>
+                                    
+                                    <button type="button"
+                                            class="add-more-btn"
+                                            data-product-id="<?php echo $pid; ?>"
+                                            data-product-name="<?php echo htmlspecialchars($item['name']); ?>"
+                                            title="Add one more to cart">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                <?php else: ?>
+                                    <button class="add-to-cart" 
+                                            data-product-id="<?php echo $pid; ?>"
+                                            data-product-name="<?php echo htmlspecialchars($item['name']); ?>">
+                                        <i class="fas fa-shopping-cart"></i> Add to Cart
+                                    </button>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     <?php endforeach; ?>
                 </div>
@@ -443,7 +582,49 @@ $page_title = 'My Wishlist';
                 toast.classList.remove('show');
             }, 3000);
         }
-        
+
+        // ============================================
+        // HELPER: Update header cart badge
+        // ============================================
+        function updateCartBadge(count) {
+            if (count === undefined) return;
+            const badge = document.querySelector('.cart-badge-sm, .cart-badge, .cart-count');
+            if (badge) badge.textContent = count;
+        }
+
+        // ============================================
+        // HELPER: Swap Add to Cart → In Cart + Plus
+        // ============================================
+        function switchCardToInCart(actionsRow, qty) {
+            const productId = actionsRow.dataset.productId;
+            const productName = actionsRow.querySelector('.add-to-cart')?.dataset.productName || '';
+            
+            // Remove the add-to-cart button
+            const addBtn = actionsRow.querySelector('.add-to-cart');
+            if (addBtn) addBtn.remove();
+            
+            // Build new HTML
+            const html = `
+                <span class="in-cart-pill" title="Item is in your cart">
+                    <i class="fas fa-check-circle"></i>
+                    In Cart
+                    <span class="qty-badge">${qty}</span>
+                </span>
+                <button type="button"
+                        class="add-more-btn"
+                        data-product-id="${productId}"
+                        data-product-name="${productName.replace(/"/g, '&quot;')}"
+                        title="Add one more to cart">
+                    <i class="fas fa-plus"></i>
+                </button>
+            `;
+            
+            actionsRow.insertAdjacentHTML('afterbegin', html);
+            
+            // Attach handler to the new + button
+            attachAddMoreHandler(actionsRow.querySelector('.add-more-btn'));
+        }
+
         // ============================================
         // REMOVE FROM WISHLIST
         // ============================================
@@ -501,16 +682,17 @@ $page_title = 'My Wishlist';
                 location.reload();
             }
         }
-        
+
         // ============================================
-        // ADD TO CART FROM WISHLIST
+        // ADD TO CART (initial add)
         // ============================================
-        document.querySelectorAll('.add-to-cart').forEach(button => {
+        document.querySelectorAll('.card-actions .add-to-cart').forEach(button => {
             button.addEventListener('click', function() {
                 if (this.disabled) return;
                 
                 const productId = this.dataset.productId;
                 const productName = this.dataset.productName;
+                const actionsRow = this.closest('.card-actions');
                 const originalText = this.innerHTML;
                 
                 this.disabled = true;
@@ -529,43 +711,86 @@ $page_title = 'My Wishlist';
                 .then(data => {
                     if (data.success) {
                         this.innerHTML = '<i class="fas fa-check"></i> Added!';
-                        this.className = 'add-to-cart added';
+                        this.classList.add('added');
                         showToast(productName + ' added to cart!', 'success');
                         
-                        if (data.cart_count !== undefined) {
-                            const cartBadge = document.querySelector('.cart-badge-sm, .cart-badge');
-                            if (cartBadge) cartBadge.textContent = data.cart_count;
-                        }
+                        updateCartBadge(data.cart_count);
                         
+                        // Swap to in-cart state after brief pause
                         setTimeout(() => {
-                            this.innerHTML = originalText;
-                            this.className = 'add-to-cart';
-                            this.disabled = false;
-                        }, 2000);
+                            switchCardToInCart(actionsRow, 1);
+                        }, 700);
                     } else {
-                        this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Failed!';
-                        this.className = 'add-to-cart error';
+                        this.innerHTML = originalText;
+                        this.disabled = false;
                         showToast(data.message || 'Failed to add to cart', 'error');
-                        setTimeout(() => {
-                            this.innerHTML = originalText;
-                            this.className = 'add-to-cart';
-                            this.disabled = false;
-                        }, 2000);
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    this.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error!';
-                    this.className = 'add-to-cart error';
+                    this.innerHTML = originalText;
+                    this.disabled = false;
                     showToast('An error occurred', 'error');
-                    setTimeout(() => {
-                        this.innerHTML = originalText;
-                        this.className = 'add-to-cart';
-                        this.disabled = false;
-                    }, 2000);
                 });
             });
         });
+
+        // ============================================
+        // "+" BUTTON (add one more to cart)
+        // ============================================
+        function attachAddMoreHandler(btn) {
+            if (!btn) return;
+            
+            btn.addEventListener('click', function() {
+                if (this.disabled) return;
+                
+                const productId = this.dataset.productId;
+                const productName = this.dataset.productName;
+                const actionsRow = this.closest('.card-actions');
+                const originalHTML = this.innerHTML;
+                
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                
+                const formData = new FormData();
+                formData.append('ajax_action', 'add_to_cart');
+                formData.append('product_id', productId);
+                formData.append('quantity', 1);
+                
+                fetch('cart.php', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    this.disabled = false;
+                    this.innerHTML = originalHTML;
+                    
+                    if (data.success) {
+                        // Update qty badge in the pill
+                        const pill = actionsRow.querySelector('.in-cart-pill .qty-badge');
+                        if (pill) {
+                            const current = parseInt(pill.textContent) || 0;
+                            pill.textContent = current + 1;
+                        }
+                        
+                        updateCartBadge(data.cart_count);
+                        showToast('1 more ' + productName + ' added to cart', 'success');
+                    } else {
+                        showToast(data.message || 'Could not add more', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    this.disabled = false;
+                    this.innerHTML = originalHTML;
+                    showToast('An error occurred', 'error');
+                });
+            });
+        }
+        
+        // Attach handler to any existing + buttons rendered server-side
+        document.querySelectorAll('.card-actions .add-more-btn').forEach(attachAddMoreHandler);
     </script>
 </body>
 </html>
