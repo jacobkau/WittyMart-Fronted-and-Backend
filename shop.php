@@ -19,7 +19,43 @@ try {
 
 // Check if user is logged in
 $isLoggedIn = isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
-
+/**
+ * Get product image URL from a product row (array)
+ * Handles Cloudinary URLs, local images, and placeholders.
+ *
+ * @param array $product  Product row from DB (must include 'image' and/or 'image_url')
+ * @return string         Resolved image URL
+ */
+function getProductImageUrl($product) {
+    // If $product is a string, treat it as a local image filename
+    if (is_string($product)) {
+        if (filter_var($product, FILTER_VALIDATE_URL)) {
+            return $product;
+        }
+        return !empty($product) ? UPLOAD_URL . $product : UPLOAD_URL . 'no-image.png';
+    }
+    
+    // If $product is an array (normal case)
+    if (is_array($product)) {
+        $image_url = $product['image_url'] ?? null;
+        $image     = $product['image'] ?? null;
+        
+        // Priority: Cloudinary URL > local filename > placeholder
+        if (!empty($image_url)) {
+            return $image_url;
+        }
+        
+        if (!empty($image)) {
+            // Already a full URL?
+            if (filter_var($image, FILTER_VALIDATE_URL)) {
+                return $image;
+            }
+            return UPLOAD_URL . $image;
+        }
+    }
+    
+    return UPLOAD_URL . 'no-image.png';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -252,7 +288,7 @@ $isLoggedIn = isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
                         <div class="product">
                             <a href="product.php?id=<?php echo $product['id']; ?>" class="product-link">
                                 <div class="product-image-container">
-                                    <img src="<?php echo htmlspecialchars(getProductImage($product)); ?>" 
+                                        <img src="<?php echo htmlspecialchars(getProductImage($product['image'] ?? null, $product['image_url'] ?? null)); ?>" 
                                          alt="<?php echo htmlspecialchars($product['name']); ?>"
                                          onerror="this.onerror=null; this.src='uploads/products/no-image.png';">
                                     <?php if (!empty($product['image_url'])): ?>
