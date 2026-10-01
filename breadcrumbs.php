@@ -41,6 +41,32 @@ foreach ($categories as $category) {
         $categoriesWithProducts[] = $category;
     }
 }
+
+// ===== FALLBACK: If a product row happens to have URL stored in `image` column =====
+// This helper resolves either a Cloudinary URL (from image_url) OR a local file (from image).
+if (!function_exists('resolveCategoryProductImage')) {
+    function resolveCategoryProductImage($product) {
+        $image_url = $product['image_url'] ?? null;
+        $image     = $product['image'] ?? null;
+
+        // 1. Prefer Cloudinary URL
+        if (!empty($image_url)) {
+            return $image_url;
+        }
+
+        // 2. Local filename
+        if (!empty($image)) {
+            // Sometimes the URL was stored in `image` directly (legacy rows)
+            if (filter_var($image, FILTER_VALIDATE_URL)) {
+                return $image;
+            }
+            return UPLOAD_URL . $image;
+        }
+
+        // 3. Placeholder
+        return UPLOAD_URL . 'no-image.png';
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -319,13 +345,19 @@ foreach ($categories as $category) {
                         
                         <div class="products-grid">
                             <?php foreach ($products as $product): ?>
+                                <?php 
+                                // Resolve image — prefers Cloudinary image_url, then local image, then placeholder
+                                $product_img_src = resolveCategoryProductImage($product);
+                                $has_cloudinary = !empty($product['image_url']);
+                                ?>
                                 <div class="product">
                                     <a href="product.php?id=<?php echo $product['id']; ?>" class="product-link">
                                         <div class="product-image-container">
-                                            <img src="<?php echo htmlspecialchars(getProductImageUrl($product)); ?>" 
+                                            <img src="<?php echo htmlspecialchars($product_img_src); ?>" 
                                                  alt="<?php echo htmlspecialchars($product['name']); ?>"
-                                                 onerror="this.src='uploads/products/no-image.png'">
-                                            <?php if (!empty($product['image_url'])): ?>
+                                                 loading="lazy"
+                                                 onerror="this.onerror=null;this.src='<?php echo UPLOAD_URL; ?>no-image.png';">
+                                            <?php if ($has_cloudinary): ?>
                                                 <span class="cloudinary-badge">
                                                     <i class="fas fa-cloud"></i> Cloud
                                                 </span>
@@ -374,7 +406,7 @@ foreach ($categories as $category) {
         </div>
     </main>
     
-    <?php include "footer.php"; ?>
+    <?php include 'footer.php'; ?>
 
     <script>
         // ============================================
