@@ -654,6 +654,7 @@ $page_title = 'Products';
             border: 1px solid #ddd;
             border-radius: 8px;
             font-size: 14px;
+            color: #333;
             background: #fafafa;
             transition: all 0.2s ease;
         }
@@ -685,25 +686,44 @@ $page_title = 'Products';
         
         .toolbar-search .clear-btn.visible { display: flex; }
         
+        /* ============================================
+           DROPDOWN – FORCED DARK TEXT
+           ============================================ */
         .toolbar-select {
             padding: 9px 32px 9px 12px;
             border: 1px solid #ddd;
             border-radius: 8px;
-            background: #fafafa;
-            color: #333;
+            background-color: #fff;
+            color: #333 !important;
             font-size: 13px;
+            font-weight: 500;
             cursor: pointer;
             appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
             background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20292.4%20292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
             background-repeat: no-repeat;
             background-position: right 10px center;
             background-size: 10px;
             min-width: 130px;
+            opacity: 1;
+        }
+        
+        .toolbar-select option {
+            color: #333;
+            background: #fff;
+        }
+        
+        .toolbar-select.is-placeholder {
+            color: #999 !important;
+            font-weight: 400;
         }
         
         .toolbar-select:focus {
             outline: none;
             border-color: #05573c;
+            background-color: #fff;
+            color: #333 !important;
             box-shadow: 0 0 0 3px rgba(5, 87, 60, 0.1);
         }
         
@@ -1168,7 +1188,7 @@ $page_title = 'Products';
                             </button>
                         </div>
                         
-                        <select name="category" class="toolbar-select" onchange="document.getElementById('filterForm').submit()">
+                        <select name="category" class="toolbar-select <?php echo $filter_cat == 0 ? 'is-placeholder' : ''; ?>" onchange="document.getElementById('filterForm').submit()">
                             <option value="">All Categories</option>
                             <?php foreach ($categories as $cat): ?>
                                 <option value="<?php echo $cat['id']; ?>" <?php echo $filter_cat == $cat['id'] ? 'selected' : ''; ?>>
@@ -1177,14 +1197,14 @@ $page_title = 'Products';
                             <?php endforeach; ?>
                         </select>
                         
-                        <select name="status" class="toolbar-select" onchange="document.getElementById('filterForm').submit()">
+                        <select name="status" class="toolbar-select <?php echo $filter_status === '' ? 'is-placeholder' : ''; ?>" onchange="document.getElementById('filterForm').submit()">
                             <option value="">All Status</option>
                             <option value="active"   <?php echo $filter_status === 'active'   ? 'selected' : ''; ?>>Active</option>
                             <option value="inactive" <?php echo $filter_status === 'inactive' ? 'selected' : ''; ?>>Inactive</option>
                             <option value="draft"    <?php echo $filter_status === 'draft'    ? 'selected' : ''; ?>>Draft</option>
                         </select>
                         
-                        <select name="stock" class="toolbar-select" onchange="document.getElementById('filterForm').submit()">
+                        <select name="stock" class="toolbar-select <?php echo $filter_stock === '' ? 'is-placeholder' : ''; ?>" onchange="document.getElementById('filterForm').submit()">
                             <option value="">All Stock</option>
                             <option value="in"  <?php echo $filter_stock === 'in'  ? 'selected' : ''; ?>>In Stock (&gt;5)</option>
                             <option value="low" <?php echo $filter_stock === 'low' ? 'selected' : ''; ?>>Low Stock (1–5)</option>
@@ -1226,7 +1246,7 @@ $page_title = 'Products';
                 </div>
             </div>
 
-            <!-- ===== TABLE CARD (SEPARATE FROM TOOLBAR) ===== -->
+            <!-- ===== TABLE CARD ===== -->
             <div class="table-card">
                 <?php if (count($products) > 0): ?>
                     <div class="table-inner">
@@ -1297,10 +1317,7 @@ $page_title = 'Products';
                             </div>
                             
                             <div class="pagination-links">
-                                <?php 
-                                // Prev
-                                $prev_disabled = $page <= 1;
-                                ?>
+                                <?php $prev_disabled = $page <= 1; ?>
                                 <a href="<?php echo $prev_disabled ? '#' : '?' . buildQueryString(['page' => $page - 1]); ?>"
                                    class="page-link <?php echo $prev_disabled ? 'disabled' : ''; ?>"
                                    <?php echo $prev_disabled ? 'onclick="return false;"' : ''; ?>>
@@ -1308,7 +1325,6 @@ $page_title = 'Products';
                                 </a>
                                 
                                 <?php
-                                // Page numbers with ellipsis
                                 $range = 2;
                                 $start = max(1, $page - $range);
                                 $end = min($total_pages, $page + $range);
@@ -1331,7 +1347,6 @@ $page_title = 'Products';
                                     echo '<a href="?' . buildQueryString(['page' => $total_pages]) . '" class="page-link">' . $total_pages . '</a>';
                                 }
                                 
-                                // Next
                                 $next_disabled = $page >= $total_pages;
                                 ?>
                                 <a href="<?php echo $next_disabled ? '#' : '?' . buildQueryString(['page' => $page + 1]); ?>"
@@ -1360,7 +1375,7 @@ $page_title = 'Products';
     </div>
 
     <!-- ============================================
-         VIEW PRODUCT MODAL (unchanged)
+         VIEW PRODUCT MODAL
          ============================================ -->
     <div id="viewProductModal" class="modal">
         <div class="modal-content">
@@ -1377,7 +1392,7 @@ $page_title = 'Products';
     </div>
 
     <!-- ============================================
-         ADMIN LIGHTBOX (unchanged)
+         ADMIN LIGHTBOX
          ============================================ -->
     <div class="adm-lightbox" id="admLightbox">
         <button class="adm-lb-close" onclick="closeAdmLightbox()" aria-label="Close">
@@ -1393,7 +1408,7 @@ $page_title = 'Products';
     </div>
 
     <!-- ============================================
-         ADD PRODUCT MODAL (unchanged from previous)
+         ADD PRODUCT MODAL
          ============================================ -->
     <div id="addProductModal" class="modal">
         <div class="modal-content" style="max-width: 650px;">
@@ -1491,7 +1506,7 @@ $page_title = 'Products';
     </div>
 
     <!-- ============================================
-         EDIT PRODUCT MODAL (unchanged from previous)
+         EDIT PRODUCT MODAL
          ============================================ -->
     <div id="editProductModal" class="modal">
         <div class="modal-content" style="max-width: 650px;">
@@ -1623,7 +1638,8 @@ $page_title = 'Products';
         }
         
         // ============================================
-        // SEARCH - LIVE (debounced) + clear button
+        // SEARCH: type freely, submit on Enter or Apply
+        // (no auto-submit while typing so input stays visible)
         // ============================================
         (function() {
             const input = document.getElementById('searchInput');
@@ -1631,25 +1647,30 @@ $page_title = 'Products';
             const form = document.getElementById('filterForm');
             if (!input || !form) return;
             
-            let timer = null;
-            input.addEventListener('input', function() {
-                if (clearBtn) clearBtn.classList.toggle('visible', this.value.length > 0);
-                clearTimeout(timer);
-                timer = setTimeout(() => {
-                    // Reset to page 1 when search changes
-                    const pageInput = form.querySelector('input[name="page"]');
-                    if (pageInput) pageInput.value = '1';
-                    form.submit();
-                }, 600);
-            });
+            function updateClearBtn() {
+                if (clearBtn) clearBtn.classList.toggle('visible', input.value.length > 0);
+            }
+            updateClearBtn();
             
+            // Just show/hide the × button as you type — no form submit
+            input.addEventListener('input', updateClearBtn);
+            
+            // Clear the search and reload
             if (clearBtn) {
                 clearBtn.addEventListener('click', function() {
                     input.value = '';
-                    this.classList.remove('visible');
+                    updateClearBtn();
                     form.submit();
                 });
             }
+            
+            // Optional: press Enter in search box to submit immediately
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    form.submit();
+                }
+            });
         })();
         
         // ============================================
