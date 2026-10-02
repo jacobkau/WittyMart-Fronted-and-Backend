@@ -54,6 +54,7 @@ $admin_actions = [
     'get_category', 'add_category', 'update_category', 'delete_category',
     'get_stats', 'search_orders', 'get_admin',
     'get_product_images', 'delete_product_image',
+    'admin_search_products',
 ];
 
 if (in_array($action, $admin_actions)) {
@@ -210,6 +211,135 @@ try {
                 $response = ['success' => true, 'message' => 'Image deleted'];
             } catch (PDOException $e) {
                 error_log('Delete product image error: ' . $e->getMessage());
+                $response = ['success' => false, 'message' => 'Database error: ' . $e->getMessage()];
+            }
+            break;
+        
+        // ========================================
+        // ADMIN LIVE SEARCH (products.php / manage_products.php)
+        // ========================================
+        
+        case 'admin_search_products':
+            $search        = trim($_GET['q'] ?? '');
+            $filter_cat    = intval($_GET['category'] ?? 0);
+            $filter_status = trim($_GET['status'] ?? '');
+            $filter_stock  = trim($_GET['stock'] ?? '');
+            $sort          = $_GET['sort'] ?? 'newest';
+            $page          = max(1, intval($_GET['page'] ?? 1));
+            $per_page      = 12;
+            $offset        = ($page - 1) * $per_page;
+
+            $where  = [];
+            $params = [];
+
+            if ($search !== '') {
+                $where[] = "(p.name ILIKE ? OR p.description ILIKE ? OR p.sku ILIKE ? OR p.supplier ILIKE ?)";
+                $s = "%$search%";
+                array_push($params, $s, $s, $s, $s);
+            }
+            if ($filter_cat > 0) {
+                $where[] = "p.category_id = ?";
+                $params[] = $filter_cat;
+            }
+            if ($filter_status !== '') {
+                $where[] = "p.status = ?";
+                $params[] = $filter_status;
+            }
+            if ($filter_stock === 'in') {
+                $where[] = "p.stock > 5";
+            } elseif ($filter_stock === 'low') {
+                $where[] = "p.stock > 0 AND p.stock <= 5";
+            } elseif ($filter_stock === 'out') {
+                $where[] = "(p.stock IS NULL OR p.stock <= 0)";
+            }
+            $where_sql = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
+
+            $order_sql = 'ORDER BY p.created_at DESC';
+            switch ($sort) {
+                case 'oldest':     $order_sql = 'ORDER BY p.created_at ASC'; break;
+                case 'name':       $order_sql = 'ORDER BY p.name ASC'; break;
+                case 'price_low':  $order_sql = 'ORDER BY p.price ASC'; break;
+                case 'price_high': $order_sql = 'ORDER BY p.price DESC'; break;
+                case 'stock_low':  $order_sql = 'ORDER BY p.stock ASC NULLS LAST'; break;
+            }
+
+            try {
+                // Total count
+                $stmt = $pdo->prepare("SELECT COUNT(*) FROM products p $where_sql");
+                $stmt->execute($params);
+                $total = intval($stmt->fetchColumn());
+
+                $total_pages = max(1, ceil($total / $per_page));
+                if ($page > $total_pages) {
+                    $page = $total_pages;
+                    $offset = ($page - 1) * $per_page;
+                }
+
+                // Page of results
+                $sql = "
+                    SELECT p.*, c.name as category_name 
+                    FROM products p
+                    LEFT JOIN categories c ON p.category_id = c.id
+                    $where_sql
+                    $order_sql
+                    LIMIT $per_page OFFSET $offset
+                ";
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute($params);
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                // Build HTML rows
+                $html = '';
+                foreach ($rows as $product) {
+                    $img_src  = function_exists('getProductImage')
+                                  ? getProductImage($product['image'] ?? null, $product['image_url'] ?? null)
+                                  : (defined('UPLOAD_URL') ? UPLOAD_URL : '../uploads/products/') . 'no-image.png';
+                    $is_cloud = !empty($product['image_url']) && strpos($product['image_url'], 'cloudinary.com') !== false;
+                    $stock_val = intval($product['stock'] ?? 0);
+                    $status_val = $product['status'] ?? 'active';
+
+                    if ($stock_val <= 0) {
+                        $stock_badge = '<span class="status-badge status-inactive">0</span>';
+                    } elseif ($stock_val <= 5) {
+                        $stock_badge = '<span class="status-badge status-draft">' . $stock_val . '</span>';
+                    } else {
+                        $stock_badge = '<span class="status-badge status-active">' . $stock_val . '</span>';
+                    }
+
+                    $html .= '<tr>'
+                        . '<td>'
+                        .   '<img src="' . htmlspecialchars($img_src) . '" alt="' . htmlspecialchars($product['name']) . '" class="product-image-thumb" onerror="this.src=\'../uploads/products/no-image.png\'">'
+                        .   ($is_cloud ? '<br><span class="cloudinary-badge">Cloud</span>' : '')
+                        . '</td>'
+                        . '<td><strong>' . htmlspecialchars($product['name']) . '</strong></td>'
+                        . '<td><code>' . htmlspecialchars($product['sku'] ?? 'N/A') . '</code></td>'
+                        . '<td>Ksh ' . number_format($product['price'], 0) . '</td>'
+                        . '<td>' . $stock_badge . '</td>'
+                        . '<td>' . htmlspecialchars($product['supplier'] ?? 'N/A') . '</td>'
+                        . '<td>' . htmlspecialchars($product['category_name'] ?? 'Uncategorized') . '</td>'
+                        . '<td><span class="status-badge status-' . htmlspecialchars($status_val) . '">' . htmlspecialchars($status_val) . '</span></td>'
+                        . '<td><div class="action-buttons">'
+                        .   '<button class="btn-view" onclick="viewProduct(' . $product['id'] . ')" title="View details"><i class="fas fa-eye"></i></button>'
+                        .   '<button class="btn-edit" onclick="editProduct(' . $product['id'] . ')" title="Edit"><i class="fas fa-edit"></i></button>'
+                        .   '<form method="POST" onsubmit="return confirm(\'Are you sure you want to delete this product?\')" style="display:inline;">'
+                        .     '<input type="hidden" name="action" value="delete">'
+                        .     '<input type="hidden" name="id" value="' . $product['id'] . '">'
+                        .     '<button type="submit" class="btn-delete" title="Delete"><i class="fas fa-trash"></i></button>'
+                        .   '</form>'
+                        . '</div></td>'
+                        . '</tr>';
+                }
+
+                $response = [
+                    'success'     => true,
+                    'html'        => $html,
+                    'total'       => $total,
+                    'shown'       => count($rows),
+                    'total_pages' => $total_pages,
+                    'page'        => $page,
+                ];
+            } catch (PDOException $e) {
+                error_log('Admin search error: ' . $e->getMessage());
                 $response = ['success' => false, 'message' => 'Database error: ' . $e->getMessage()];
             }
             break;
