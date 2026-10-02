@@ -13,12 +13,43 @@ global $pdo;
 $message = '';
 $messageType = '';
 
+/**
+ * Upload multiple files to Cloudinary.
+ * Returns array of ['url' => ..., 'public_id' => ...] for successful uploads.
+ */
+function uploadMultipleProductImages($files) {
+    $uploaded = [];
+    if (empty($files['name'][0])) return $uploaded;
+    
+    $count = count($files['name']);
+    for ($i = 0; $i < $count; $i++) {
+        if ($files['error'][$i] !== UPLOAD_ERR_OK) continue;
+        if ($files['size'][$i] > 5 * 1024 * 1024) continue; // 5MB cap
+        
+        $tmp = $files['tmp_name'][$i];
+        $type = mime_content_type($tmp);
+        if (!in_array($type, ['image/jpeg','image/png','image/gif','image/webp'])) continue;
+        
+        $result = uploadToCloudinary($tmp, 'products');
+        if (!empty($result['success'])) {
+            $uploaded[] = [
+                'url'       => $result['url'],
+                'public_id' => $result['public_id'],
+            ];
+        }
+    }
+    return $uploaded;
+}
+
 // Handle actions
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     
     try {
         switch ($action) {
+            // ============================================
+            // ADD PRODUCT
+            // ============================================
             case 'add':
                 $name = sanitize($_POST['name'] ?? '');
                 $description = sanitize($_POST['description'] ?? '');
@@ -34,28 +65,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $image_name = null;
                 $upload_message = '';
                 
+                // Primary image (single file input named "image")
                 if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
                     $upload_result = uploadToCloudinary($_FILES['image']['tmp_name'], 'products');
                     
                     if ($upload_result['success']) {
                         $image_url = $upload_result['url'];
                         $image_public_id = $upload_result['public_id'];
-                        $upload_message = 'Image uploaded to Cloudinary successfully!';
+                        $upload_message = 'Main image uploaded to Cloudinary. ';
                         
                         $upload_dir = UPLOAD_DIR;
                         if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
                         $image_name = time() . '_' . basename($_FILES['image']['name']);
                         move_uploaded_file($_FILES['image']['tmp_name'], $upload_dir . $image_name);
-                    } else {
-                        $upload_dir = UPLOAD_DIR;
-                        if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
-                        $image_name = time() . '_' . basename($_FILES['image']['name']);
-                        if (move_uploaded_file($_FILES['image']['tmp_name'], $upload_dir . $image_name)) {
-                            $upload_message = 'Image saved locally (Cloudinary upload failed)';
-                        } else {
-                            $image_name = null;
-                            $upload_message = 'Image upload failed';
-                        }
+                    }
+                }
+                
+                // Additional gallery images
+                $gallery_uploads = [];
+                if (isset($_FILES['product_images']) && !empty($_FILES['product_images']['name'][0])) {
+                    $gallery_uploads = uploadMultipleProductImages($_FILES['product_images']);
+                    if (!empty($gallery_uploads)) {
+                        $upload_message .= count($gallery_uploads) . ' gallery image(s) uploaded.';
                     }
                 }
                 
@@ -72,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ])) {
                         $new_product_id = $pdo->lastInsertId();
                         
-                        // Insert primary image row in product_images
+                        // Insert primary image
                         if ($image_url) {
                             try {
                                 $stmtImg = $pdo->prepare("
@@ -83,6 +114,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $stmtImg->execute([$new_product_id, $image_url, $image_public_id]);
                             } catch (PDOException $e) {
                                 error_log('Insert primary image row error: ' . $e->getMessage());
+                            }
+                        }
+                        
+                        // Insert additional gallery images
+                        $order = 1;
+                        foreach ($gallery_uploads as $img) {
+                            try {
+                                $stmtImg = $pdo->prepare("
+                                    INSERT INTO product_images 
+                                    (product_id, image_url, image_public_id, display_order, is_primary)
+                                    VALUES (?, ?, ?, ?, FALSE)
+                                ");
+                                $stmtImg->execute([$new_product_id, $img['url'], $img['public_id'], $order++]);
+                            } catch (PDOException $e) {
+                                error_log('Insert gallery image error: ' . $e->getMessage());
                             }
                         }
                         
@@ -102,6 +148,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 break;
                 
+            // ============================================
+            // EDIT PRODUCT
+            // ============================================
             case 'edit':
                 $id = intval($_POST['id'] ?? 0);
                 $name = sanitize($_POST['name'] ?? '');
@@ -123,12 +172,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $upload_message = '';
                 
                 if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                    // Delete old Cloudinary image
                     if (!empty($existing_product['image_public_id'])) {
-                        $delete_result = deleteFromCloudinary($existing_product['image_public_id']);
-                        if ($delete_result['success']) {
-                            $upload_message = 'Old image deleted from Cloudinary. ';
-                        }
+                        deleteFromCloudinary($existing_product['image_public_id']);
                     }
                     
                     $upload_result = uploadToCloudinary($_FILES['image']['tmp_name'], 'products');
@@ -136,22 +181,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($upload_result['success']) {
                         $image_url = $upload_result['url'];
                         $image_public_id = $upload_result['public_id'];
-                        $upload_message .= 'New image uploaded to Cloudinary!';
+                        $upload_message = 'New main image uploaded. ';
                         
                         $upload_dir = UPLOAD_DIR;
                         if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
                         $image_name = time() . '_' . basename($_FILES['image']['name']);
                         move_uploaded_file($_FILES['image']['tmp_name'], $upload_dir . $image_name);
-                    } else {
-                        $upload_dir = UPLOAD_DIR;
-                        if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
-                        $image_name = time() . '_' . basename($_FILES['image']['name']);
-                        if (move_uploaded_file($_FILES['image']['tmp_name'], $upload_dir . $image_name)) {
-                            $upload_message = 'Image saved locally (Cloudinary upload failed)';
-                        } else {
-                            $image_name = null;
-                            $upload_message = 'Image upload failed';
-                        }
                     }
                 }
                 
@@ -173,7 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $result = $stmt->execute($params);
                     
                     if ($result) {
-                        // Keep primary image row in sync
+                        // Sync primary image row
                         if ($image_url !== null) {
                             try {
                                 $stmtUpd = $pdo->prepare("
@@ -196,6 +231,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
                         }
                         
+                        // ===== HANDLE ADDITIONAL GALLERY IMAGES =====
+                        if (isset($_FILES['product_images']) && !empty($_FILES['product_images']['name'][0])) {
+                            $new_gallery = uploadMultipleProductImages($_FILES['product_images']);
+                            
+                            if (!empty($new_gallery)) {
+                                $stmtMax = $pdo->prepare("SELECT COALESCE(MAX(display_order), 0) FROM product_images WHERE product_id = ?");
+                                $stmtMax->execute([$id]);
+                                $next_order = intval($stmtMax->fetchColumn()) + 1;
+                                
+                                foreach ($new_gallery as $img) {
+                                    try {
+                                        $stmtIns = $pdo->prepare("
+                                            INSERT INTO product_images 
+                                            (product_id, image_url, image_public_id, display_order, is_primary)
+                                            VALUES (?, ?, ?, ?, FALSE)
+                                        ");
+                                        $stmtIns->execute([$id, $img['url'], $img['public_id'], $next_order++]);
+                                    } catch (PDOException $e) {
+                                        error_log('Insert edit gallery image error: ' . $e->getMessage());
+                                    }
+                                }
+                                $upload_message .= count($new_gallery) . ' gallery image(s) added.';
+                            }
+                        }
+                        
                         if (function_exists('logActivity')) {
                             logActivity('update_product', 'Updated product: ' . $name . ' (ID: ' . $id . ')',
                                 $_SESSION['user_id'], $_SESSION['user_name']);
@@ -212,6 +272,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 break;
                 
+            // ============================================
+            // DELETE PRODUCT
+            // ============================================
             case 'delete':
                 $id = intval($_POST['id']);
                 
@@ -223,7 +286,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = 'Cannot delete product as it is in a cart.';
                     $messageType = 'error';
                 } else {
-                    // Delete all gallery images from Cloudinary
                     try {
                         $stmt = $pdo->prepare("SELECT image_public_id FROM product_images WHERE product_id = ?");
                         $stmt->execute([$id]);
@@ -236,7 +298,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         error_log('Delete gallery images error: ' . $e->getMessage());
                     }
                     
-                    // Also delete main image from Cloudinary
                     $stmt = $pdo->prepare("SELECT image_public_id FROM products WHERE id = ?");
                     $stmt->execute([$id]);
                     $product = $stmt->fetch();
@@ -256,6 +317,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $message = 'Failed to delete product.';
                         $messageType = 'error';
                     }
+                }
+                break;
+                
+            // ============================================
+            // DELETE A SINGLE GALLERY IMAGE
+            // ============================================
+            case 'delete_image':
+                $img_id = intval($_POST['image_id'] ?? 0);
+                
+                if (!$img_id) {
+                    $message = 'Invalid image ID';
+                    $messageType = 'error';
+                    break;
+                }
+                
+                try {
+                    $stmt = $pdo->prepare("SELECT image_public_id, product_id, is_primary FROM product_images WHERE id = ?");
+                    $stmt->execute([$img_id]);
+                    $img = $stmt->fetch();
+                    
+                    if (!$img) {
+                        $message = 'Image not found';
+                        $messageType = 'error';
+                        break;
+                    }
+                    
+                    if (!empty($img['image_public_id'])) {
+                        deleteFromCloudinary($img['image_public_id']);
+                    }
+                    
+                    $stmt = $pdo->prepare("DELETE FROM product_images WHERE id = ?");
+                    $stmt->execute([$img_id]);
+                    
+                    if ($img['is_primary']) {
+                        $stmt = $pdo->prepare("
+                            UPDATE product_images 
+                            SET is_primary = TRUE 
+                            WHERE id = (
+                                SELECT id FROM product_images 
+                                WHERE product_id = ? 
+                                ORDER BY display_order ASC, id ASC 
+                                LIMIT 1
+                            )
+                        ");
+                        $stmt->execute([$img['product_id']]);
+                    }
+                    
+                    $message = 'Image deleted successfully!';
+                    $messageType = 'success';
+                } catch (PDOException $e) {
+                    error_log('Delete image error: ' . $e->getMessage());
+                    $message = 'Database error: ' . $e->getMessage();
+                    $messageType = 'error';
                 }
                 break;
         }
@@ -335,13 +449,10 @@ $page_title = 'Products';
         .status-active { background-color: #28a745; }
         .status-inactive { background-color: #dc3545; }
         .status-draft { background-color: #ffc107; color: #333; }
-        .status-deleted { background-color: #6c757d; }
         
         .form-row {
             display: grid; grid-template-columns: 1fr 1fr; gap: 15px;
         }
-        .image-preview { max-height: 100px; margin: 10px 0; }
-        .image-preview img { max-height: 100px; border-radius: 4px; }
         .file-input-wrapper {
             position: relative; overflow: hidden;
             display: inline-block; width: 100%;
@@ -379,6 +490,100 @@ $page_title = 'Products';
             background-color: #3448C5; color: white;
             font-size: 10px; padding: 2px 6px;
             border-radius: 10px; margin-left: 5px;
+        }
+        
+        /* ===== IMAGE PREVIEW GRID ===== */
+        .image-preview-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+            min-height: 40px;
+        }
+        
+        .preview-thumb {
+            position: relative;
+            width: 70px;
+            height: 70px;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 2px solid #e0e0e0;
+            background: #f5f5f5;
+        }
+        .preview-thumb img {
+            width: 100%; height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .preview-thumb .thumb-label {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            background: rgba(5, 87, 60, 0.9);
+            color: #fff;
+            font-size: 9px;
+            text-align: center;
+            font-weight: 700;
+            padding: 1px 0;
+            letter-spacing: 0.3px;
+        }
+        
+        /* Existing gallery image thumbs (in edit modal) */
+        .existing-thumb {
+            position: relative;
+            width: 70px;
+            height: 70px;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 2px solid #e0e0e0;
+            background: #f5f5f5;
+        }
+        .existing-thumb.primary {
+            border-color: #05573c;
+            box-shadow: 0 0 0 2px rgba(5, 87, 60, 0.15);
+        }
+        .existing-thumb img {
+            width: 100%; height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .existing-thumb .thumb-label {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            background: rgba(5, 87, 60, 0.9);
+            color: #fff;
+            font-size: 9px;
+            text-align: center;
+            font-weight: 700;
+            padding: 1px 0;
+            letter-spacing: 0.3px;
+        }
+        .existing-thumb .thumb-delete {
+            position: absolute;
+            top: 2px; right: 2px;
+            background: rgba(220, 53, 69, 0.95);
+            color: #fff;
+            border: none;
+            width: 20px; height: 20px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 11px;
+            display: flex; align-items: center; justify-content: center;
+            padding: 0;
+            z-index: 2;
+        }
+        .existing-thumb .thumb-delete:hover {
+            background: #dc3545;
+            transform: scale(1.1);
+        }
+        
+        /* Main image preview (edit) */
+        .main-image-preview {
+            margin-bottom: 8px;
+        }
+        .main-image-preview img {
+            max-height: 100px;
+            border-radius: 6px;
+            border: 2px solid #e0e0e0;
         }
         
         /* ===== VIEW PRODUCT MODAL ===== */
@@ -453,9 +658,7 @@ $page_title = 'Products';
         .view-thumb:hover { transform: translateY(-2px); }
         
         .view-details h2 {
-            margin: 0 0 8px 0;
-            color: #222;
-            font-size: 22px;
+            margin: 0 0 8px 0; color: #222; font-size: 22px;
         }
         .view-details .view-price {
             font-size: 26px; font-weight: 700;
@@ -504,16 +707,14 @@ $page_title = 'Products';
         .adm-lightbox.active { display: flex; }
         .adm-lightbox img {
             max-width: 95vw; max-height: 90vh;
-            object-fit: contain;
-            border-radius: 6px;
+            object-fit: contain; border-radius: 6px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.6);
         }
         .adm-lightbox .adm-lb-close {
             position: absolute; top: 20px; right: 24px;
             background: rgba(255,255,255,0.15); color: #fff;
             border: none; width: 44px; height: 44px;
-            border-radius: 50%; cursor: pointer;
-            font-size: 22px;
+            border-radius: 50%; cursor: pointer; font-size: 22px;
             display: flex; align-items: center; justify-content: center;
         }
         .adm-lightbox .adm-lb-close:hover { background: rgba(255,255,255,0.3); }
@@ -662,7 +863,7 @@ $page_title = 'Products';
          ADD PRODUCT MODAL
          ============================================ -->
     <div id="addProductModal" class="modal">
-        <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-content" style="max-width: 650px;">
             <div class="modal-header">
                 <h2><i class="fas fa-plus-circle"></i> Add Product</h2>
                 <span class="close" onclick="closeModal('addProductModal')">&times;</span>
@@ -716,15 +917,16 @@ $page_title = 'Products';
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label><i class="fas fa-image"></i> Product Image</label>
+                        <label><i class="fas fa-image"></i> Main Image</label>
                         <div class="file-input-wrapper">
                             <button type="button" class="btn-secondary" style="width:100%;">
-                                <i class="fas fa-upload"></i> Choose Image
+                                <i class="fas fa-upload"></i> Choose Main Image
                             </button>
-                            <input type="file" name="image" accept="image/*">
+                            <input type="file" name="image" accept="image/*" id="addMainImage" onchange="previewImages(this, 'addMainPreview')">
                         </div>
+                        <div class="image-preview-grid" id="addMainPreview"></div>
                         <small style="display:block; margin-top:5px; color:#666;">
-                            <i class="fas fa-cloud-upload-alt"></i> Will be uploaded to Cloudinary
+                            <i class="fas fa-cloud-upload-alt"></i> This becomes the primary image.
                         </small>
                     </div>
                     <div class="form-group">
@@ -735,6 +937,20 @@ $page_title = 'Products';
                             <option value="draft">Draft</option>
                         </select>
                     </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-images"></i> Additional Gallery Images</label>
+                    <div class="file-input-wrapper">
+                        <button type="button" class="btn-secondary" style="width:100%;">
+                            <i class="fas fa-upload"></i> Choose Multiple Images
+                        </button>
+                        <input type="file" name="product_images[]" accept="image/*" multiple id="addGalleryImages" onchange="previewImages(this, 'addGalleryPreview', true)">
+                    </div>
+                    <div class="image-preview-grid" id="addGalleryPreview"></div>
+                    <small style="display:block; margin-top:5px; color:#666;">
+                        <i class="fas fa-cloud-upload-alt"></i> Select multiple. Max 5MB each.
+                    </small>
                 </div>
                 
                 <button type="submit" class="btn-primary" style="width:100%; margin-top:10px;">
@@ -748,7 +964,7 @@ $page_title = 'Products';
          EDIT PRODUCT MODAL
          ============================================ -->
     <div id="editProductModal" class="modal">
-        <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-content" style="max-width: 650px;">
             <div class="modal-header">
                 <h2><i class="fas fa-edit"></i> Edit Product</h2>
                 <span class="close" onclick="closeModal('editProductModal')">&times;</span>
@@ -759,13 +975,13 @@ $page_title = 'Products';
                 
                 <div class="form-group">
                     <label><i class="fas fa-tag"></i> Product Name *</label>
-                    <input type="text" name="name" id="editProductName" required placeholder="Enter product name">
+                    <input type="text" name="name" id="editProductName" required>
                 </div>
                 
                 <div class="form-row">
                     <div class="form-group">
                         <label><i class="fas fa-money-bill"></i> Price (Ksh) *</label>
-                        <input type="number" name="price" id="editProductPrice" required step="0.01" placeholder="0.00">
+                        <input type="number" name="price" id="editProductPrice" required step="0.01">
                     </div>
                     <div class="form-group">
                         <label><i class="fas fa-folder"></i> Category</label>
@@ -782,7 +998,7 @@ $page_title = 'Products';
                 
                 <div class="form-group">
                     <label><i class="fas fa-align-left"></i> Description</label>
-                    <textarea name="description" id="editProductDescription" rows="3" placeholder="Enter product description"></textarea>
+                    <textarea name="description" id="editProductDescription" rows="3"></textarea>
                 </div>
                 
                 <div class="form-row">
@@ -792,27 +1008,28 @@ $page_title = 'Products';
                     </div>
                     <div class="form-group">
                         <label><i class="fas fa-barcode"></i> SKU</label>
-                        <input type="text" name="sku" id="editProductSku" placeholder="Optional">
+                        <input type="text" name="sku" id="editProductSku">
                     </div>
                 </div>
                 
                 <div class="form-group">
                     <label><i class="fas fa-truck"></i> Supplier</label>
-                    <input type="text" name="supplier" id="editProductSupplier" placeholder="Supplier name">
+                    <input type="text" name="supplier" id="editProductSupplier">
                 </div>
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label><i class="fas fa-image"></i> Product Image</label>
-                        <div id="editProductImagePreview" style="margin-bottom:10px;"></div>
+                        <label><i class="fas fa-image"></i> Main Image</label>
+                        <div class="main-image-preview" id="editProductImagePreview"></div>
                         <div class="file-input-wrapper">
                             <button type="button" class="btn-secondary" style="width:100%;">
-                                <i class="fas fa-upload"></i> Change Image
+                                <i class="fas fa-upload"></i> Change Main Image
                             </button>
-                            <input type="file" name="image" accept="image/*">
+                            <input type="file" name="image" accept="image/*" onchange="previewImages(this, 'editMainPreview')">
                         </div>
+                        <div class="image-preview-grid" id="editMainPreview"></div>
                         <small style="display:block; margin-top:5px; color:#666;">
-                            <i class="fas fa-cloud-upload-alt"></i> Will be uploaded to Cloudinary
+                            Leave empty to keep current.
                         </small>
                     </div>
                     <div class="form-group">
@@ -823,6 +1040,22 @@ $page_title = 'Products';
                             <option value="draft">Draft</option>
                         </select>
                     </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-images"></i> Existing Gallery</label>
+                    <div class="image-preview-grid" id="editExistingGallery"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-plus-circle"></i> Add More Gallery Images</label>
+                    <div class="file-input-wrapper">
+                        <button type="button" class="btn-secondary" style="width:100%;">
+                            <i class="fas fa-upload"></i> Choose Multiple Images
+                        </button>
+                        <input type="file" name="product_images[]" accept="image/*" multiple onchange="previewImages(this, 'editNewGalleryPreview', true)">
+                    </div>
+                    <div class="image-preview-grid" id="editNewGalleryPreview"></div>
                 </div>
                 
                 <button type="submit" class="btn-primary" style="width:100%; margin-top:10px;">
@@ -863,26 +1096,105 @@ $page_title = 'Products';
         }
         
         // ============================================
+        // LIVE IMAGE PREVIEW
+        // ============================================
+        function previewImages(input, previewContainerId, multiple) {
+            const container = document.getElementById(previewContainerId);
+            if (!container) return;
+            container.innerHTML = '';
+            
+            if (!input.files || input.files.length === 0) return;
+            
+            const files = multiple ? Array.from(input.files) : [input.files[0]];
+            
+            files.forEach((file, index) => {
+                if (!file.type.startsWith('image/')) return;
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const wrap = document.createElement('div');
+                    wrap.className = 'preview-thumb';
+                    wrap.innerHTML = `
+                        <img src="${e.target.result}" alt="Preview">
+                        ${multiple ? `<span class="thumb-label">#${index + 1}</span>` : ''}
+                    `;
+                    container.appendChild(wrap);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+        
+        // ============================================
+        // LOAD EXISTING GALLERY (Edit modal)
+        // ============================================
+        function loadExistingGallery(productId) {
+            const container = document.getElementById('editExistingGallery');
+            container.innerHTML = '<small style="color:#888;">Loading…</small>';
+            
+            fetch('includes/ajax.php?action=get_product_images&id=' + productId)
+                .then(r => r.json())
+                .then(res => {
+                    container.innerHTML = '';
+                    
+                    if (!res.success || !res.images || !res.images.length) {
+                        container.innerHTML = '<small style="color:#888;">No gallery images</small>';
+                        return;
+                    }
+                    
+                    res.images.forEach(img => {
+                        const isPrimary = img.is_primary == 1 || img.is_primary === true;
+                        const wrap = document.createElement('div');
+                        wrap.className = 'existing-thumb' + (isPrimary ? ' primary' : '');
+                        wrap.innerHTML = `
+                            <img src="${img.image_url}" alt="Gallery image">
+                            ${isPrimary ? '<span class="thumb-label">MAIN</span>' : ''}
+                            ${!isPrimary ? `<button type="button" class="thumb-delete" onclick="deleteGalleryImage(${img.id})" title="Delete">×</button>` : ''}
+                        `;
+                        container.appendChild(wrap);
+                    });
+                })
+                .catch(err => {
+                    console.error(err);
+                    container.innerHTML = '<small style="color:#c00;">Failed to load gallery</small>';
+                });
+        }
+        
+        // Delete a single gallery image
+        function deleteGalleryImage(imageId) {
+            if (!confirm('Delete this gallery image?')) return;
+            
+            const fd = new FormData();
+            fd.append('action', 'delete_image');
+            fd.append('image_id', imageId);
+            
+            fetch('products.php', { method: 'POST', body: fd })
+                .then(() => {
+                    // Reload the gallery
+                    const pid = document.getElementById('editProductId').value;
+                    loadExistingGallery(pid);
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('Failed to delete image');
+                });
+        }
+        
+        // ============================================
         // VIEW PRODUCT MODAL
         // ============================================
-        let viewGallery = [];      // array of image URLs
+        let viewGallery = [];
         let viewGalleryIndex = 0;
-        let viewProductName = '';
         
         function viewProduct(productId) {
             const data = productData[productId];
             if (!data) { alert('Product not found'); return; }
             
-            viewProductName = data.name;
-            
-            // Show loading state
             document.getElementById('viewProductContent').innerHTML =
                 '<p style="text-align:center;padding:40px;color:#888;">' +
                 '<i class="fas fa-spinner fa-spin"></i> Loading gallery…</p>';
             
             openModal('viewProductModal');
             
-            // Fetch gallery images
             fetch('includes/ajax.php?action=get_product_images&id=' + productId)
                 .then(r => r.json())
                 .then(res => {
@@ -891,7 +1203,6 @@ $page_title = 'Products';
                     if (res.success && res.images && res.images.length) {
                         images = res.images.map(i => i.image_url);
                     } else {
-                        // Fallback to main image
                         if (data.image_url) images.push(data.image_url);
                         else if (data.image) images.push('../uploads/products/' + data.image);
                         else images.push('../uploads/products/no-image.png');
@@ -899,12 +1210,10 @@ $page_title = 'Products';
                     
                     viewGallery = images;
                     viewGalleryIndex = 0;
-                    
                     renderViewProduct(data);
                 })
                 .catch(err => {
                     console.error(err);
-                    // Fallback to main image only
                     viewGallery = [];
                     if (data.image_url) viewGallery.push(data.image_url);
                     else if (data.image) viewGallery.push('../uploads/products/' + data.image);
@@ -981,11 +1290,9 @@ $page_title = 'Products';
             
             document.getElementById('viewProductContent').innerHTML = html;
             
-            // Attach thumb handlers
             document.querySelectorAll('#viewThumbs .view-thumb').forEach(thumb => {
                 thumb.addEventListener('click', function() {
-                    const idx = parseInt(this.dataset.index);
-                    setViewImage(idx);
+                    setViewImage(parseInt(this.dataset.index));
                 });
             });
         }
@@ -1060,16 +1367,24 @@ $page_title = 'Products';
             document.getElementById('editProductSku').value = data.sku;
             document.getElementById('editProductSupplier').value = data.supplier;
             
+            // Main image preview
             var imagePreview = document.getElementById('editProductImagePreview');
             if (data.image_url) {
-                imagePreview.innerHTML = '<img src="' + data.image_url + '" alt="Current image" style="max-height:100px; border-radius:4px;"><br>' +
+                imagePreview.innerHTML = '<img src="' + data.image_url + '" alt="Current image"><br>' +
                                         '<small style="color:#666;"><i class="fas fa-cloud" style="color:#3448C5;"></i> Cloudinary image</small>';
             } else if (data.image) {
-                imagePreview.innerHTML = '<img src="../uploads/products/' + data.image + '" alt="Current image" style="max-height:100px; border-radius:4px;"><br>' +
+                imagePreview.innerHTML = '<img src="../uploads/products/' + data.image + '" alt="Current image"><br>' +
                                         '<small style="color:#666;">Local image: ' + data.image + '</small>';
             } else {
                 imagePreview.innerHTML = '<small style="color:#666;">No image uploaded</small>';
             }
+            
+            // Clear any leftover preview grids
+            document.getElementById('editMainPreview').innerHTML = '';
+            document.getElementById('editNewGalleryPreview').innerHTML = '';
+            
+            // Load gallery
+            loadExistingGallery(productId);
             
             openModal('editProductModal');
         }
@@ -1094,7 +1409,6 @@ $page_title = 'Products';
         }
         
         document.addEventListener('keydown', function(e) {
-            // Close lightbox first
             if (document.getElementById('admLightbox').classList.contains('active')) {
                 if (e.key === 'Escape') closeAdmLightbox();
                 if (e.key === 'ArrowLeft') admLightboxPrev();
@@ -1102,7 +1416,6 @@ $page_title = 'Products';
                 return;
             }
             
-            // Close modals
             if (e.key === 'Escape') {
                 document.querySelectorAll('.modal').forEach(function(modal) {
                     modal.style.display = 'none';
@@ -1111,10 +1424,17 @@ $page_title = 'Products';
             }
         });
         
-        // File input styling
+        // File input button label update
         document.querySelectorAll('.file-input-wrapper input[type="file"]').forEach(function(input) {
             input.addEventListener('change', function() {
-                var fileName = this.files[0] ? this.files[0].name : 'No file chosen';
+                var fileName;
+                if (this.multiple && this.files.length > 1) {
+                    fileName = this.files.length + ' files selected';
+                } else if (this.files.length > 0) {
+                    fileName = this.files[0].name;
+                } else {
+                    fileName = 'No file chosen';
+                }
                 var parent = this.closest('.file-input-wrapper');
                 var btn = parent.querySelector('button');
                 btn.innerHTML = '<i class="fas fa-file"></i> ' + fileName;
