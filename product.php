@@ -1,5 +1,6 @@
 <?php
 require_once 'includes/config.php';
+require_once 'includes/cloudinary_helper.php';
 
 $product_id = intval($_GET['id'] ?? 0);
 
@@ -8,7 +9,6 @@ if (!$product_id) {
     exit();
 }
 
-// ===== GET PRODUCT DETAILS =====
 try {
     $stmt = $pdo->prepare("
         SELECT p.*, c.name as category_name 
@@ -24,7 +24,6 @@ try {
         exit();
     }
     
-    // ===== GET RELATED PRODUCTS (same category) =====
     $stmt = $pdo->prepare("
         SELECT p.*, c.name as category_name 
         FROM products p
@@ -44,7 +43,7 @@ try {
 
 $isLoggedIn = isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
 
-// ===== CHECK IF PRODUCT IS IN USER'S WISHLIST =====
+// Wishlist
 $in_wishlist = false;
 if ($isLoggedIn) {
     try {
@@ -56,7 +55,7 @@ if ($isLoggedIn) {
     }
 }
 
-// ===== CHECK IF PRODUCT IS IN USER'S CART =====
+// Cart
 $cart_quantity = 0;
 if ($isLoggedIn) {
     try {
@@ -69,11 +68,15 @@ if ($isLoggedIn) {
     }
 }
 
-$page_title = $product['name'];
-$stock_val = intval($product['stock'] ?? 0);
-$is_cloudinary = !empty($product['image_url']) && strpos($product['image_url'], 'cloudinary.com') !== false;
-$in_cart = $cart_quantity > 0;
-$product_image = getProductImage($product['image'] ?? null, $product['image_url'] ?? null);
+// ===== GALLERY IMAGES =====
+$gallery = getProductImages($product_id, $product);
+$primary_image = $gallery[0]['image_url'] ?? getProductImage($product['image'] ?? null, $product['image_url'] ?? null);
+$total_images  = count($gallery);
+
+$page_title     = $product['name'];
+$stock_val      = intval($product['stock'] ?? 0);
+$is_cloudinary  = !empty($product['image_url']) && strpos($product['image_url'], 'cloudinary.com') !== false;
+$in_cart        = $cart_quantity > 0;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -85,11 +88,7 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
     <style>
-        .product-detail {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
+        .product-detail { max-width: 1200px; margin: 0 auto; padding: 20px; }
         
         .product-detail-grid {
             display: grid;
@@ -110,224 +109,147 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
             background: #f5f5f5;
         }
         
-        .product-image img {
+        .product-image img#mainProductImage {
             width: 100%;
             height: 400px;
             object-fit: cover;
             border-radius: 8px;
-            transition: transform 0.4s ease;
+            transition: opacity 0.25s ease;
             display: block;
         }
         
-        .product-image:hover img {
-            transform: scale(1.04);
-        }
-        
         .product-image .cloudinary-badge {
-            position: absolute;
-            top: 12px;
-            right: 12px;
-            background: rgba(52, 72, 197, 0.9);
-            color: #fff;
-            font-size: 11px;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-            z-index: 2;
+            position: absolute; top: 12px; right: 12px;
+            background: rgba(52, 72, 197, 0.9); color: #fff;
+            font-size: 11px; padding: 4px 12px; border-radius: 12px;
+            font-weight: 600; letter-spacing: 0.5px; z-index: 2;
         }
         
         .product-image .zoom-hint {
-            position: absolute;
-            bottom: 12px;
-            right: 12px;
-            background: rgba(0, 0, 0, 0.7);
-            color: #fff;
-            font-size: 11px;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            pointer-events: none;
-            transition: opacity 0.3s ease;
-            z-index: 2;
+            position: absolute; bottom: 12px; right: 12px;
+            background: rgba(0,0,0,0.7); color: #fff;
+            font-size: 11px; padding: 6px 12px; border-radius: 20px;
+            font-weight: 600; display: flex; align-items: center; gap: 6px;
+            pointer-events: none; transition: opacity 0.3s ease; z-index: 2;
+        }
+        .product-image:hover .zoom-hint { opacity: 0; }
+        
+        /* Image counter */
+        .image-counter {
+            position: absolute; top: 12px; left: 12px;
+            background: rgba(0,0,0,0.7); color: #fff;
+            font-size: 11px; padding: 4px 10px; border-radius: 12px;
+            font-weight: 600; z-index: 2;
+            display: flex; align-items: center; gap: 5px;
         }
         
-        .product-image:hover .zoom-hint {
-            opacity: 0;
+        /* Gallery arrows */
+        .gallery-nav {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            background: rgba(255,255,255,0.9); color: #333;
+            border: none; width: 40px; height: 40px;
+            border-radius: 50%; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; transition: all 0.25s ease; z-index: 4;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+        }
+        .gallery-nav:hover {
+            background: #05573c; color: #fff;
+            transform: translateY(-50%) scale(1.1);
+        }
+        .gallery-nav.prev { left: 12px; }
+        .gallery-nav.next { right: 12px; }
+        
+        /* Thumbnails */
+        .gallery-thumbs {
+            display: flex; gap: 8px; margin-top: 12px;
+            overflow-x: auto; padding: 4px 2px; scrollbar-width: thin;
+        }
+        .gallery-thumbs::-webkit-scrollbar { height: 6px; }
+        .gallery-thumbs::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+        
+        .gallery-thumb {
+            flex: 0 0 70px; width: 70px; height: 70px;
+            border-radius: 6px; overflow: hidden; cursor: pointer;
+            border: 2px solid transparent; transition: all 0.25s ease;
+            background: #f5f5f5;
+        }
+        .gallery-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .gallery-thumb:hover { border-color: #0a7a54; transform: translateY(-2px); }
+        .gallery-thumb.active {
+            border-color: #05573c;
+            box-shadow: 0 0 0 3px rgba(5, 87, 60, 0.15);
         }
         
-        .product-info h1 {
-            font-size: 28px;
-            margin: 0 0 10px 0;
-            color: #333;
-        }
+        .product-info h1 { font-size: 28px; margin: 0 0 10px 0; color: #333; }
         
-        .product-meta {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-        }
-        
+        .product-meta { display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; }
         .product-meta .category {
-            background: #f0f0f0;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 13px;
-            color: #666;
+            background: #f0f0f0; padding: 4px 12px;
+            border-radius: 12px; font-size: 13px; color: #666;
         }
-        
         .product-meta .stock {
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 13px;
-            font-weight: 600;
+            padding: 4px 12px; border-radius: 12px;
+            font-size: 13px; font-weight: 600;
         }
+        .product-meta .in-stock { background: #d4edda; color: #155724; }
+        .product-meta .out-of-stock { background: #f8d7da; color: #721c24; }
         
-        .product-meta .in-stock {
-            background: #d4edda;
-            color: #155724;
-        }
+        .product-info .price { font-size: 32px; font-weight: 700; color: #05573c; margin: 15px 0; }
+        .product-info .description { color: #555; line-height: 1.8; margin: 20px 0; }
         
-        .product-meta .out-of-stock {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        
-        .product-info .price {
-            font-size: 32px;
-            font-weight: 700;
-            color: #05573c;
-            margin: 15px 0;
-        }
-        
-        .product-info .description {
-            color: #555;
-            line-height: 1.8;
-            margin: 20px 0;
-        }
-        
-        /* ===== ACTION BUTTONS ===== */
         .product-actions {
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
+            display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
         }
         
         .product-info .add-to-cart {
-            background: #05573c;
-            color: #fff;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            min-width: 200px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
+            background: #05573c; color: #fff; border: none;
+            padding: 12px 30px; border-radius: 6px; font-size: 16px;
+            font-weight: 600; cursor: pointer; transition: all 0.3s ease;
+            min-width: 200px; display: inline-flex; align-items: center;
+            justify-content: center; gap: 8px;
         }
-        
         .product-info .add-to-cart:hover:not(:disabled) { background: #03402c; }
         .product-info .add-to-cart:disabled { opacity: 0.7; cursor: not-allowed; }
         .product-info .add-to-cart.added { background: #28a745; }
         .product-info .add-to-cart.error { background: #dc3545; }
         
-        /* ===== IN-CART STATE ===== */
         .product-info .in-cart-btn {
-            background: #e8f5f0;
-            color: #05573c;
-            border: 2px solid #05573c;
-            padding: 12px 24px;
-            border-radius: 6px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: default;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            min-width: 200px;
-            justify-content: center;
+            background: #e8f5f0; color: #05573c;
+            border: 2px solid #05573c; padding: 12px 24px;
+            border-radius: 6px; font-size: 15px; font-weight: 600;
+            cursor: default; display: inline-flex; align-items: center;
+            gap: 8px; min-width: 200px; justify-content: center;
         }
-        
-        .product-info .in-cart-btn i {
-            color: #05573c;
-        }
+        .product-info .in-cart-btn i { color: #05573c; }
         
         .product-info .add-more-btn {
-            background: #05573c;
-            color: #fff;
-            border: none;
-            width: 48px;
-            height: 48px;
-            border-radius: 6px;
-            font-size: 20px;
-            font-weight: 700;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
+            background: #05573c; color: #fff; border: none;
+            width: 48px; height: 48px; border-radius: 6px;
+            font-size: 20px; font-weight: 700; cursor: pointer;
+            display: inline-flex; align-items: center; justify-content: center;
             transition: all 0.25s ease;
             box-shadow: 0 2px 6px rgba(5, 87, 60, 0.25);
         }
-        
         .product-info .add-more-btn:hover:not(:disabled) {
-            background: #03402c;
-            transform: scale(1.06);
+            background: #03402c; transform: scale(1.06);
         }
-        
-        .product-info .add-more-btn:active:not(:disabled) {
-            transform: scale(0.96);
-        }
-        
-        .product-info .add-more-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
+        .product-info .add-more-btn:active:not(:disabled) { transform: scale(0.96); }
+        .product-info .add-more-btn:disabled { opacity: 0.6; cursor: not-allowed; }
         
         .product-info .wishlist-btn {
-            background: #fff;
-            border: 2px solid #e91e63;
-            color: #e91e63;
-            padding: 12px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 16px;
-            font-weight: 600;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            min-width: 140px;
-            justify-content: center;
+            background: #fff; border: 2px solid #e91e63; color: #e91e63;
+            padding: 12px 20px; border-radius: 6px; cursor: pointer;
+            transition: all 0.3s ease; font-size: 16px; font-weight: 600;
+            display: inline-flex; align-items: center; gap: 8px;
+            min-width: 140px; justify-content: center;
         }
-        
         .product-info .wishlist-btn:hover:not(:disabled) {
-            background: #e91e63;
-            color: #fff;
-            transform: translateY(-1px);
+            background: #e91e63; color: #fff; transform: translateY(-1px);
         }
-        
-        .product-info .wishlist-btn.active {
-            background: #e91e63;
-            color: #fff;
-        }
-        
-        .product-info .wishlist-btn.active i {
-            animation: heartPop 0.4s ease;
-        }
-        
-        .product-info .wishlist-btn:disabled {
-            opacity: 0.7;
-            cursor: not-allowed;
-        }
+        .product-info .wishlist-btn.active { background: #e91e63; color: #fff; }
+        .product-info .wishlist-btn.active i { animation: heartPop 0.4s ease; }
+        .product-info .wishlist-btn:disabled { opacity: 0.7; cursor: not-allowed; }
         
         @keyframes heartPop {
             0%   { transform: scale(1); }
@@ -336,328 +258,179 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
         }
         
         .quantity-selector {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin: 20px 0;
+            display: flex; align-items: center; gap: 15px; margin: 20px 0;
         }
-        
-        .quantity-selector label {
-            font-weight: 600;
-            color: #555;
-        }
-        
+        .quantity-selector label { font-weight: 600; color: #555; }
         .quantity-selector input {
-            width: 80px;
-            padding: 8px;
-            border: 2px solid #e0e0e0;
-            border-radius: 6px;
-            text-align: center;
-            font-size: 16px;
+            width: 80px; padding: 8px; border: 2px solid #e0e0e0;
+            border-radius: 6px; text-align: center; font-size: 16px;
         }
-        
-        .quantity-selector input:focus {
-            outline: none;
-            border-color: #05573c;
-        }
+        .quantity-selector input:focus { outline: none; border-color: #05573c; }
         
         .cart-hint {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 13px;
-            color: #05573c;
-            background: #e8f5f0;
-            padding: 6px 12px;
-            border-radius: 12px;
-            font-weight: 600;
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 13px; color: #05573c; background: #e8f5f0;
+            padding: 6px 12px; border-radius: 12px; font-weight: 600;
         }
-        
         .cart-hint .qty-badge {
-            background: #05573c;
-            color: #fff;
-            border-radius: 10px;
-            padding: 1px 8px;
-            font-size: 12px;
+            background: #05573c; color: #fff;
+            border-radius: 10px; padding: 1px 8px; font-size: 12px;
         }
         
-        /* Related Products */
-        .related-products {
-            margin-top: 40px;
-        }
-        
-        .related-products h2 {
-            margin-bottom: 20px;
-            color: #333;
-        }
-        
+        .related-products { margin-top: 40px; }
+        .related-products h2 { margin-bottom: 20px; color: #333; }
         .related-products .products-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
             gap: 20px;
         }
-        
         .related-products .product-card {
-            background: #fff;
-            border-radius: 10px;
+            background: #fff; border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-            overflow: hidden;
-            transition: all 0.3s ease;
-            text-align: center;
-            padding: 15px;
+            overflow: hidden; transition: all 0.3s ease;
+            text-align: center; padding: 15px;
         }
-        
         .related-products .product-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 4px 20px rgba(0,0,0,0.15);
         }
-        
         .related-products .product-card img {
-            width: 100%;
-            height: 150px;
-            object-fit: cover;
-            border-radius: 6px;
-            background: #f5f5f5;
+            width: 100%; height: 150px; object-fit: cover;
+            border-radius: 6px; background: #f5f5f5;
         }
-        
         .related-products .product-card h3 {
-            font-size: 14px;
-            margin: 10px 0 5px;
-            color: #333;
+            font-size: 14px; margin: 10px 0 5px; color: #333;
         }
-        
         .related-products .product-card .price {
-            font-size: 16px;
-            font-weight: 700;
-            color: #05573c;
+            font-size: 16px; font-weight: 700; color: #05573c;
         }
+        .related-products .product-card a { text-decoration: none; color: inherit; }
         
-        .related-products .product-card a {
-            text-decoration: none;
-            color: inherit;
-        }
-        
-        /* Toast notification */
+        /* Toast */
         .toast {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 15px 25px;
-            border-radius: 8px;
-            color: #fff;
-            font-weight: 600;
-            z-index: 9999;
-            transform: translateY(100px);
-            opacity: 0;
+            position: fixed; bottom: 20px; right: 20px;
+            padding: 15px 25px; border-radius: 8px; color: #fff;
+            font-weight: 600; z-index: 9999;
+            transform: translateY(100px); opacity: 0;
             transition: all 0.3s ease;
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
-        
         .toast.show { transform: translateY(0); opacity: 1; }
         .toast.success { background: #28a745; }
         .toast.error   { background: #dc3545; }
         .toast.info    { background: #17a2b8; }
         
-        /* ============================================
-           IMAGE LIGHTBOX / ZOOM OVERLAY
-           ============================================ */
+        /* ============ LIGHTBOX ============ */
         .lightbox-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.95);
-            z-index: 10000;
-            overflow: hidden;
-            opacity: 0;
-            transition: opacity 0.3s ease;
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.95); z-index: 10000;
+            overflow: hidden; opacity: 0; transition: opacity 0.3s ease;
         }
-        
-        .lightbox-overlay.active {
-            display: block;
-            opacity: 1;
-        }
+        .lightbox-overlay.active { display: block; opacity: 1; }
         
         .lightbox-stage {
-            position: absolute;
-            inset: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            cursor: grab;
-            overflow: hidden;
-            touch-action: none;
-            user-select: none;
+            position: absolute; inset: 0;
+            display: flex; justify-content: center; align-items: center;
+            cursor: grab; overflow: hidden;
+            touch-action: none; user-select: none;
         }
-        
-        .lightbox-stage.grabbing {
-            cursor: grabbing;
-        }
+        .lightbox-stage.grabbing { cursor: grabbing; }
         
         .lightbox-stage img {
-            max-width: 92vw;
-            max-height: 88vh;
-            width: auto;
-            height: auto;
-            object-fit: contain;
+            max-width: 92vw; max-height: 88vh;
+            width: auto; height: auto; object-fit: contain;
             transform-origin: center center;
             transition: transform 0.15s ease-out;
             will-change: transform;
-            user-select: none;
-            -webkit-user-drag: none;
-            pointer-events: none;
-            border-radius: 4px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            user-select: none; -webkit-user-drag: none;
+            pointer-events: none; border-radius: 4px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
         }
-        
-        .lightbox-stage img.dragging {
-            transition: none;
-        }
+        .lightbox-stage img.dragging { transition: none; }
         
         .lightbox-close {
-            position: fixed;
-            top: 20px;
-            right: 24px;
-            background: rgba(255, 255, 255, 0.15);
-            color: #fff;
-            border: none;
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            cursor: pointer;
-            font-size: 22px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.25s ease;
-            z-index: 10002;
+            position: fixed; top: 20px; right: 24px;
+            background: rgba(255,255,255,0.15); color: #fff;
+            border: none; width: 44px; height: 44px;
+            border-radius: 50%; cursor: pointer; font-size: 22px;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.25s ease; z-index: 10002;
             backdrop-filter: blur(10px);
         }
-        
-        .lightbox-close:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: rotate(90deg);
-        }
+        .lightbox-close:hover { background: rgba(255,255,255,0.3); transform: rotate(90deg); }
         
         .lightbox-controls {
-            position: fixed;
-            bottom: 24px;
-            left: 50%;
+            position: fixed; bottom: 24px; left: 50%;
             transform: translateX(-50%);
-            display: flex;
-            gap: 8px;
-            background: rgba(255, 255, 255, 0.15);
-            padding: 8px 12px;
-            border-radius: 30px;
-            backdrop-filter: blur(10px);
-            z-index: 10002;
+            display: flex; gap: 8px;
+            background: rgba(255,255,255,0.15);
+            padding: 8px 12px; border-radius: 30px;
+            backdrop-filter: blur(10px); z-index: 10002;
         }
-        
         .lightbox-controls button {
-            background: rgba(255, 255, 255, 0.2);
-            color: #fff;
-            border: none;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            cursor: pointer;
-            font-size: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            background: rgba(255,255,255,0.2); color: #fff;
+            border: none; width: 40px; height: 40px;
+            border-radius: 50%; cursor: pointer; font-size: 16px;
+            display: flex; align-items: center; justify-content: center;
             transition: all 0.2s ease;
         }
-        
         .lightbox-controls button:hover:not(:disabled) {
-            background: rgba(255, 255, 255, 0.35);
-            transform: scale(1.08);
+            background: rgba(255,255,255,0.35); transform: scale(1.08);
         }
-        
-        .lightbox-controls button:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-        }
-        
+        .lightbox-controls button:disabled { opacity: 0.4; cursor: not-allowed; }
         .lightbox-controls .zoom-level {
-            display: flex;
-            align-items: center;
-            color: #fff;
-            font-size: 13px;
-            font-weight: 600;
-            min-width: 50px;
-            justify-content: center;
-            padding: 0 6px;
+            display: flex; align-items: center; color: #fff;
+            font-size: 13px; font-weight: 600;
+            min-width: 50px; justify-content: center; padding: 0 6px;
         }
         
         .lightbox-hint {
-            position: fixed;
-            top: 24px;
-            left: 24px;
-            color: rgba(255, 255, 255, 0.75);
-            font-size: 12px;
-            background: rgba(0, 0, 0, 0.4);
-            padding: 8px 14px;
-            border-radius: 20px;
-            backdrop-filter: blur(10px);
-            z-index: 10002;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            pointer-events: none;
+            position: fixed; top: 24px; left: 24px;
+            color: rgba(255,255,255,0.75); font-size: 12px;
+            background: rgba(0,0,0,0.4); padding: 8px 14px;
+            border-radius: 20px; backdrop-filter: blur(10px);
+            z-index: 10002; display: flex; align-items: center;
+            gap: 6px; pointer-events: none;
         }
         
-        body.lightbox-open {
-            overflow: hidden;
+        /* Lightbox gallery nav */
+        .lightbox-nav {
+            position: fixed; top: 50%; transform: translateY(-50%);
+            background: rgba(255,255,255,0.15); color: #fff;
+            border: none; width: 50px; height: 50px;
+            border-radius: 50%; cursor: pointer; font-size: 20px;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.25s ease; z-index: 10002;
+            backdrop-filter: blur(10px);
         }
+        .lightbox-nav:hover { background: rgba(255,255,255,0.3); }
+        .lightbox-nav.prev { left: 20px; }
+        .lightbox-nav.next { right: 20px; }
+        
+        body.lightbox-open { overflow: hidden; }
         
         @media (max-width: 768px) {
             .product-detail-grid {
-                grid-template-columns: 1fr;
-                gap: 20px;
-                padding: 20px;
+                grid-template-columns: 1fr; gap: 20px; padding: 20px;
             }
-            
-            .product-image img {
-                height: 250px;
-            }
-            
-            .product-info h1 {
-                font-size: 22px;
-            }
-            
-            .product-info .price {
-                font-size: 24px;
-            }
-            
+            .product-image img#mainProductImage { height: 250px; }
+            .product-info h1 { font-size: 22px; }
+            .product-info .price { font-size: 24px; }
             .product-info .add-to-cart,
-            .product-info .in-cart-btn {
-                width: 100%;
-                min-width: 0;
-            }
-            
+            .product-info .in-cart-btn { width: 100%; min-width: 0; }
             .related-products .products-grid {
                 grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
             }
-            
-            .lightbox-close {
-                top: 12px; right: 12px;
-                width: 40px; height: 40px;
-            }
-            .lightbox-hint {
-                top: 12px; left: 12px;
-                font-size: 10px;
-                padding: 6px 10px;
-            }
-            .lightbox-controls {
-                bottom: 12px;
-                padding: 6px 10px;
-            }
-            .lightbox-controls button {
-                width: 36px; height: 36px; font-size: 14px;
-            }
-            .lightbox-stage img {
-                max-width: 96vw;
-                max-height: 82vh;
-            }
+            .lightbox-close { top: 12px; right: 12px; width: 40px; height: 40px; }
+            .lightbox-hint { top: 12px; left: 12px; font-size: 10px; padding: 6px 10px; }
+            .lightbox-controls { bottom: 12px; padding: 6px 10px; }
+            .lightbox-controls button { width: 36px; height: 36px; font-size: 14px; }
+            .lightbox-stage img { max-width: 96vw; max-height: 82vh; }
+            .lightbox-nav { width: 40px; height: 40px; font-size: 16px; }
+            .lightbox-nav.prev { left: 8px; }
+            .lightbox-nav.next { right: 8px; }
+            .gallery-nav { width: 34px; height: 34px; font-size: 14px; }
+            .gallery-thumb { flex: 0 0 58px; width: 58px; height: 58px; }
         }
     </style>
 </head>
@@ -665,12 +438,9 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
     <?php include "header.php"; ?>
     <?php include "sidebar.php"; ?>
     
-    <!-- Toast Notification -->
     <div id="toast" class="toast"></div>
     
-    <!-- ============================================
-         IMAGE LIGHTBOX / ZOOM OVERLAY
-         ============================================ -->
+    <!-- ============ LIGHTBOX ============ -->
     <div class="lightbox-overlay" id="lightbox">
         <div class="lightbox-hint">
             <i class="fas fa-search-plus"></i>
@@ -681,8 +451,17 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
             <i class="fas fa-times"></i>
         </button>
         
+        <?php if ($total_images > 1): ?>
+            <button class="lightbox-nav prev" onclick="lightboxPrev()" aria-label="Previous">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <button class="lightbox-nav next" onclick="lightboxNext()" aria-label="Next">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        <?php endif; ?>
+        
         <div class="lightbox-stage" id="lightboxStage">
-            <img src="<?php echo htmlspecialchars($product_image); ?>" 
+            <img src="<?php echo htmlspecialchars($primary_image); ?>" 
                  alt="<?php echo htmlspecialchars($product['name']); ?>"
                  id="lightboxImg">
         </div>
@@ -705,20 +484,53 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
         <div class="product-detail">
             <div class="product-detail-grid">
                 
-                <!-- ===== PRODUCT IMAGE ===== -->
-                <div class="product-image" id="productImageBox" title="Click to view full image">
-                    <img src="<?php echo htmlspecialchars($product_image); ?>" 
-                         alt="<?php echo htmlspecialchars($product['name']); ?>"
-                         onerror="this.src='uploads/products/no-image.png'"
-                         id="mainProductImage">
-                    <?php if ($is_cloudinary): ?>
-                        <span class="cloudinary-badge">
-                            <i class="fas fa-cloud"></i> Cloud
+                <!-- ===== PRODUCT IMAGE GALLERY ===== -->
+                <div>
+                    <div class="product-image" id="productImageBox" title="Click to view full image">
+                        <img src="<?php echo htmlspecialchars($primary_image); ?>" 
+                             alt="<?php echo htmlspecialchars($product['name']); ?>"
+                             onerror="this.src='uploads/products/no-image.png'"
+                             id="mainProductImage">
+                        
+                        <?php if ($is_cloudinary): ?>
+                            <span class="cloudinary-badge">
+                                <i class="fas fa-cloud"></i> Cloud
+                            </span>
+                        <?php endif; ?>
+                        
+                        <?php if ($total_images > 1): ?>
+                            <span class="image-counter">
+                                <i class="fas fa-images"></i>
+                                <span id="currentImageIndex">1</span> / <?php echo $total_images; ?>
+                            </span>
+                            
+                            <button type="button" class="gallery-nav prev" id="galleryPrev" title="Previous image">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <button type="button" class="gallery-nav next" id="galleryNext" title="Next image">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        <?php endif; ?>
+                        
+                        <span class="zoom-hint">
+                            <i class="fas fa-expand"></i> Click to zoom
                         </span>
+                    </div>
+                    
+                    <!-- Thumbnails -->
+                    <?php if ($total_images > 1): ?>
+                        <div class="gallery-thumbs" id="galleryThumbs">
+                            <?php foreach ($gallery as $index => $img): ?>
+                                <div class="gallery-thumb <?php echo $index === 0 ? 'active' : ''; ?>" 
+                                     data-index="<?php echo $index; ?>"
+                                     data-url="<?php echo htmlspecialchars($img['image_url']); ?>">
+                                    <img src="<?php echo htmlspecialchars($img['image_url']); ?>" 
+                                         alt="View <?php echo $index + 1; ?>"
+                                         onerror="this.src='uploads/products/no-image.png'">
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
                     <?php endif; ?>
-                    <span class="zoom-hint">
-                        <i class="fas fa-expand"></i> Click to zoom
-                    </span>
                 </div>
                 
                 <!-- ===== PRODUCT INFO ===== -->
@@ -766,26 +578,20 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
                             </button>
                         <?php elseif ($in_cart): ?>
                             <span class="in-cart-btn" title="Item is in your cart">
-                                <i class="fas fa-check-circle"></i> 
-                                In Cart
+                                <i class="fas fa-check-circle"></i> In Cart
                             </span>
-                            
-                            <button type="button" 
-                                    class="add-more-btn"
-                                    id="addMoreBtn"
+                            <button type="button" class="add-more-btn" id="addMoreBtn"
                                     data-product-id="<?php echo $product['id']; ?>"
                                     data-product-name="<?php echo htmlspecialchars($product['name']); ?>"
                                     title="Add one more to cart">
                                 <i class="fas fa-plus"></i>
                             </button>
-                            
                             <span class="cart-hint">
                                 <i class="fas fa-shopping-cart"></i>
                                 <span class="qty-badge" id="cartQtyBadge"><?php echo $cart_quantity; ?></span> in cart
                             </span>
                         <?php else: ?>
-                            <button class="add-to-cart" 
-                                    id="addToCartBtn"
+                            <button class="add-to-cart" id="addToCartBtn"
                                     data-product-id="<?php echo $product['id']; ?>"
                                     data-product-name="<?php echo htmlspecialchars($product['name']); ?>">
                                 <i class="fas fa-shopping-cart"></i> Add to Cart
@@ -811,7 +617,7 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
                     <div class="products-grid">
                         <?php foreach ($related_products as $related): ?>
                             <?php 
-                            $related_img = getProductImage($related['image'] ?? null, $related['image_url'] ?? null);
+                            $related_img   = getProductImage($related['image'] ?? null, $related['image_url'] ?? null);
                             $related_stock = intval($related['stock'] ?? 0);
                             ?>
                             <div class="product-card">
@@ -844,9 +650,16 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
         const isLoggedIn = <?php echo $isLoggedIn ? 'true' : 'false'; ?>;
         const productId = <?php echo $product['id']; ?>;
         const stockAvailable = <?php echo $stock_val; ?>;
-
+        
+        // Gallery data (from PHP)
+        const productGallery = <?php 
+            echo json_encode(array_map(function($g) {
+                return ['url' => $g['image_url']];
+            }, $gallery)); 
+        ?>;
+        
         // ============================================
-        // TOAST NOTIFICATION
+        // TOAST
         // ============================================
         function showToast(message, type = 'success') {
             const toast = document.getElementById('toast');
@@ -856,102 +669,176 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
             toast.classList.add('show');
             setTimeout(() => toast.classList.remove('show'), 3000);
         }
-
-        // ============================================
-        // HELPER: update header cart badge
-        // ============================================
+        
         function updateCartBadge(count) {
             if (count === undefined) return;
             const badge = document.querySelector('.cart-badge-sm, .cart-badge');
             if (badge) badge.textContent = count;
         }
-
+        
         // ============================================
-        // IMAGE LIGHTBOX / ZOOM
+        // GALLERY (main image + thumbnails + arrows)
+        // ============================================
+        let galleryIndex = 0;
+        const mainImg     = document.getElementById('mainProductImage');
+        const counter     = document.getElementById('currentImageIndex');
+        const thumbs      = document.querySelectorAll('.gallery-thumb');
+        const prevBtn     = document.getElementById('galleryPrev');
+        const nextBtn     = document.getElementById('galleryNext');
+        const lightboxImgEl = document.getElementById('lightboxImg');
+        
+        function showGalleryImage(index) {
+            if (productGallery.length < 1) return;
+            if (index < 0) index = productGallery.length - 1;
+            if (index >= productGallery.length) index = 0;
+            
+            galleryIndex = index;
+            const url = productGallery[index].url;
+            
+            // Update main image (fade)
+            if (mainImg) {
+                mainImg.style.opacity = '0.4';
+                setTimeout(() => {
+                    mainImg.src = url;
+                    mainImg.style.opacity = '1';
+                }, 100);
+            }
+            
+            // Update lightbox image
+            if (lightboxImgEl) lightboxImgEl.src = url;
+            
+            // Counter
+            if (counter) counter.textContent = index + 1;
+            
+            // Thumb active state
+            thumbs.forEach((t, i) => t.classList.toggle('active', i === index));
+        }
+        
+        // Thumbnail clicks
+        thumbs.forEach(thumb => {
+            thumb.addEventListener('click', function(e) {
+                e.stopPropagation();
+                showGalleryImage(parseInt(this.dataset.index));
+            });
+        });
+        
+        // Arrow clicks
+        prevBtn?.addEventListener('click', function(e) {
+            e.stopPropagation();
+            showGalleryImage(galleryIndex - 1);
+        });
+        nextBtn?.addEventListener('click', function(e) {
+            e.stopPropagation();
+            showGalleryImage(galleryIndex + 1);
+        });
+        
+        // Keyboard arrows
+        document.addEventListener('keydown', function(e) {
+            // Ignore if lightbox is open (lightbox has its own nav)
+            const lb = document.getElementById('lightbox');
+            if (lb && lb.classList.contains('active')) return;
+            
+            if (e.key === 'ArrowLeft')  showGalleryImage(galleryIndex - 1);
+            if (e.key === 'ArrowRight') showGalleryImage(galleryIndex + 1);
+        });
+        
+        // Touch swipe on main image
+        let tStartX = 0, tStartY = 0;
+        const imgBox = document.getElementById('productImageBox');
+        if (imgBox) {
+            imgBox.addEventListener('touchstart', function(e) {
+                tStartX = e.changedTouches[0].screenX;
+                tStartY = e.changedTouches[0].screenY;
+            }, { passive: true });
+            
+            imgBox.addEventListener('touchend', function(e) {
+                const dx = e.changedTouches[0].screenX - tStartX;
+                const dy = e.changedTouches[0].screenY - tStartY;
+                if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+                    showGalleryImage(galleryIndex + (dx < 0 ? 1 : -1));
+                }
+            }, { passive: true });
+        }
+        
+        // ============================================
+        // LIGHTBOX / ZOOM
         // ============================================
         const lightbox      = document.getElementById('lightbox');
-        const lightboxImg   = document.getElementById('lightboxImg');
         const lightboxStage = document.getElementById('lightboxStage');
         const zoomLevelEl   = document.getElementById('zoomLevel');
         const zoomInBtn     = document.getElementById('zoomInBtn');
         const zoomOutBtn    = document.getElementById('zoomOutBtn');
-
+        
         let currentScale = 1;
         let translateX = 0;
         let translateY = 0;
         const MIN_SCALE = 1;
         const MAX_SCALE = 6;
         const SCALE_STEP = 0.3;
-
-        // Drag state
+        
         let isDragging = false;
-        let dragStartX = 0;
-        let dragStartY = 0;
-        let dragStartTranslateX = 0;
-        let dragStartTranslateY = 0;
-
+        let dragStartX = 0, dragStartY = 0;
+        let dragStartTranslateX = 0, dragStartTranslateY = 0;
+        
         function applyTransform(animate = true) {
-            if (!animate) {
-                lightboxImg.classList.add('dragging');
-            } else {
-                lightboxImg.classList.remove('dragging');
-            }
-            lightboxImg.style.transform =
-                `translate(${translateX}px, ${translateY}px) scale(${currentScale})`;
+            lightboxImg.classList.toggle('dragging', !animate);
+            lightboxImg.style.transform = `translate(${translateX}px, ${translateY}px) scale(${currentScale})`;
             zoomLevelEl.textContent = Math.round(currentScale * 100) + '%';
             zoomInBtn.disabled  = currentScale >= MAX_SCALE;
             zoomOutBtn.disabled = currentScale <= MIN_SCALE;
         }
-
+        
         function openLightbox() {
             lightbox.classList.add('active');
             document.body.classList.add('lightbox-open');
             resetZoom();
         }
-
+        
         function closeLightbox() {
             lightbox.classList.remove('active');
             document.body.classList.remove('lightbox-open');
             resetZoom();
         }
-
+        
         function zoomIn() {
             if (currentScale >= MAX_SCALE) return;
             currentScale = Math.min(MAX_SCALE, currentScale + SCALE_STEP);
             applyTransform();
         }
-
         function zoomOut() {
             if (currentScale <= MIN_SCALE) return;
             currentScale = Math.max(MIN_SCALE, currentScale - SCALE_STEP);
-            if (currentScale === MIN_SCALE) {
-                translateX = 0;
-                translateY = 0;
-            }
+            if (currentScale === MIN_SCALE) { translateX = 0; translateY = 0; }
             applyTransform();
         }
-
         function resetZoom() {
-            currentScale = 1;
-            translateX = 0;
-            translateY = 0;
+            currentScale = 1; translateX = 0; translateY = 0;
             applyTransform();
         }
-
-        // Open lightbox on product image click
+        
+        // Lightbox internal gallery navigation
+        function lightboxPrev() {
+            showGalleryImage(galleryIndex - 1);
+            resetZoom();
+        }
+        function lightboxNext() {
+            showGalleryImage(galleryIndex + 1);
+            resetZoom();
+        }
+        
+        // Open on main image click
         document.getElementById('productImageBox')?.addEventListener('click', function(e) {
             if (e.target.closest('.cloudinary-badge')) return;
+            if (e.target.closest('.gallery-nav')) return;
             openLightbox();
         });
-
-        // Click on empty stage area → close
+        
+        // Close on empty stage click
         lightboxStage?.addEventListener('click', function(e) {
-            if (e.target === lightboxStage && !isDragging) {
-                closeLightbox();
-            }
+            if (e.target === lightboxStage && !isDragging) closeLightbox();
         });
-
-        // Esc + keyboard shortcuts
+        
+        // Esc + shortcuts
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape' && lightbox.classList.contains('active')) {
                 closeLightbox();
@@ -960,9 +847,11 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
                 if (e.key === '+' || e.key === '=') zoomIn();
                 if (e.key === '-' || e.key === '_') zoomOut();
                 if (e.key === '0') resetZoom();
+                if (e.key === 'ArrowLeft')  lightboxPrev();
+                if (e.key === 'ArrowRight') lightboxNext();
             }
         });
-
+        
         // Wheel zoom
         lightboxStage?.addEventListener('wheel', function(e) {
             if (!lightbox.classList.contains('active')) return;
@@ -975,8 +864,8 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
             }
             applyTransform();
         }, { passive: false });
-
-        // Mouse drag to pan
+        
+        // Mouse drag
         lightboxStage?.addEventListener('mousedown', function(e) {
             if (currentScale <= MIN_SCALE) return;
             e.preventDefault();
@@ -987,30 +876,25 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
             dragStartTranslateX = translateX;
             dragStartTranslateY = translateY;
         });
-
         document.addEventListener('mousemove', function(e) {
             if (!isDragging) return;
             translateX = dragStartTranslateX + (e.clientX - dragStartX);
             translateY = dragStartTranslateY + (e.clientY - dragStartY);
             applyTransform(false);
         });
-
         document.addEventListener('mouseup', function() {
             if (isDragging) {
                 isDragging = false;
                 lightboxStage.classList.remove('grabbing');
             }
         });
-
+        
         // Touch pinch + pan
-        let touchStartDist = 0;
-        let touchStartScale = 1;
-        let touchStartX = 0;
-        let touchStartY = 0;
-        let touchStartTranslateX = 0;
-        let touchStartTranslateY = 0;
+        let touchStartDist = 0, touchStartScale = 1;
+        let touchStartX = 0, touchStartY = 0;
+        let touchStartTranslateX = 0, touchStartTranslateY = 0;
         let isPinching = false;
-
+        
         lightboxStage?.addEventListener('touchstart', function(e) {
             if (e.touches.length === 2) {
                 isPinching = true;
@@ -1026,7 +910,7 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
                 touchStartTranslateY = translateY;
             }
         }, { passive: true });
-
+        
         lightboxStage?.addEventListener('touchmove', function(e) {
             if (isPinching && e.touches.length === 2) {
                 e.preventDefault();
@@ -1045,18 +929,17 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
                 applyTransform(false);
             }
         }, { passive: false });
-
+        
         lightboxStage?.addEventListener('touchend', function(e) {
             if (e.touches.length < 2) isPinching = false;
         });
-
+        
         // ============================================
-        // REPLACE add-to-cart button with in-cart UI
+        // IN-CART UI SWAP
         // ============================================
         function switchToInCartUI(initialQty) {
             const container = document.querySelector('.product-actions');
             const addBtn = document.getElementById('addToCartBtn');
-            
             if (addBtn) addBtn.remove();
             
             const qtySel = document.querySelector('.quantity-selector');
@@ -1066,11 +949,8 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
                 <span class="in-cart-btn" title="Item is in your cart">
                     <i class="fas fa-check-circle"></i> In Cart
                 </span>
-                <button type="button" 
-                        class="add-more-btn"
-                        id="addMoreBtn"
-                        data-product-id="${productId}"
-                        title="Add one more to cart">
+                <button type="button" class="add-more-btn" id="addMoreBtn"
+                        data-product-id="${productId}" title="Add one more to cart">
                     <i class="fas fa-plus"></i>
                 </button>
                 <span class="cart-hint">
@@ -1088,9 +968,9 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
             
             attachAddMoreHandler();
         }
-
+        
         // ============================================
-        // ADD TO CART (initial add)
+        // ADD TO CART (initial)
         // ============================================
         const addToCartBtn = document.getElementById('addToCartBtn');
         if (addToCartBtn) {
@@ -1124,12 +1004,8 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
                             this.innerHTML = '<i class="fas fa-check"></i> Added!';
                             this.className = 'add-to-cart added';
                             showToast(productName + ' added to cart!', 'success');
-                            
                             updateCartBadge(data.cart_count);
-                            
-                            setTimeout(() => {
-                                switchToInCartUI(quantity);
-                            }, 700);
+                            setTimeout(() => switchToInCartUI(quantity), 700);
                         } else {
                             this.innerHTML = originalText;
                             this.className = 'add-to-cart';
@@ -1146,9 +1022,9 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
                     });
             });
         }
-
+        
         // ============================================
-        // ADD ONE MORE (+ button)
+        // "+" button – add one more
         // ============================================
         function attachAddMoreHandler() {
             const btn = document.getElementById('addMoreBtn');
@@ -1187,7 +1063,6 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
                                 const current = parseInt(badge.textContent) || 0;
                                 badge.textContent = current + 1;
                             }
-                            
                             updateCartBadge(data.cart_count);
                             showToast('1 more ' + productName + ' added to cart', 'success');
                         } else {
@@ -1202,11 +1077,10 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
                     });
             });
         }
-        
         attachAddMoreHandler();
-
+        
         // ============================================
-        // TOGGLE WISHLIST
+        // WISHLIST TOGGLE
         // ============================================
         const wishlistBtn = document.getElementById('wishlistBtn');
         if (wishlistBtn) {
@@ -1233,7 +1107,6 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
                     .then(data => {
                         if (data.success) {
                             const added = data.added;
-                            
                             if (added) {
                                 btn.classList.add('active');
                                 icon.className = 'fas fa-heart';
@@ -1247,7 +1120,6 @@ $product_image = getProductImage($product['image'] ?? null, $product['image_url'
                                 btn.title = 'Add to wishlist';
                                 showToast(productName + ' removed from wishlist', 'info');
                             }
-                            
                             if (data.wishlist_count !== undefined) {
                                 const badge = document.querySelector('.wishlist-badge, .wishlist-count');
                                 if (badge) badge.textContent = data.wishlist_count;
