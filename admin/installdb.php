@@ -490,6 +490,32 @@ foreach ([
         } catch (PDOException $e) {}
     }
 }
+
+
+
+
+// PAYMENT COLUMNS
+if (!witty_column_exists($pdo, 'orders', 'payment_status')) {
+    try {
+        $pdo->exec("ALTER TABLE orders ADD COLUMN payment_status VARCHAR(20) DEFAULT 'pending'");
+        echo "<div class='success'>  ✅ orders.payment_status added</div>";
+    } catch (PDOException $e) {}
+}
+if (!witty_column_exists($pdo, 'orders', 'payment_reference')) {
+    try {
+        $pdo->exec("ALTER TABLE orders ADD COLUMN payment_reference VARCHAR(100)");
+        echo "<div class='success'>  ✅ orders.payment_reference added</div>";
+    } catch (PDOException $e) {}
+}
+if (!witty_column_exists($pdo, 'orders', 'mpesa_phone')) {
+    try {
+        $pdo->exec("ALTER TABLE orders ADD COLUMN mpesa_phone VARCHAR(30)");
+        echo "<div class='success'>  ✅ orders.mpesa_phone added</div>";
+    } catch (PDOException $e) {}
+}
+
+
+    
     echo "</div>"; // close log div
 
     // ============================================
