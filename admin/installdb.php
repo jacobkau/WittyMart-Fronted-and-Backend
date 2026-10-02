@@ -334,7 +334,97 @@ try {
         $linked = $stmt->fetchColumn();
         echo "<div class='info'>  📊 products linked to suppliers: {$linked}</div>";
     }
+    
+// ============================================
+// USER ADDRESSES TABLE
+// ============================================
+echo "<hr style='margin:24px 0; border:0; border-top:1px solid #eee;'>";
+echo "<div class='info' style='font-weight:700; font-size:14px;'>▶ Setting up User Addresses system...</div>";
 
+if (witty_table_exists($pdo, 'user_addresses')) {
+    echo "<div class='warn'>  ⚠ user_addresses table already exists — skipping creation</div>";
+} else {
+    $pdo->exec("
+        CREATE TABLE user_addresses (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            label VARCHAR(50) DEFAULT 'Home',
+            recipient_name VARCHAR(150) NOT NULL,
+            phone VARCHAR(30) NOT NULL,
+            county VARCHAR(100) NOT NULL,
+            city VARCHAR(100),
+            address_line TEXT NOT NULL,
+            delivery_instructions TEXT,
+            is_default BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ");
+    echo "<div class='success'>  ✅ user_addresses table created</div>";
+}
+
+if (!witty_index_exists($pdo, 'idx_user_addresses_user')) {
+    $pdo->exec("CREATE INDEX idx_user_addresses_user ON user_addresses(user_id)");
+    echo "<div class='success'>  ✅ Index idx_user_addresses_user created</div>";
+}
+
+if (!witty_index_exists($pdo, 'idx_user_addresses_default')) {
+    $pdo->exec("CREATE INDEX idx_user_addresses_default ON user_addresses(user_id, is_default) WHERE is_default = TRUE");
+    echo "<div class='success'>  ✅ Index idx_user_addresses_default created</div>";
+}
+
+// Trigger for updated_at
+try {
+    $pdo->exec("
+        CREATE OR REPLACE FUNCTION update_user_addresses_updated_at()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.updated_at = CURRENT_TIMESTAMP;
+            RETURN NEW;
+        END;
+        $$ language 'plpgsql'
+    ");
+    $pdo->exec("
+        DROP TRIGGER IF EXISTS update_user_addresses_updated_at ON user_addresses;
+        CREATE TRIGGER update_user_addresses_updated_at
+            BEFORE UPDATE ON user_addresses
+            FOR EACH ROW
+            EXECUTE FUNCTION update_user_addresses_updated_at()
+    ");
+    echo "<div class='success'>  ✅ user_addresses trigger created</div>";
+} catch (PDOException $e) {
+    echo "<div class='warn'>  ⚠ Trigger skipped: " . htmlspecialchars($e->getMessage()) . "</div>";
+}
+
+// ============================================
+// ORDERS: Add delivery columns (if missing)
+// ============================================
+if (!witty_column_exists($pdo, 'orders', 'delivery_county')) {
+    try {
+        $pdo->exec("ALTER TABLE orders ADD COLUMN delivery_county VARCHAR(100)");
+        echo "<div class='success'>  ✅ orders.delivery_county column added</div>";
+    } catch (PDOException $e) {
+        echo "<div class='warn'>  ⚠ " . htmlspecialchars($e->getMessage()) . "</div>";
+    }
+}
+if (!witty_column_exists($pdo, 'orders', 'delivery_phone')) {
+    try {
+        $pdo->exec("ALTER TABLE orders ADD COLUMN delivery_phone VARCHAR(30)");
+        echo "<div class='success'>  ✅ orders.delivery_phone column added</div>";
+    } catch (PDOException $e) {}
+}
+if (!witty_column_exists($pdo, 'orders', 'delivery_recipient')) {
+    try {
+        $pdo->exec("ALTER TABLE orders ADD COLUMN delivery_recipient VARCHAR(150)");
+        echo "<div class='success'>  ✅ orders.delivery_recipient column added</div>";
+    } catch (PDOException $e) {}
+}
+if (!witty_column_exists($pdo, 'orders', 'address_id')) {
+    try {
+        $pdo->exec("ALTER TABLE orders ADD COLUMN address_id INTEGER REFERENCES user_addresses(id) ON DELETE SET NULL");
+        echo "<div class='success'>  ✅ orders.address_id column added</div>";
+    } catch (PDOException $e) {}
+}
     echo "</div>"; // close log div
 
     // ============================================
@@ -355,6 +445,8 @@ try {
     echo "<li><strong>reviews</strong>: id, product_id, user_id, rating (1–5), comment, status, created_at, updated_at</li>";
     echo "<li><strong>suppliers</strong>: id, name, slug, contact_person, email, phone, address, notes, status, created_at, updated_at</li>";
     echo "<li><strong>products</strong>: + supplier_id (FK → suppliers.id)</li>";
+    echo "<li><strong>user_addresses</strong> — User delivery addresses (with default)</li>";
+echo "<li><strong>orders</strong>: + delivery_county, delivery_phone, delivery_recipient, address_id</li>";
     echo "</ul>";
 
     echo "<p class='info'>Old free-text <code>products.supplier</code> column is preserved for backward compatibility.</p>";
