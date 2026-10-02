@@ -1,7 +1,7 @@
 <?php
 require_once 'includes/config.php';
 
-// Make sure Cloudinary helper is loaded for getProductImage()
+// Load Cloudinary helper for getProductImage()
 $helper_paths = [
     __DIR__ . '/includes/cloudinary_helper.php',
     __DIR__ . '/../includes/cloudinary_helper.php',
@@ -13,7 +13,7 @@ foreach ($helper_paths as $p) {
     }
 }
 
-// Fallback if the helper isn't available for some reason
+// Fallback if helper is missing
 if (!function_exists('getProductImage')) {
     function getProductImage($image_name = null, $image_url = null) {
         if (!empty($image_url)) return $image_url;
@@ -36,7 +36,7 @@ $page     = max(1, intval($_GET['page'] ?? 1));
 $per_page = 12;
 $offset   = ($page - 1) * $per_page;
 
-// Sort options
+// Sort
 $sort = $_GET['sort'] ?? 'newest';
 $order_sql = 'ORDER BY p.created_at DESC';
 switch ($sort) {
@@ -54,7 +54,6 @@ $has_search = (!empty($query) || $category || $min_price || $max_price);
 
 if ($has_search) {
     try {
-        // Build WHERE
         $where = ["(p.status = 'active' OR p.status IS NULL)"];
         $params = [];
 
@@ -78,7 +77,7 @@ if ($has_search) {
 
         $where_sql = 'WHERE ' . implode(' AND ', $where);
 
-        // Count total
+        // Count
         $count_sql = "SELECT COUNT(*) FROM products p $where_sql";
         $stmt = $pdo->prepare($count_sql);
         $stmt->execute($params);
@@ -104,7 +103,7 @@ if ($has_search) {
 
 $total_pages = max(1, ceil($total_products / $per_page));
 
-// ===== Cart quantities for logged-in user =====
+// ===== Cart quantities =====
 $cartQuantities = [];
 if (isset($_SESSION['user_id'])) {
     try {
@@ -130,7 +129,7 @@ if (isset($_SESSION['user_id'])) {
     }
 }
 
-// Get categories for filter
+// Categories for filter
 try {
     $stmt = $pdo->query("SELECT * FROM categories ORDER BY name");
     $categories = $stmt->fetchAll();
@@ -141,7 +140,6 @@ try {
 $isLoggedIn = isset($_SESSION['user_id']) && !empty($_SESSION['user_id']);
 $page_title = 'Search Results';
 
-// Helper: preserve filters in pagination URLs
 function buildSearchQuery($overrides = []) {
     $params = $_GET;
     foreach ($overrides as $k => $v) {
@@ -182,11 +180,14 @@ function buildSearchQuery($overrides = []) {
             margin: 0;
         }
         
-        /* ===== Filter bar ===== */
+        /* ============================================
+           FILTER BAR
+           ============================================ */
         .search-filters {
             display: flex;
             gap: 12px;
             flex-wrap: wrap;
+            align-items: center;
             margin-bottom: 20px;
             background: #fff;
             padding: 16px 20px;
@@ -200,17 +201,22 @@ function buildSearchQuery($overrides = []) {
             border: 2px solid #e0e0e0;
             border-radius: 8px;
             font-size: 14px;
-            transition: border-color 0.2s ease;
-            background: #fafafa;
+            color: #333;
+            background: #fff;
+            transition: all 0.2s ease;
         }
         
         .search-filters input[type="text"] {
-            flex: 1 1 260px;
+            flex: 1 1 240px;
             min-width: 200px;
         }
         
         .search-filters input[type="number"] {
             width: 110px;
+        }
+        
+        .search-filters input::placeholder {
+            color: #aaa;
         }
         
         .search-filters input:focus,
@@ -221,15 +227,46 @@ function buildSearchQuery($overrides = []) {
             box-shadow: 0 0 0 3px rgba(5, 87, 60, 0.1);
         }
         
+        /* ============================================
+           SELECT DROPDOWN – FIXED TEXT COLOR
+           ============================================ */
         .search-filters select {
-            padding: 10px 14px;
+            padding: 10px 32px 10px 14px;
             border: 2px solid #e0e0e0;
             border-radius: 8px;
             font-size: 14px;
-            background: #fafafa;
+            background-color: #fff;
+            color: #333;
             min-width: 140px;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 292.4 292.4'%3E%3Cpath fill='%23666' d='M287 69.4a17.6 17.6 0 0 0-13-5.4H18.4c-5 0-9.3 1.8-12.9 5.4A17.6 17.6 0 0 0 0 82.2c0 5 1.8 9.3 5.4 12.9l128 127.9c3.6 3.6 7.8 5.4 12.8 5.4s9.2-1.8 12.8-5.4L287 95c3.5-3.5 5.4-7.8 5.4-12.8 0-5-1.9-9.2-5.5-12.8z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            background-size: 10px;
+            opacity: 1;
+            transition: all 0.2s ease;
         }
         
+        .search-filters select option {
+            color: #333;
+            background: #fff;
+        }
+        
+        /* Placeholder state (grey) when value is default */
+        .search-filters select.is-placeholder {
+            color: #999;
+        }
+        
+        .search-filters select:focus {
+            color: #333;
+        }
+        
+        /* ============================================
+           BUTTONS
+           ============================================ */
         .search-filters .btn-search {
             padding: 10px 22px;
             background: #05573c;
@@ -238,6 +275,7 @@ function buildSearchQuery($overrides = []) {
             border-radius: 8px;
             cursor: pointer;
             font-weight: 600;
+            font-size: 14px;
             transition: all 0.2s ease;
             display: inline-flex;
             align-items: center;
@@ -246,6 +284,7 @@ function buildSearchQuery($overrides = []) {
         
         .search-filters .btn-search:hover {
             background: #03402c;
+            transform: translateY(-1px);
         }
         
         .search-filters .btn-clear {
@@ -256,6 +295,7 @@ function buildSearchQuery($overrides = []) {
             border-radius: 8px;
             cursor: pointer;
             font-weight: 600;
+            font-size: 14px;
             text-decoration: none;
             display: inline-flex;
             align-items: center;
@@ -267,6 +307,9 @@ function buildSearchQuery($overrides = []) {
             background: #5a6268;
         }
         
+        /* ============================================
+           RESULTS INFO
+           ============================================ */
         .results-info {
             display: flex;
             justify-content: space-between;
@@ -282,7 +325,9 @@ function buildSearchQuery($overrides = []) {
             color: #05573c;
         }
         
-        /* ===== Product Grid ===== */
+        /* ============================================
+           PRODUCT GRID
+           ============================================ */
         .products-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -343,7 +388,6 @@ function buildSearchQuery($overrides = []) {
             z-index: 2;
         }
         
-        /* Top-left heart */
         .wishlist-btn {
             position: absolute;
             top: 8px;
@@ -409,7 +453,7 @@ function buildSearchQuery($overrides = []) {
         .stock-badge.in-stock { background: #d4edda; color: #155724; }
         .stock-badge.out-of-stock { background: #f8d7da; color: #721c24; }
         
-        /* ===== Action row ===== */
+        /* Action row */
         .card-actions {
             display: flex;
             gap: 8px;
@@ -443,7 +487,7 @@ function buildSearchQuery($overrides = []) {
         .card-actions .add-to-cart.added { background: #28a745; }
         .card-actions .add-to-cart.error { background: #dc3545; }
         
-        /* In-cart pill + plus */
+        /* In-cart pill */
         .in-cart-pill {
             background: #e8f5f0;
             color: #05573c;
@@ -494,7 +538,7 @@ function buildSearchQuery($overrides = []) {
         .add-more-btn:hover:not(:disabled) { background: #03402c; transform: scale(1.06); }
         .add-more-btn:disabled { opacity: 0.6; cursor: not-allowed; }
         
-        /* Icon-only wishlist square */
+        /* Wishlist square */
         .add-to-wishlist-inline {
             background: #fff;
             color: #e91e63;
@@ -524,7 +568,7 @@ function buildSearchQuery($overrides = []) {
             100% { transform: scale(1); }
         }
         
-        /* ===== Pagination ===== */
+        /* Pagination */
         .pagination {
             display: flex;
             justify-content: center;
@@ -578,7 +622,7 @@ function buildSearchQuery($overrides = []) {
             font-weight: 600;
         }
         
-        /* ===== No results ===== */
+        /* No results */
         .no-results {
             text-align: center;
             padding: 60px 20px;
@@ -653,11 +697,11 @@ function buildSearchQuery($overrides = []) {
                 <?php endif; ?>
             </div>
             
-            <!-- ===== FILTERS ===== -->
+            <!-- ===== FILTER BAR ===== -->
             <form class="search-filters" method="GET" action="search.php">
                 <input type="text" name="q" placeholder="Search products..." value="<?php echo htmlspecialchars($query); ?>">
                 
-                <select name="category">
+                <select name="category" class="<?php echo $category == 0 ? 'is-placeholder' : ''; ?>">
                     <option value="0">All Categories</option>
                     <?php foreach ($categories as $cat): ?>
                         <option value="<?php echo $cat['id']; ?>" <?php echo $category == $cat['id'] ? 'selected' : ''; ?>>
@@ -669,7 +713,7 @@ function buildSearchQuery($overrides = []) {
                 <input type="number" name="min_price" placeholder="Min Ksh" value="<?php echo $min_price ?: ''; ?>" step="1" min="0">
                 <input type="number" name="max_price" placeholder="Max Ksh" value="<?php echo $max_price ?: ''; ?>" step="1" min="0">
                 
-                <select name="sort">
+                <select name="sort" class="is-placeholder-none">
                     <option value="newest"     <?php echo $sort === 'newest'     ? 'selected' : ''; ?>>Newest</option>
                     <option value="oldest"     <?php echo $sort === 'oldest'     ? 'selected' : ''; ?>>Oldest</option>
                     <option value="price_low"  <?php echo $sort === 'price_low'  ? 'selected' : ''; ?>>Price ↑</option>
@@ -776,9 +820,7 @@ function buildSearchQuery($overrides = []) {
                 <!-- ===== PAGINATION ===== -->
                 <?php if ($total_pages > 1): ?>
                     <div class="pagination">
-                        <?php 
-                        $prev_disabled = $page <= 1;
-                        ?>
+                        <?php $prev_disabled = $page <= 1; ?>
                         <a href="<?php echo $prev_disabled ? '#' : '?' . buildSearchQuery(['page' => $page - 1]); ?>"
                            class="page-link <?php echo $prev_disabled ? 'disabled' : ''; ?>">
                             <i class="fas fa-chevron-left"></i>
@@ -837,6 +879,19 @@ function buildSearchQuery($overrides = []) {
 
     <script>
         const isLoggedIn = <?php echo $isLoggedIn ? 'true' : 'false'; ?>;
+        
+        // ============================================
+        // SELECT PLACEHOLDER STATE
+        // Greys the text when the default option is selected
+        // ============================================
+        document.querySelectorAll('.search-filters select').forEach(function(sel) {
+            function updatePlaceholder() {
+                const isPlaceholder = (sel.value === '' || sel.value === '0');
+                sel.classList.toggle('is-placeholder', isPlaceholder);
+            }
+            updatePlaceholder();
+            sel.addEventListener('change', updatePlaceholder);
+        });
         
         // ============================================
         // TOAST
