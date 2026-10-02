@@ -22,6 +22,19 @@ try {
     exit;
 }
 
+// Make sure Cloudinary helpers are loaded
+$cloudinary_helper_paths = [
+    __DIR__ . '/cloudinary_helper.php',
+    __DIR__ . '/../includes/cloudinary_helper.php',
+    __DIR__ . '/../../includes/cloudinary_helper.php',
+];
+foreach ($cloudinary_helper_paths as $path) {
+    if (file_exists($path)) {
+        require_once $path;
+        break;
+    }
+}
+
 // Get action from request
 $action = $_GET['action'] ?? '';
 $response = ['success' => false, 'message' => 'Invalid action'];
@@ -33,10 +46,17 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-// Check if user is admin for admin-only actions - FIXED to use user_role
-$admin_actions = ['get_product', 'add_product', 'update_product', 'delete_product', 'get_order', 'update_order_status', 'delete_order', 'get_customer', 'delete_customer', 'get_category', 'add_category', 'update_category', 'delete_category', 'get_stats', 'search_orders', 'get_admin'];
+// Check if user is admin for admin-only actions
+$admin_actions = [
+    'get_product', 'add_product', 'update_product', 'delete_product',
+    'get_order', 'update_order_status', 'delete_order',
+    'get_customer', 'delete_customer',
+    'get_category', 'add_category', 'update_category', 'delete_category',
+    'get_stats', 'search_orders', 'get_admin',
+    'get_product_images', 'delete_product_image',
+];
+
 if (in_array($action, $admin_actions)) {
-    // Check using the same admin check as config.php
     $isAdmin = isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
     if (!$isAdmin) {
         ob_clean();
@@ -66,15 +86,130 @@ try {
                 $product = $stmt->fetch(PDO::FETCH_ASSOC);
                 
                 if ($product) {
-                    $response = [
-                        'success' => true,
-                        'product' => $product
-                    ];
+                    $response = ['success' => true, 'product' => $product];
                 } else {
                     $response = ['success' => false, 'message' => 'Product not found'];
                 }
             } catch (PDOException $e) {
                 error_log('Get product error: ' . $e->getMessage());
+                $response = ['success' => false, 'message' => 'Database error: ' . $e->getMessage()];
+            }
+            break;
+
+        // ========================================
+        // PRODUCT IMAGES (GALLERY) ACTIONS
+        // ========================================
+        
+        case 'get_product_images':
+            $id = intval($_GET['id'] ?? 0);
+            if (!$id) {
+                $response = ['success' => false, 'message' => 'Invalid product ID'];
+                break;
+            }
+            
+            try {
+                $stmt = $pdo->prepare("
+                    SELECT id, image_url, image_public_id, display_order, is_primary
+                    FROM product_images
+                    WHERE product_id = ?
+                    ORDER BY is_primary DESC, display_order ASC, id ASC
+                ");
+                $stmt->execute([$id]);
+                $images = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                // Fallback: if no gallery rows, use the product's main image
+                if (empty($images)) {
+                    $stmt = $pdo->prepare("
+                        SELECT image, image_url, image_public_id
+                        FROM products WHERE id = ?
+                    ");
+                    $stmt->execute([$id]);
+                    $p = $stmt->fetch(PDO::FETCH_ASSOC);
+                    
+                    if ($p) {
+                        $url = null;
+                        if (!empty($p['image_url'])) {
+                            $url = $p['image_url'];
+                        } elseif (!empty($p['image'])) {
+                            $url = (defined('UPLOAD_URL') ? UPLOAD_URL : '../uploads/products/') . $p['image'];
+                        }
+                        
+                        if ($url) {
+                            $images[] = [
+                                'id' => 0,
+                                'image_url' => $url,
+                                'image_public_id' => $p['image_public_id'] ?? null,
+                                'display_order' => 0,
+                                'is_primary' => true,
+                            ];
+                        }
+                    }
+                }
+                
+                $response = ['success' => true, 'images' => $images];
+            } catch (PDOException $e) {
+                error_log('Get product images error: ' . $e->getMessage());
+                $response = ['success' => false, 'message' => 'Database error'];
+            }
+            break;
+        
+        case 'delete_product_image':
+            // Accept JSON body or form data
+            $input = null;
+            if (empty($_POST)) {
+                $input = json_decode(file_get_contents('php://input'), true) ?: [];
+            } else {
+                $input = $_POST;
+            }
+            
+            $image_id = intval($input['image_id'] ?? $_GET['image_id'] ?? 0);
+            if (!$image_id) {
+                $response = ['success' => false, 'message' => 'Invalid image ID'];
+                break;
+            }
+            
+            try {
+                // Fetch image record
+                $stmt = $pdo->prepare("
+                    SELECT image_public_id, product_id, is_primary
+                    FROM product_images
+                    WHERE id = ?
+                ");
+                $stmt->execute([$image_id]);
+                $img = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if (!$img) {
+                    $response = ['success' => false, 'message' => 'Image not found'];
+                    break;
+                }
+                
+                // Delete from Cloudinary
+                if (!empty($img['image_public_id']) && function_exists('deleteFromCloudinary')) {
+                    deleteFromCloudinary($img['image_public_id']);
+                }
+                
+                // Delete DB row
+                $stmt = $pdo->prepare("DELETE FROM product_images WHERE id = ?");
+                $stmt->execute([$image_id]);
+                
+                // If it was primary, promote the next image
+                if ($img['is_primary']) {
+                    $stmt = $pdo->prepare("
+                        UPDATE product_images 
+                        SET is_primary = TRUE 
+                        WHERE id = (
+                            SELECT id FROM product_images 
+                            WHERE product_id = ? 
+                            ORDER BY display_order ASC, id ASC 
+                            LIMIT 1
+                        )
+                    ");
+                    $stmt->execute([$img['product_id']]);
+                }
+                
+                $response = ['success' => true, 'message' => 'Image deleted'];
+            } catch (PDOException $e) {
+                error_log('Delete product image error: ' . $e->getMessage());
                 $response = ['success' => false, 'message' => 'Database error: ' . $e->getMessage()];
             }
             break;
@@ -92,10 +227,7 @@ try {
                 $admin = $stmt->fetch(PDO::FETCH_ASSOC);
                 
                 if ($admin) {
-                    $response = [
-                        'success' => true,
-                        'admin' => $admin
-                    ];
+                    $response = ['success' => true, 'admin' => $admin];
                 } else {
                     $response = ['success' => false, 'message' => 'Admin not found'];
                 }
@@ -165,10 +297,7 @@ try {
                 ]);
                 
                 if ($success) {
-                    $response = [
-                        'success' => true,
-                        'message' => 'Product updated successfully'
-                    ];
+                    $response = ['success' => true, 'message' => 'Product updated successfully'];
                 } else {
                     $response = ['success' => false, 'message' => 'Failed to update product'];
                 }
@@ -188,7 +317,6 @@ try {
             }
             
             try {
-                // Check if product exists
                 $stmt = $pdo->prepare("SELECT id FROM products WHERE id = ?");
                 $stmt->execute([$id]);
                 if (!$stmt->fetch()) {
@@ -200,10 +328,7 @@ try {
                 $success = $stmt->execute([$id]);
                 
                 if ($success) {
-                    $response = [
-                        'success' => true,
-                        'message' => 'Product deleted successfully'
-                    ];
+                    $response = ['success' => true, 'message' => 'Product deleted successfully'];
                 } else {
                     $response = ['success' => false, 'message' => 'Failed to delete product'];
                 }
@@ -225,7 +350,6 @@ try {
             }
             
             try {
-                // Get order details
                 $stmt = $pdo->prepare("
                     SELECT o.*, u.name as customer_name 
                     FROM orders o 
@@ -236,7 +360,6 @@ try {
                 $order = $stmt->fetch(PDO::FETCH_ASSOC);
                 
                 if ($order) {
-                    // Get order items
                     $stmt = $pdo->prepare("
                         SELECT oi.*, p.name as product_name 
                         FROM order_items oi 
@@ -246,11 +369,7 @@ try {
                     $stmt->execute([$id]);
                     $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
                     
-                    $response = [
-                        'success' => true,
-                        'order' => $order,
-                        'items' => $items
-                    ];
+                    $response = ['success' => true, 'order' => $order, 'items' => $items];
                 } else {
                     $response = ['success' => false, 'message' => 'Order not found'];
                 }
@@ -275,10 +394,7 @@ try {
                 $success = $stmt->execute([$status, $id]);
                 
                 if ($success) {
-                    $response = [
-                        'success' => true,
-                        'message' => 'Order status updated successfully'
-                    ];
+                    $response = ['success' => true, 'message' => 'Order status updated successfully'];
                 } else {
                     $response = ['success' => false, 'message' => 'Failed to update order status'];
                 }
@@ -298,19 +414,14 @@ try {
             }
             
             try {
-                // Delete order items first
                 $stmt = $pdo->prepare("DELETE FROM order_items WHERE order_id = ?");
                 $stmt->execute([$id]);
                 
-                // Then delete order
                 $stmt = $pdo->prepare("DELETE FROM orders WHERE id = ?");
                 $success = $stmt->execute([$id]);
                 
                 if ($success) {
-                    $response = [
-                        'success' => true,
-                        'message' => 'Order deleted successfully'
-                    ];
+                    $response = ['success' => true, 'message' => 'Order deleted successfully'];
                 } else {
                     $response = ['success' => false, 'message' => 'Failed to delete order'];
                 }
@@ -337,10 +448,7 @@ try {
                 $customer = $stmt->fetch(PDO::FETCH_ASSOC);
                 
                 if ($customer) {
-                    $response = [
-                        'success' => true,
-                        'customer' => $customer
-                    ];
+                    $response = ['success' => true, 'customer' => $customer];
                 } else {
                     $response = ['success' => false, 'message' => 'Customer not found'];
                 }
@@ -364,10 +472,7 @@ try {
                 $success = $stmt->execute([$id]);
                 
                 if ($success && $stmt->rowCount() > 0) {
-                    $response = [
-                        'success' => true,
-                        'message' => 'Customer deleted successfully'
-                    ];
+                    $response = ['success' => true, 'message' => 'Customer deleted successfully'];
                 } else {
                     $response = ['success' => false, 'message' => 'Customer not found or cannot be deleted'];
                 }
@@ -394,10 +499,7 @@ try {
                 $category = $stmt->fetch(PDO::FETCH_ASSOC);
                 
                 if ($category) {
-                    $response = [
-                        'success' => true,
-                        'category' => $category
-                    ];
+                    $response = ['success' => true, 'category' => $category];
                 } else {
                     $response = ['success' => false, 'message' => 'Category not found'];
                 }
@@ -452,10 +554,7 @@ try {
                 $success = $stmt->execute([$name, $slug, $id]);
                 
                 if ($success) {
-                    $response = [
-                        'success' => true,
-                        'message' => 'Category updated successfully'
-                    ];
+                    $response = ['success' => true, 'message' => 'Category updated successfully'];
                 } else {
                     $response = ['success' => false, 'message' => 'Failed to update category'];
                 }
@@ -475,14 +574,13 @@ try {
             }
             
             try {
-                // Check if category has products
                 $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM products WHERE category_id = ?");
                 $stmt->execute([$id]);
                 $count = $stmt->fetch(PDO::FETCH_ASSOC)['count'] ?? 0;
                 
                 if ($count > 0) {
                     $response = [
-                        'success' => false, 
+                        'success' => false,
                         'message' => 'Cannot delete category with products. Move products first.'
                     ];
                     break;
@@ -492,10 +590,7 @@ try {
                 $success = $stmt->execute([$id]);
                 
                 if ($success) {
-                    $response = [
-                        'success' => true,
-                        'message' => 'Category deleted successfully'
-                    ];
+                    $response = ['success' => true, 'message' => 'Category deleted successfully'];
                 } else {
                     $response = ['success' => false, 'message' => 'Failed to delete category'];
                 }
@@ -513,30 +608,22 @@ try {
             try {
                 $stats = [];
                 
-                // Total products
                 $stmt = $pdo->query("SELECT COUNT(*) as count FROM products");
                 $stats['products'] = $stmt->fetch(PDO::FETCH_ASSOC)['count'] ?? 0;
                 
-                // Total orders
                 $stmt = $pdo->query("SELECT COUNT(*) as count FROM orders");
                 $stats['orders'] = $stmt->fetch(PDO::FETCH_ASSOC)['count'] ?? 0;
                 
-                // Total revenue
                 $stmt = $pdo->query("SELECT COALESCE(SUM(total), 0) as total FROM orders WHERE status != 'cancelled'");
                 $stats['revenue'] = $stmt->fetch(PDO::FETCH_ASSOC)['total'] ?? 0;
                 
-                // Total customers
                 $stmt = $pdo->query("SELECT COUNT(*) as count FROM users WHERE role = 'user'");
                 $stats['customers'] = $stmt->fetch(PDO::FETCH_ASSOC)['count'] ?? 0;
                 
-                // Pending orders
                 $stmt = $pdo->query("SELECT COUNT(*) as count FROM orders WHERE status = 'pending'");
                 $stats['pending_orders'] = $stmt->fetch(PDO::FETCH_ASSOC)['count'] ?? 0;
                 
-                $response = [
-                    'success' => true,
-                    'stats' => $stats
-                ];
+                $response = ['success' => true, 'stats' => $stats];
             } catch (PDOException $e) {
                 error_log('Get stats error: ' . $e->getMessage());
                 $response = ['success' => false, 'message' => 'Database error'];
@@ -564,11 +651,7 @@ try {
                 ");
                 $stmt->execute([$search, $search]);
                 $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                
-                $response = [
-                    'success' => true,
-                    'products' => $products
-                ];
+                $response = ['success' => true, 'products' => $products];
             } catch (PDOException $e) {
                 error_log('Search products error: ' . $e->getMessage());
                 $response = ['success' => false, 'message' => 'Database error'];
@@ -594,11 +677,7 @@ try {
                 ");
                 $stmt->execute([$search, $search, $search]);
                 $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                
-                $response = [
-                    'success' => true,
-                    'orders' => $orders
-                ];
+                $response = ['success' => true, 'orders' => $orders];
             } catch (PDOException $e) {
                 error_log('Search orders error: ' . $e->getMessage());
                 $response = ['success' => false, 'message' => 'Database error'];
