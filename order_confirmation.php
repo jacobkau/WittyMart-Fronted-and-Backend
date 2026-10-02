@@ -4,12 +4,43 @@
 // ============================================
 require_once 'includes/config.php';
 
-if (!isset($_SESSION['order_success']) || !isset($_SESSION['order_number'])) {
-    header('Location: index.php');
+if (!isset($_SESSION['user_id'])) {
+    header('Location: home.php');
     exit();
 }
 
-$order_number = $_SESSION['order_number'];
+$user_id = $_SESSION['user_id'];
+
+// ============================================
+// RESOLVE ORDER NUMBER
+// Priority 1: session flash (fast path after normal redirect)
+// Priority 2: ?order= query param
+// Priority 3: latest order for this user (fallback if session lost)
+// ============================================
+$order_number = $_SESSION['order_number'] ?? '';
+
+if (!$order_number && !empty($_GET['order'])) {
+    $order_number = trim($_GET['order']);
+}
+
+if (!$order_number) {
+    try {
+        $stmt = $pdo->prepare("
+            SELECT order_number FROM orders 
+            WHERE user_id = ? 
+            ORDER BY id DESC LIMIT 1
+        ");
+        $stmt->execute([$user_id]);
+        $order_number = $stmt->fetchColumn() ?: '';
+    } catch (PDOException $e) {
+        error_log('Order confirmation fallback: ' . $e->getMessage());
+    }
+}
+
+if (!$order_number) {
+    header('Location: index.php');
+    exit();
+}
 
 // ============================================
 // CAPTURE STK DETAILS BEFORE CLEARING SESSION
@@ -20,7 +51,7 @@ $stk_amount    = $_SESSION['stk_amount']    ?? 0;
 $stk_reference = $_SESSION['stk_reference'] ?? '';
 $stk_order_id  = $_SESSION['order_id']      ?? 0;
 
-// Clear the transient session keys immediately so refresh doesn't re-trigger anything
+// Clear the transient session keys so a refresh doesn't re-trigger anything
 unset(
     $_SESSION['order_success'],
     $_SESSION['order_number'],
@@ -42,13 +73,24 @@ try {
         SELECT * FROM orders 
         WHERE order_number = ? AND user_id = ?
     ");
-    $stmt->execute([$order_number, $_SESSION['user_id']]);
+    $stmt->execute([$order_number, $user_id]);
     $order = $stmt->fetch();
 
     if ($order) {
         $stmt = $pdo->prepare("SELECT * FROM order_items WHERE order_id = ?");
         $stmt->execute([$order['id']]);
         $items = $stmt->fetchAll();
+
+        // If session was lost but we found the order, recover STK details from the order row
+        if (!$stk_order_id) {
+            $stk_order_id  = (int)$order['id'];
+            $stk_phone     = $order['mpesa_phone'] ?? '';
+            $stk_amount    = (float)$order['total'];
+            $stk_reference = 'ORD' . $order['id'];
+            $stk_needed    = !empty($order['mpesa_phone'])
+                             && in_array($order['payment_method'], ['mpesa','paybill'], true)
+                             && $order['payment_status'] === 'awaiting_payment';
+        }
     }
 } catch (PDOException $e) {
     error_log('Order confirmation fetch: ' . $e->getMessage());
@@ -245,26 +287,38 @@ $page_title = 'Order Confirmed';
                 </div>
 
                 <?php if (in_array($order['payment_method'], ['mpesa', 'paybill'])): ?>
-                    <div class="oc-status-card mpesa" id="mpesaCard">
-                        <i class="fas fa-mobile-alt"></i>
-                        <div>
-                            <strong>Payment Request Sent</strong>
-                            Check your phone <strong><?php echo htmlspecialchars($order['mpesa_phone'] ?? ''); ?></strong>
-                            and enter your M-Pesa PIN to complete payment of
-                            <strong>Ksh <?php echo number_format($order['total'], 0); ?></strong>.
-                            <small>
-                                Didn't receive the prompt? Dial <strong>*334#</strong>
-                                or visit <a href="orders.php" style="color:#0c5460; font-weight:600;">My Orders</a> to retry.
-                            </small>
+                    <?php if ($order['payment_status'] === 'paid'): ?>
+                        <div class="oc-status-card cod">
+                            <i class="fas fa-check-circle"></i>
+                            <div>
+                                <strong>Payment Confirmed</strong>
+                                We've received your payment of
+                                <strong>Ksh <?php echo number_format($order['total'], 0); ?></strong>.
+                                Your order is now being processed.
+                            </div>
                         </div>
-                    </div>
+                    <?php else: ?>
+                        <div class="oc-status-card mpesa" id="mpesaCard">
+                            <i class="fas fa-mobile-alt"></i>
+                            <div>
+                                <strong>Payment Request Sent</strong>
+                                Check your phone <strong><?php echo htmlspecialchars($order['mpesa_phone'] ?? ''); ?></strong>
+                                and enter your M-Pesa PIN to complete payment of
+                                <strong>Ksh <?php echo number_format($order['total'], 0); ?></strong>.
+                                <small>
+                                    Didn't receive the prompt? Dial <strong>*334#</strong>
+                                    or visit <a href="orders.php" style="color:#0c5460; font-weight:600;">My Orders</a> to retry.
+                                </small>
+                            </div>
+                        </div>
 
-                    <div class="pay-status" id="payStatus">
-                        <i class="fas fa-spinner fa-spin"></i>
-                        <span>Waiting for payment confirmation…</span>
-                    </div>
+                        <div class="pay-status" id="payStatus">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            <span>Waiting for payment confirmation…</span>
+                        </div>
+                    <?php endif; ?>
 
-                <?php elseif ($order['payment_method'] === 'pay_on_delivery'): ?>
+                <?php elseif ($order['payment_method'] === 'pay_on_delivery' || $order['payment_method'] === 'cash'): ?>
                     <div class="oc-status-card cod">
                         <i class="fas fa-money-bill-wave"></i>
                         <div>
@@ -276,6 +330,11 @@ $page_title = 'Order Confirmed';
                         </div>
                     </div>
                 <?php endif; ?>
+            <?php else: ?>
+                <div style="padding:20px; background:#fff3cd; color:#856404; border-radius:10px; text-align:left;">
+                    <strong><i class="fas fa-exclamation-triangle"></i> Order not found</strong>
+                    <p style="margin:6px 0 0;">We couldn't find your order details, but your order was likely placed. Check <a href="orders.php" style="color:#856404; font-weight:600;">My Orders</a> for confirmation.</p>
+                </div>
             <?php endif; ?>
 
             <div class="oc-actions">
@@ -293,7 +352,7 @@ $page_title = 'Order Confirmed';
     <?php include "footer.php"; ?>
 
     <!-- ============================================
-         EMAILJS CONFIRMATION
+         EMAILJS CONFIRMATION + PAYMENT POLLING
          ============================================ -->
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <script>
@@ -305,36 +364,40 @@ $page_title = 'Order Confirmed';
 
         document.addEventListener('DOMContentLoaded', function() {
             const statusEl = document.getElementById('emailStatus');
-            if (typeof emailjs === 'undefined' || !statusEl) return;
 
-            const itemsText = <?php echo json_encode($itemsText); ?>;
+            // ============================================
+            // EMAIL CONFIRMATION
+            // ============================================
+            if (typeof emailjs !== 'undefined' && statusEl) {
+                const itemsText = <?php echo json_encode($itemsText); ?>;
 
-            const params = {
-                to_name:      <?php echo json_encode($user['name'] ?? ''); ?>,
-                to_email:     <?php echo json_encode($user['email'] ?? ''); ?>,
-                order_number: <?php echo json_encode($order_number); ?>,
-                order_total:  <?php echo json_encode($order ? number_format($order['total'], 0) : ''); ?>,
-                order_items:  itemsText,
-                delivery_to:  <?php echo json_encode($order['shipping_address'] ?? ''); ?>
-            };
+                const params = {
+                    to_name:      <?php echo json_encode($user['name'] ?? ''); ?>,
+                    to_email:     <?php echo json_encode($user['email'] ?? ''); ?>,
+                    order_number: <?php echo json_encode($order_number); ?>,
+                    order_total:  <?php echo json_encode($order ? number_format($order['total'], 0) : ''); ?>,
+                    order_items:  itemsText,
+                    delivery_to:  <?php echo json_encode($order['shipping_address'] ?? ''); ?>
+                };
 
-            if (!params.to_email) return;
+                if (params.to_email) {
+                    statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending confirmation email…';
 
-            statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending confirmation email…';
-
-            emailjs.send("YOUR_SERVICE_ID", "YOUR_TEMPLATE_ID", params)
-                .then(function() {
-                    statusEl.innerHTML = '<i class="fas fa-check-circle ok"></i> Confirmation email sent to ' + params.to_email;
-                })
-                .catch(function(err) {
-                    console.error('Email send failed:', err);
-                    statusEl.innerHTML = '<i class="fas fa-exclamation-triangle err"></i> Could not send email confirmation.';
-                });
+                    emailjs.send("YOUR_SERVICE_ID", "YOUR_TEMPLATE_ID", params)
+                        .then(function() {
+                            statusEl.innerHTML = '<i class="fas fa-check-circle ok"></i> Confirmation email sent to ' + params.to_email;
+                        })
+                        .catch(function(err) {
+                            console.error('Email send failed:', err);
+                            statusEl.innerHTML = '<i class="fas fa-exclamation-triangle err"></i> Could not send email confirmation.';
+                        });
+                }
+            }
 
             // ============================================
             // POLL PAYMENT STATUS (for M-Pesa orders)
             // ============================================
-            <?php if ($order && in_array($order['payment_method'], ['mpesa','paybill'])): ?>
+            <?php if ($order && in_array($order['payment_method'], ['mpesa','paybill']) && $order['payment_status'] !== 'paid'): ?>
             const payStatusEl = document.getElementById('payStatus');
             const orderId = <?php echo (int)$order['id']; ?>;
             let pollCount = 0;
@@ -349,6 +412,12 @@ $page_title = 'Order Confirmed';
                         if (data.status === 'paid') {
                             payStatusEl.className = 'pay-status paid';
                             payStatusEl.innerHTML = '<i class="fas fa-check-circle"></i> <span>Payment confirmed! Your order is being processed.</span>';
+                            // Also swap the top card
+                            const mpesaCard = document.getElementById('mpesaCard');
+                            if (mpesaCard) {
+                                mpesaCard.className = 'oc-status-card cod';
+                                mpesaCard.innerHTML = '<i class="fas fa-check-circle"></i><div><strong>Payment Confirmed</strong>We\\'ve received your payment. Your order is now being processed.</div>';
+                            }
                             return;
                         }
                         if (data.status === 'failed') {
@@ -375,9 +444,7 @@ $page_title = 'Order Confirmed';
 <?php
 // ============================================
 // DEFERRED STK PUSH TRIGGER
-// This runs AFTER the page has been fully sent to the user.
-// The browser has already closed its connection — only the server
-// process continues here.
+// Runs AFTER the page has been sent to the user.
 // ============================================
 
 // Flush all output to the client so the browser is done
