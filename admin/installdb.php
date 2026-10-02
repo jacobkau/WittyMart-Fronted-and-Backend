@@ -514,6 +514,23 @@ if (!witty_column_exists($pdo, 'orders', 'mpesa_phone')) {
     } catch (PDOException $e) {}
 }
 
+foreach ([
+    'payment_status'  => "VARCHAR(20) DEFAULT 'pending'",
+    'payment_reference' => "VARCHAR(100)",
+    'mpesa_phone'     => "VARCHAR(30)",
+] as $col => $def) {
+    if (!witty_column_exists($pdo, 'orders', $col)) {
+        try {
+            $pdo->exec("ALTER TABLE orders ADD COLUMN $col $def");
+            echo "<div class='success'>  ✅ orders.$col added</div>";
+        } catch (PDOException $e) {}
+    }
+}
+
+
+
+
+    
 
     
     echo "</div>"; // close log div
