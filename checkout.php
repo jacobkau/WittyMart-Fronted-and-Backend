@@ -221,6 +221,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
                 $pdo->prepare("DELETE FROM cart WHERE user_id = ?")->execute([$user_id]);
 
                 $pdo->commit();
+                error_log("CHECKOUT DEBUG: Order #$order_number created, ID=$order_id");
+                error_log("CHECKOUT DEBUG: Redirecting to order_confirmation.php");
 
                 logActivity('order_placed', 'Order #' . $order_number, $user_id, $user_name);
 
