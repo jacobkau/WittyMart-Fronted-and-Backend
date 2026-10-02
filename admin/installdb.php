@@ -425,6 +425,71 @@ if (!witty_column_exists($pdo, 'orders', 'address_id')) {
         echo "<div class='success'>  ✅ orders.address_id column added</div>";
     } catch (PDOException $e) {}
 }
+
+    // ============================================
+// COUPONS TABLE
+// ============================================
+echo "<hr style='margin:24px 0;border:0;border-top:1px solid #eee;'>";
+echo "<div class='info' style='font-weight:700;font-size:14px;'>▶ Setting up Coupons...</div>";
+
+if (!witty_table_exists($pdo, 'coupons')) {
+    $pdo->exec("
+        CREATE TABLE coupons (
+            id SERIAL PRIMARY KEY,
+            code VARCHAR(50) UNIQUE NOT NULL,
+            description TEXT,
+            discount_type VARCHAR(20) NOT NULL DEFAULT 'percentage', -- 'percentage' or 'fixed'
+            discount_value NUMERIC(10,2) NOT NULL,
+            min_order_amount NUMERIC(10,2) DEFAULT 0,
+            max_discount NUMERIC(10,2),
+            usage_limit INTEGER,
+            used_count INTEGER DEFAULT 0,
+            per_user_limit INTEGER DEFAULT 1,
+            starts_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMP,
+            status VARCHAR(20) DEFAULT 'active',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ");
+    echo "<div class='success'>  ✅ coupons table created</div>";
+} else {
+    echo "<div class='warn'>  ⚠ coupons already exists</div>";
+}
+
+if (!witty_table_exists($pdo, 'coupon_usages')) {
+    $pdo->exec("
+        CREATE TABLE coupon_usages (
+            id SERIAL PRIMARY KEY,
+            coupon_id INTEGER NOT NULL REFERENCES coupons(id) ON DELETE CASCADE,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+            discount_amount NUMERIC(10,2) NOT NULL,
+            used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ");
+    echo "<div class='success'>  ✅ coupon_usages table created</div>";
+}
+
+// ============================================
+// ORDERS: add coupon + payment metadata
+// ============================================
+foreach ([
+    'coupon_code'        => "VARCHAR(50)",
+    'coupon_discount'    => "NUMERIC(10,2) DEFAULT 0",
+    'payment_status'     => "VARCHAR(30) DEFAULT 'pending'",
+    'payment_reference'  => "VARCHAR(100)",
+    'paybill_number'     => "VARCHAR(20)",
+    'paybill_account'    => "VARCHAR(50)",
+    'tracking_number'    => "VARCHAR(50)",
+    'tracking_status'    => "VARCHAR(30) DEFAULT 'pending'",
+] as $col => $type) {
+    if (!witty_column_exists($pdo, 'orders', $col)) {
+        try {
+            $pdo->exec("ALTER TABLE orders ADD COLUMN $col $type");
+            echo "<div class='success'>  ✅ orders.$col added</div>";
+        } catch (PDOException $e) {}
+    }
+}
     echo "</div>"; // close log div
 
     // ============================================
@@ -447,6 +512,10 @@ if (!witty_column_exists($pdo, 'orders', 'address_id')) {
     echo "<li><strong>products</strong>: + supplier_id (FK → suppliers.id)</li>";
     echo "<li><strong>user_addresses</strong> — User delivery addresses (with default)</li>";
 echo "<li><strong>orders</strong>: + delivery_county, delivery_phone, delivery_recipient, address_id</li>";
+ echo "<p><strong>coupons reference:</strong></p>";
+    echo "<li><strong>coupons</strong> — Discount coupon codes</li>";
+echo "<li><strong>coupon_usages</strong> — Tracks coupon redemptions per user</li>";
+echo "<li><strong>orders</strong> — + coupon_code, payment_status, tracking_number, paybill_*</li>";
     echo "</ul>";
 
     echo "<p class='info'>Old free-text <code>products.supplier</code> column is preserved for backward compatibility.</p>";
