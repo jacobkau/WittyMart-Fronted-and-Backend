@@ -1,6 +1,6 @@
 <?php
 // ============================================
-// WITTYMART CHECKOUT WITH M-PESA STK PUSH
+// WITTYMART CHECKOUT WITH DEFERRED M-PESA STK PUSH
 // ============================================
 require_once 'includes/config.php';
 require_once 'includes/cloudinary_helper.php';
@@ -114,7 +114,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
         $post_address_id = intval($_POST['address_id'] ?? 0);
         $mpesa_phone     = sanitize($_POST['mpesa_phone'] ?? '');
 
-        // Validate
         $validAddress = null;
         foreach ($userAddresses as $a) if ((int)$a['id'] === $post_address_id) { $validAddress = $a; break; }
 
@@ -125,14 +124,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
         } elseif (in_array($payment_method, ['mpesa', 'paybill']) && empty($mpesa_phone)) {
             $order_error = 'Please enter the M-Pesa phone number.';
         } else {
-            // Payment status based on method
             $payment_status = in_array($payment_method, ['mpesa', 'paybill'])
                 ? 'awaiting_payment'
-                : 'pending'; // pay_on_delivery
+                : 'pending';
 
             $pdo->beginTransaction();
 
-            // ----- Stock locks -----
+            // Stock locks
             $stock_error = false;
             foreach ($cartItems as $item) {
                 $lock = $pdo->prepare("SELECT stock, name FROM products WHERE id = ? FOR UPDATE");
@@ -148,12 +146,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
             if ($stock_error) {
                 $pdo->rollBack();
             } else {
-                // Recalculate server-side
                 $transportFee = countyTransportFee($validAddress['county']);
                 $shipping_fee = $transportFee;
                 $order_total  = $totalAfterDiscount + $transportFee;
 
-                // ----- Generate unique order number -----
+                // Order number
                 $order_number = null;
                 for ($i = 0; $i < 5; $i++) {
                     $candidate = 'ORD-' . date('Ymd') . '-' . str_pad(random_int(1, 99999), 5, '0', STR_PAD_LEFT);
@@ -169,7 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
                     (!empty($validAddress['city']) ? ', ' . $validAddress['city'] : '')
                 );
 
-                // ----- Insert order -----
+                // Insert order
                 $stmt = $pdo->prepare("
                     INSERT INTO orders
                     (user_id, order_number, total, shipping_fee, status,
@@ -189,7 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
                 ]);
                 $order_id = $pdo->lastInsertId();
 
-                // ----- Insert items + decrement stock -----
+                // Items
                 $stmtItem  = $pdo->prepare("
                     INSERT INTO order_items
                     (order_id, product_id, product_name, quantity, price, total)
@@ -209,13 +206,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
                     }
                 }
 
-                // ----- Increment coupon use -----
+                // Coupon use
                 if (!empty($_SESSION['coupon']['id'])) {
                     $pdo->prepare("UPDATE coupons SET uses = uses + 1 WHERE id = ?")
                         ->execute([$_SESSION['coupon']['id']]);
                 }
 
-                // ----- Clear cart -----
+                // Clear cart
                 $pdo->prepare("DELETE FROM cart WHERE user_id = ?")->execute([$user_id]);
 
                 $pdo->commit();
@@ -223,51 +220,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
                 logActivity('order_placed', 'Order #' . $order_number, $user_id, $user_name);
 
                 // ============================================
-                // M-PESA STK PUSH INITIATION (outside the txn)
+                // STASH STK DETAILS IN SESSION — DO NOT CALL MPESA HERE
+                // The push will be triggered from order_confirmation.php
+                // AFTER the response has been sent to the user.
                 // ============================================
-                $mpesa_push_success = false;
-                $mpesa_push_message = '';
+                $stk_needed = in_array($payment_method, ['mpesa', 'paybill']) && !empty($mpesa_phone);
 
-                if (in_array($payment_method, ['mpesa', 'paybill']) && !empty($mpesa_phone)) {
-                    require_once 'includes/mpesa_service.php';
-
-                    try {
-                        $mpesa = new MpesaService();
-                        $normalizedPhone = MpesaService::normalizePhone($mpesa_phone);
-                        $reference = 'ORD' . $order_id; // max 12 chars
-
-                        $pushResponse = $mpesa->stkPush(
-                            $normalizedPhone,
-                            $order_total,
-                            $reference,
-                            'WittyMart Order'
-                        );
-
-                        if ($pushResponse && !empty($pushResponse['CheckoutRequestID'])) {
-                            // Save CheckoutRequestID so the callback can match the order
-                            $stmt = $pdo->prepare("UPDATE orders SET payment_reference = ? WHERE id = ?");
-                            $stmt->execute([$pushResponse['CheckoutRequestID'], $order_id]);
-                            $mpesa_push_success = true;
-                            $mpesa_push_message = $pushResponse['CustomerMessage'] ?? 'STK push sent';
-                            error_log("M-Pesa STK Push sent for order #{$order_number} — CheckoutRequestID: {$pushResponse['CheckoutRequestID']}");
-                        } else {
-                            error_log("M-Pesa STK Push failed for order #{$order_number}");
-                            $mpesa_push_message = 'Could not initiate payment prompt. Please retry from your orders page.';
-                        }
-                    } catch (Exception $e) {
-                        error_log('M-Pesa service error: ' . $e->getMessage());
-                        $mpesa_push_message = 'Payment service unavailable. Please retry from your orders page.';
-                    }
-                }
-
-                // ============================================
-                // SESSION CLEANUP & REDIRECT
-                // ============================================
-                unset($_SESSION['selected_address_id'], $_SESSION['coupon'], $_SESSION['delivery']);
                 $_SESSION['order_success']  = true;
                 $_SESSION['order_number']   = $order_number;
-                $_SESSION['mpesa_pending']  = $mpesa_push_success;
-                $_SESSION['mpesa_message']  = $mpesa_push_message;
+                $_SESSION['order_id']       = $order_id;
+                $_SESSION['stk_needed']     = $stk_needed;
+                $_SESSION['stk_phone']      = $mpesa_phone;
+                $_SESSION['stk_amount']     = $order_total;
+                $_SESSION['stk_reference']  = 'ORD' . $order_id;
+
+                unset($_SESSION['selected_address_id'], $_SESSION['coupon'], $_SESSION['delivery']);
 
                 header('Location: order_confirmation.php');
                 exit();
@@ -358,7 +325,6 @@ $page_title = 'Checkout';
         .btn-place-order:hover:not(:disabled) { background: #03402c; }
         .btn-place-order:disabled { opacity: 0.7; cursor: not-allowed; }
 
-        /* Order summary */
         .order-item { display: flex; gap: 15px; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
         .order-item:last-child { border-bottom: none; }
         .order-item img { width: 60px; height: 60px; object-fit: cover; border-radius: 6px; background: #f5f5f5; }
@@ -525,7 +491,6 @@ $page_title = 'Checkout';
         function selectPay(el) {
             document.querySelectorAll('.payment-methods label').forEach(l => l.classList.remove('selected'));
             el.classList.add('selected');
-            // Also trigger the radio change so the phone fields show
             const radio = el.querySelector('input[type=radio]');
             if (radio) {
                 radio.checked = true;
@@ -546,7 +511,6 @@ $page_title = 'Checkout';
             }
         }
 
-        // Prevent double submission
         document.getElementById('checkoutForm').addEventListener('submit', function(e) {
             const btn = document.getElementById('placeOrderBtn');
             const method = document.querySelector('input[name="payment_method"]:checked').value;
@@ -558,7 +522,6 @@ $page_title = 'Checkout';
                 : '<i class="fas fa-spinner fa-spin"></i> Placing order…';
         });
 
-        // Initialize on page load
         toggleMpesa();
     </script>
 </body>
