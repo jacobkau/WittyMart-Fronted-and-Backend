@@ -59,6 +59,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $supplier = sanitize($_POST['supplier'] ?? '');
                 $sku = sanitize(trim($_POST['sku'] ?? ''));
                 
+                // Auto-generate SKU if empty
+                if ($sku === '') {
+                    $stmt = $pdo->prepare("SELECT name FROM categories WHERE id = ?");
+                    $stmt->execute([$category_id]);
+                    $category = $stmt->fetch();
+                    $prefix = 'PRD';
+                    if ($category) {
+                        $prefix = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $category['name']), 0, 3));
+                        $prefix = str_pad($prefix, 3, 'X');
+                    }
+                    do {
+                        $sku = $prefix . '-' . random_int(100000, 999999);
+                        $check = $pdo->prepare("SELECT COUNT(*) FROM products WHERE sku = ?");
+                        $check->execute([$sku]);
+                    } while ($check->fetchColumn() > 0);
+                }
+                
                 $image_url = null;
                 $image_public_id = null;
                 $image_name = null;
@@ -128,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                         
                         if (function_exists('logActivity')) {
-                            logActivity('add_product', 'Added product: ' . $name,
+                            logActivity('add_product', 'Added product: ' . $name . ' (SKU: ' . $sku . ')',
                                 $_SESSION['user_id'], $_SESSION['user_name']);
                         }
                         $message = 'Product added successfully! ' . $upload_message;
@@ -156,6 +173,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stock = intval($_POST['stock'] ?? 0);
                 $supplier = sanitize($_POST['supplier'] ?? '');
                 $sku = sanitize(trim($_POST['sku'] ?? ''));
+                
+                if ($sku === '') {
+                    $stmt = $pdo->prepare("SELECT name FROM categories WHERE id = ?");
+                    $stmt->execute([$category_id]);
+                    $category = $stmt->fetch();
+                    $prefix = 'PRD';
+                    if ($category) {
+                        $prefix = strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $category['name']), 0, 3));
+                        $prefix = str_pad($prefix, 3, 'X');
+                    }
+                    do {
+                        $sku = $prefix . '-' . random_int(100000, 999999);
+                        $check = $pdo->prepare("SELECT COUNT(*) FROM products WHERE sku = ? AND id != ?");
+                        $check->execute([$sku, $id]);
+                    } while ($check->fetchColumn() > 0);
+                }
                 
                 $stmt = $pdo->prepare("SELECT image_public_id, image, image_url FROM products WHERE id = ?");
                 $stmt->execute([$id]);
@@ -374,7 +407,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ============================================
-// FILTERS + SEARCH + PAGINATION
+// FILTERS + SEARCH + PAGINATION (server-side)
 // ============================================
 $search        = trim($_GET['q'] ?? '');
 $filter_cat    = intval($_GET['category'] ?? 0);
@@ -420,13 +453,13 @@ $where_sql = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
 // Order by
 $order_sql = 'ORDER BY p.created_at DESC';
 switch ($sort) {
-    case 'oldest':  $order_sql = 'ORDER BY p.created_at ASC'; break;
-    case 'name':    $order_sql = 'ORDER BY p.name ASC'; break;
+    case 'oldest':     $order_sql = 'ORDER BY p.created_at ASC'; break;
+    case 'name':       $order_sql = 'ORDER BY p.name ASC'; break;
     case 'price_low':  $order_sql = 'ORDER BY p.price ASC'; break;
     case 'price_high': $order_sql = 'ORDER BY p.price DESC'; break;
     case 'stock_low':  $order_sql = 'ORDER BY p.stock ASC NULLS LAST'; break;
     case 'newest':
-    default:        $order_sql = 'ORDER BY p.created_at DESC'; break;
+    default:           $order_sql = 'ORDER BY p.created_at DESC'; break;
 }
 
 // ===== Get total count for pagination =====
@@ -591,10 +624,6 @@ $page_title = 'Products';
         .stat-card.info .stat-icon { background: #17a2b8; }
         .stat-card.info { border-left-color: #17a2b8; }
         
-        .stat-card .stat-body {
-            min-width: 0;
-        }
-        
         .stat-card .stat-label {
             font-size: 11px;
             text-transform: uppercase;
@@ -612,7 +641,7 @@ $page_title = 'Products';
         }
         
         /* ============================================
-           TOOLBAR (filter card)
+           TOOLBAR
            ============================================ */
         .toolbar-card {
             background: #fff;
@@ -686,9 +715,6 @@ $page_title = 'Products';
         
         .toolbar-search .clear-btn.visible { display: flex; }
         
-        /* ============================================
-           DROPDOWN – FORCED DARK TEXT
-           ============================================ */
         .toolbar-select {
             padding: 9px 32px 9px 12px;
             border: 1px solid #ddd;
@@ -1171,9 +1197,9 @@ $page_title = 'Products';
                 </div>
             </div>
 
-            <!-- ===== TOOLBAR (SEPARATE CARD) ===== -->
+            <!-- ===== TOOLBAR ===== -->
             <div class="toolbar-card">
-                <form method="GET" action="products.php" id="filterForm">
+                <form method="GET" action="manage_products.php" id="filterForm">
                     <div class="toolbar-row">
                         <div class="toolbar-search">
                             <i class="fas fa-search"></i>
@@ -1225,7 +1251,7 @@ $page_title = 'Products';
                         </button>
                         
                         <?php if ($search || $filter_cat || $filter_status || $filter_stock || $sort !== 'newest'): ?>
-                            <a href="products.php" class="toolbar-btn secondary">
+                            <a href="manage_products.php" class="toolbar-btn secondary">
                                 <i class="fas fa-times"></i> Reset
                             </a>
                         <?php endif; ?>
@@ -1255,36 +1281,52 @@ $page_title = 'Products';
                                 <tr>
                                     <th>Image</th>
                                     <th>Name</th>
-                                    <th>Description</th>
+                                    <th>SKU</th>
                                     <th>Price</th>
+                                    <th>Stock</th>
+                                    <th>Supplier</th>
                                     <th>Category</th>
                                     <th>Status</th>
-                                    <th>Created</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php foreach ($products as $product): ?>
+                                    <?php 
+                                    $img_src = getProductImage($product['image'] ?? null, $product['image_url'] ?? null);
+                                    $is_cloudinary = !empty($product['image_url']) && strpos($product['image_url'], 'cloudinary.com') !== false;
+                                    $stock_val = intval($product['stock'] ?? 0);
+                                    $status_val = $product['status'] ?? 'active';
+                                    ?>
                                     <tr>
                                         <td>
-                                            <img src="<?php echo getProductImage($product['image'] ?? null, $product['image_url'] ?? null); ?>" 
+                                            <img src="<?php echo htmlspecialchars($img_src); ?>" 
                                                  alt="<?php echo htmlspecialchars($product['name']); ?>"
                                                  class="product-image-thumb"
                                                  onerror="this.src='../uploads/products/no-image.png'">
-                                            <?php if (!empty($product['image_url'])): ?>
-                                                <span class="cloudinary-badge">Cloud</span>
+                                            <?php if ($is_cloudinary): ?>
+                                                <br><span class="cloudinary-badge">Cloud</span>
                                             <?php endif; ?>
                                         </td>
                                         <td><strong><?php echo htmlspecialchars($product['name']); ?></strong></td>
-                                        <td><?php echo htmlspecialchars(substr($product['description'] ?? '', 0, 50)); ?>...</td>
+                                        <td><code><?php echo htmlspecialchars($product['sku'] ?? 'N/A'); ?></code></td>
                                         <td>Ksh <?php echo number_format($product['price'], 0); ?></td>
+                                        <td>
+                                            <?php if ($stock_val <= 0): ?>
+                                                <span class="status-badge status-inactive">0</span>
+                                            <?php elseif ($stock_val <= 5): ?>
+                                                <span class="status-badge status-draft"><?php echo $stock_val; ?></span>
+                                            <?php else: ?>
+                                                <span class="status-badge status-active"><?php echo $stock_val; ?></span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td><?php echo htmlspecialchars($product['supplier'] ?? 'N/A'); ?></td>
                                         <td><?php echo htmlspecialchars($product['category_name'] ?? 'Uncategorized'); ?></td>
                                         <td>
-                                            <span class="status-badge status-<?php echo htmlspecialchars($product['status'] ?? 'active'); ?>">
-                                                <?php echo htmlspecialchars($product['status'] ?? 'active'); ?>
+                                            <span class="status-badge status-<?php echo htmlspecialchars($status_val); ?>">
+                                                <?php echo htmlspecialchars($status_val); ?>
                                             </span>
                                         </td>
-                                        <td><?php echo date('M d, Y', strtotime($product['created_at'] ?? 'now')); ?></td>
                                         <td>
                                             <div class="action-buttons">
                                                 <button class="btn-view" onclick="viewProduct(<?php echo $product['id']; ?>)" title="View details">
@@ -1363,7 +1405,7 @@ $page_title = 'Products';
                         <h3 style="margin:0 0 8px; color:#555;">No products found</h3>
                         <p style="margin:0;">
                             <?php if ($search || $filter_cat || $filter_status || $filter_stock): ?>
-                                Try adjusting your filters or <a href="products.php" style="color:#05573c; font-weight:600;">reset</a>.
+                                Try adjusting your filters or <a href="manage_products.php" style="color:#05573c; font-weight:600;">reset</a>.
                             <?php else: ?>
                                 Click "Add Product" to get started.
                             <?php endif; ?>
@@ -1424,6 +1466,11 @@ $page_title = 'Products';
                     <input type="text" name="name" required placeholder="Enter product name">
                 </div>
                 
+                <div class="form-group">
+                    <label><i class="fas fa-barcode"></i> SKU (Optional — auto-generated if blank)</label>
+                    <input type="text" name="sku" placeholder="e.g., PRD-001">
+                </div>
+                
                 <div class="form-row">
                     <div class="form-group">
                         <label><i class="fas fa-money-bill"></i> Price (Ksh) *</label>
@@ -1449,18 +1496,13 @@ $page_title = 'Products';
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label><i class="fas fa-cubes"></i> Stock</label>
+                        <label><i class="fas fa-cubes"></i> Stock Quantity</label>
                         <input type="number" name="stock" value="0">
                     </div>
                     <div class="form-group">
-                        <label><i class="fas fa-barcode"></i> SKU</label>
-                        <input type="text" name="sku" placeholder="Optional">
+                        <label><i class="fas fa-truck"></i> Supplier / Seller</label>
+                        <input type="text" name="supplier" placeholder="Enter supplier name">
                     </div>
-                </div>
-                
-                <div class="form-group">
-                    <label><i class="fas fa-truck"></i> Supplier</label>
-                    <input type="text" name="supplier" placeholder="Supplier name">
                 </div>
                 
                 <div class="form-row">
@@ -1523,6 +1565,11 @@ $page_title = 'Products';
                     <input type="text" name="name" id="editProductName" required>
                 </div>
                 
+                <div class="form-group">
+                    <label><i class="fas fa-barcode"></i> SKU</label>
+                    <input type="text" name="sku" id="editProductSku" placeholder="e.g., PRD-001">
+                </div>
+                
                 <div class="form-row">
                     <div class="form-group">
                         <label><i class="fas fa-money-bill"></i> Price (Ksh) *</label>
@@ -1548,18 +1595,13 @@ $page_title = 'Products';
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label><i class="fas fa-cubes"></i> Stock</label>
+                        <label><i class="fas fa-cubes"></i> Stock Quantity</label>
                         <input type="number" name="stock" id="editProductStock" value="0">
                     </div>
                     <div class="form-group">
-                        <label><i class="fas fa-barcode"></i> SKU</label>
-                        <input type="text" name="sku" id="editProductSku">
+                        <label><i class="fas fa-truck"></i> Supplier / Seller</label>
+                        <input type="text" name="supplier" id="editProductSupplier">
                     </div>
-                </div>
-                
-                <div class="form-group">
-                    <label><i class="fas fa-truck"></i> Supplier</label>
-                    <input type="text" name="supplier" id="editProductSupplier">
                 </div>
                 
                 <div class="form-row">
@@ -1639,7 +1681,6 @@ $page_title = 'Products';
         
         // ============================================
         // SEARCH: type freely, submit on Enter or Apply
-        // (no auto-submit while typing so input stays visible)
         // ============================================
         (function() {
             const input = document.getElementById('searchInput');
@@ -1652,10 +1693,8 @@ $page_title = 'Products';
             }
             updateClearBtn();
             
-            // Just show/hide the × button as you type — no form submit
             input.addEventListener('input', updateClearBtn);
             
-            // Clear the search and reload
             if (clearBtn) {
                 clearBtn.addEventListener('click', function() {
                     input.value = '';
@@ -1664,7 +1703,6 @@ $page_title = 'Products';
                 });
             }
             
-            // Optional: press Enter in search box to submit immediately
             input.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
@@ -1740,7 +1778,7 @@ $page_title = 'Products';
             const fd = new FormData();
             fd.append('action', 'delete_image');
             fd.append('image_id', imageId);
-            fetch('products.php', { method: 'POST', body: fd })
+            fetch('manage_products.php', { method: 'POST', body: fd })
                 .then(() => {
                     const pid = document.getElementById('editProductId').value;
                     loadExistingGallery(pid);
