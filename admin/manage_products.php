@@ -25,15 +25,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $price = floatval($_POST['price'] ?? 0);
                 $category_id = intval($_POST['category_id'] ?? 0);
                 $status = sanitize($_POST['status'] ?? 'active');
+                $stock = intval($_POST['stock'] ?? 0);
+                $supplier = sanitize($_POST['supplier'] ?? '');
+                $sku = sanitize(trim($_POST['sku'] ?? ''));
                 
-                // Handle image upload - UPLOAD TO CLOUDINARY
                 $image_url = null;
                 $image_public_id = null;
-                $image_name = null; // Keep for backward compatibility
+                $image_name = null;
                 $upload_message = '';
                 
                 if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                    // First, upload to Cloudinary
                     $upload_result = uploadToCloudinary($_FILES['image']['tmp_name'], 'products');
                     
                     if ($upload_result['success']) {
@@ -41,24 +42,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $image_public_id = $upload_result['public_id'];
                         $upload_message = 'Image uploaded to Cloudinary successfully!';
                         
-                        // Also save locally as fallback (optional)
                         $upload_dir = UPLOAD_DIR;
-                        if (!file_exists($upload_dir)) {
-                            mkdir($upload_dir, 0777, true);
-                        }
+                        if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
                         $image_name = time() . '_' . basename($_FILES['image']['name']);
-                        $upload_path = $upload_dir . $image_name;
-                        move_uploaded_file($_FILES['image']['tmp_name'], $upload_path);
+                        move_uploaded_file($_FILES['image']['tmp_name'], $upload_dir . $image_name);
                     } else {
-                        // Fallback to local upload if Cloudinary fails
                         $upload_dir = UPLOAD_DIR;
-                        if (!file_exists($upload_dir)) {
-                            mkdir($upload_dir, 0777, true);
-                        }
+                        if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
                         $image_name = time() . '_' . basename($_FILES['image']['name']);
-                        $upload_path = $upload_dir . $image_name;
-                        
-                        if (move_uploaded_file($_FILES['image']['tmp_name'], $upload_path)) {
+                        if (move_uploaded_file($_FILES['image']['tmp_name'], $upload_dir . $image_name)) {
                             $upload_message = 'Image saved locally (Cloudinary upload failed)';
                         } else {
                             $image_name = null;
@@ -68,16 +60,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 if ($name && $price > 0) {
-                    // Update SQL to include image_url and image_public_id
-                    $stmt = $pdo->prepare("INSERT INTO products (name, description, price, category_id, image, image_url, image_public_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-                    if ($stmt->execute([$name, $description, $price, $category_id, $image_name, $image_url, $image_public_id, $status])) {
+                    $stmt = $pdo->prepare("
+                        INSERT INTO products 
+                        (name, description, price, category_id, image, image_url, image_public_id, status, stock, supplier, sku) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    if ($stmt->execute([
+                        $name, $description, $price, $category_id,
+                        $image_name, $image_url, $image_public_id, $status,
+                        $stock, $supplier, $sku
+                    ])) {
+                        $new_product_id = $pdo->lastInsertId();
+                        
+                        // Insert primary image row in product_images
+                        if ($image_url) {
+                            try {
+                                $stmtImg = $pdo->prepare("
+                                    INSERT INTO product_images 
+                                    (product_id, image_url, image_public_id, display_order, is_primary)
+                                    VALUES (?, ?, ?, 0, TRUE)
+                                ");
+                                $stmtImg->execute([$new_product_id, $image_url, $image_public_id]);
+                            } catch (PDOException $e) {
+                                error_log('Insert primary image row error: ' . $e->getMessage());
+                            }
+                        }
+                        
                         if (function_exists('logActivity')) {
-                            logActivity(
-                                'add_product',
-                                'Added product: ' . $name,
-                                $_SESSION['user_id'],
-                                $_SESSION['user_name']
-                            );
+                            logActivity('add_product', 'Added product: ' . $name,
+                                $_SESSION['user_id'], $_SESSION['user_name']);
                         }
                         $message = 'Product added successfully! ' . $upload_message;
                         $messageType = 'success';
@@ -92,26 +103,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 break;
                 
             case 'edit':
-                $id = intval($_POST['id']);
+                $id = intval($_POST['id'] ?? 0);
                 $name = sanitize($_POST['name'] ?? '');
                 $description = sanitize($_POST['description'] ?? '');
                 $price = floatval($_POST['price'] ?? 0);
                 $category_id = intval($_POST['category_id'] ?? 0);
                 $status = sanitize($_POST['status'] ?? 'active');
+                $stock = intval($_POST['stock'] ?? 0);
+                $supplier = sanitize($_POST['supplier'] ?? '');
+                $sku = sanitize(trim($_POST['sku'] ?? ''));
                 
-                // Get existing product to delete old Cloudinary image if needed
-                $stmt = $pdo->prepare("SELECT image_public_id, image FROM products WHERE id = ?");
+                $stmt = $pdo->prepare("SELECT image_public_id, image, image_url FROM products WHERE id = ?");
                 $stmt->execute([$id]);
                 $existing_product = $stmt->fetch();
                 
-                // Handle image upload
                 $image_url = null;
                 $image_public_id = null;
                 $image_name = null;
                 $upload_message = '';
                 
                 if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-                    // Delete old Cloudinary image if exists
+                    // Delete old Cloudinary image
                     if (!empty($existing_product['image_public_id'])) {
                         $delete_result = deleteFromCloudinary($existing_product['image_public_id']);
                         if ($delete_result['success']) {
@@ -119,7 +131,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
                     
-                    // Upload new image to Cloudinary
                     $upload_result = uploadToCloudinary($_FILES['image']['tmp_name'], 'products');
                     
                     if ($upload_result['success']) {
@@ -127,23 +138,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $image_public_id = $upload_result['public_id'];
                         $upload_message .= 'New image uploaded to Cloudinary!';
                         
-                        // Also save locally as fallback
                         $upload_dir = UPLOAD_DIR;
-                        if (!file_exists($upload_dir)) {
-                            mkdir($upload_dir, 0777, true);
-                        }
+                        if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
                         $image_name = time() . '_' . basename($_FILES['image']['name']);
-                        $upload_path = $upload_dir . $image_name;
-                        move_uploaded_file($_FILES['image']['tmp_name'], $upload_path);
+                        move_uploaded_file($_FILES['image']['tmp_name'], $upload_dir . $image_name);
                     } else {
-                        // Fallback to local
                         $upload_dir = UPLOAD_DIR;
-                        if (!file_exists($upload_dir)) {
-                            mkdir($upload_dir, 0777, true);
-                        }
+                        if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
                         $image_name = time() . '_' . basename($_FILES['image']['name']);
-                        $upload_path = $upload_dir . $image_name;
-                        if (move_uploaded_file($_FILES['image']['tmp_name'], $upload_path)) {
+                        if (move_uploaded_file($_FILES['image']['tmp_name'], $upload_dir . $image_name)) {
                             $upload_message = 'Image saved locally (Cloudinary upload failed)';
                         } else {
                             $image_name = null;
@@ -153,9 +156,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 
                 if ($name && $price > 0 && $id) {
-                    // Build the update query dynamically
-                    $sql = "UPDATE products SET name = ?, description = ?, price = ?, category_id = ?, status = ?";
-                    $params = [$name, $description, $price, $category_id, $status];
+                    $sql = "UPDATE products SET name = ?, description = ?, price = ?, category_id = ?, status = ?, stock = ?, supplier = ?, sku = ?";
+                    $params = [$name, $description, $price, $category_id, $status, $stock, $supplier, $sku];
                     
                     if ($image_url !== null) {
                         $sql .= ", image = ?, image_url = ?, image_public_id = ?";
@@ -171,13 +173,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $result = $stmt->execute($params);
                     
                     if ($result) {
+                        // Keep primary image row in sync
+                        if ($image_url !== null) {
+                            try {
+                                $stmtUpd = $pdo->prepare("
+                                    UPDATE product_images 
+                                    SET image_url = ?, image_public_id = ?
+                                    WHERE product_id = ? AND is_primary = TRUE
+                                ");
+                                $stmtUpd->execute([$image_url, $image_public_id, $id]);
+                                
+                                if ($stmtUpd->rowCount() === 0) {
+                                    $stmtIns = $pdo->prepare("
+                                        INSERT INTO product_images 
+                                        (product_id, image_url, image_public_id, display_order, is_primary)
+                                        VALUES (?, ?, ?, 0, TRUE)
+                                    ");
+                                    $stmtIns->execute([$id, $image_url, $image_public_id]);
+                                }
+                            } catch (PDOException $e) {
+                                error_log('Sync primary image error: ' . $e->getMessage());
+                            }
+                        }
+                        
                         if (function_exists('logActivity')) {
-                            logActivity(
-                                'update_product',
-                                'Updated product: ' . $name . ' (ID: ' . $id . ')',
-                                $_SESSION['user_id'],
-                                $_SESSION['user_name']
-                            );
+                            logActivity('update_product', 'Updated product: ' . $name . ' (ID: ' . $id . ')',
+                                $_SESSION['user_id'], $_SESSION['user_name']);
                         }
                         $message = 'Product updated successfully! ' . $upload_message;
                         $messageType = 'success';
@@ -194,7 +215,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             case 'delete':
                 $id = intval($_POST['id']);
                 
-                // Check if product is in cart
                 $stmt = $pdo->prepare("SELECT COUNT(*) as count FROM cart WHERE product_id = ?");
                 $stmt->execute([$id]);
                 $cart_count = $stmt->fetch()['count'];
@@ -203,32 +223,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = 'Cannot delete product as it is in a cart.';
                     $messageType = 'error';
                 } else {
-                    // Get product info to delete Cloudinary image
+                    // Delete all gallery images from Cloudinary
+                    try {
+                        $stmt = $pdo->prepare("SELECT image_public_id FROM product_images WHERE product_id = ?");
+                        $stmt->execute([$id]);
+                        foreach ($stmt->fetchAll() as $row) {
+                            if (!empty($row['image_public_id'])) {
+                                deleteFromCloudinary($row['image_public_id']);
+                            }
+                        }
+                    } catch (PDOException $e) {
+                        error_log('Delete gallery images error: ' . $e->getMessage());
+                    }
+                    
+                    // Also delete main image from Cloudinary
                     $stmt = $pdo->prepare("SELECT image_public_id FROM products WHERE id = ?");
                     $stmt->execute([$id]);
                     $product = $stmt->fetch();
-                    
-                    // Delete from Cloudinary if exists
-                    $delete_message = '';
                     if (!empty($product['image_public_id'])) {
-                        $delete_result = deleteFromCloudinary($product['image_public_id']);
-                        if ($delete_result['success']) {
-                            $delete_message = 'Image deleted from Cloudinary. ';
-                        }
+                        deleteFromCloudinary($product['image_public_id']);
                     }
                     
-                    // Delete from database
                     $stmt = $pdo->prepare("DELETE FROM products WHERE id = ?");
                     if ($stmt->execute([$id])) {
                         if (function_exists('logActivity')) {
-                            logActivity(
-                                'delete_product',
-                                'Deleted product ID: ' . $id,
-                                $_SESSION['user_id'],
-                                $_SESSION['user_name']
-                            );
+                            logActivity('delete_product', 'Deleted product ID: ' . $id,
+                                $_SESSION['user_id'], $_SESSION['user_name']);
                         }
-                        $message = 'Product deleted successfully! ' . $delete_message;
+                        $message = 'Product deleted successfully!';
                         $messageType = 'success';
                     } else {
                         $message = 'Failed to delete product.';
@@ -259,7 +281,7 @@ try {
     $products = [];
 }
 
-// ===== GET CATEGORIES FOR DROPDOWN =====
+// ===== GET CATEGORIES =====
 try {
     $stmt = $pdo->query("SELECT * FROM categories ORDER BY name");
     $categories = $stmt->fetchAll();
@@ -268,7 +290,6 @@ try {
     $categories = [];
 }
 
-// ===== GET PRODUCT FOR EDITING =====
 $edit_product = null;
 if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
     try {
@@ -280,22 +301,6 @@ if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
     }
 }
 
-// Helper function to get product image URL - UPDATED for Cloudinary
-function getProductImage($image_name, $image_url = null) {
-    // If Cloudinary URL exists, use it
-    if (!empty($image_url)) {
-        return $image_url;
-    }
-    
-    // Fallback to local image
-    if (!empty($image_name) && file_exists(UPLOAD_DIR . $image_name)) {
-        return '../uploads/products/' . $image_name;
-    }
-    
-    return '../uploads/products/no-image.png';
-}
-
-// Helper function to escape JavaScript strings
 function jsEscape($str) {
     if ($str === null) return '';
     $str = str_replace("\\", "\\\\", $str);
@@ -320,90 +325,212 @@ $page_title = 'Products';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         .product-image-thumb {
-            width: 50px;
-            height: 50px;
-            object-fit: cover;
-            border-radius: 4px;
+            width: 50px; height: 50px;
+            object-fit: cover; border-radius: 4px;
         }
         .status-badge {
-            padding: 3px 10px;
-            border-radius: 12px;
-            font-size: 12px;
-            color: white;
+            padding: 3px 10px; border-radius: 12px;
+            font-size: 12px; color: white;
         }
         .status-active { background-color: #28a745; }
         .status-inactive { background-color: #dc3545; }
         .status-draft { background-color: #ffc107; color: #333; }
         .status-deleted { background-color: #6c757d; }
+        
         .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 15px;
         }
-        .image-preview {
-            max-height: 100px;
-            margin: 10px 0;
-        }
-        .image-preview img {
-            max-height: 100px;
-            border-radius: 4px;
-        }
+        .image-preview { max-height: 100px; margin: 10px 0; }
+        .image-preview img { max-height: 100px; border-radius: 4px; }
         .file-input-wrapper {
-            position: relative;
-            overflow: hidden;
-            display: inline-block;
-            width: 100%;
+            position: relative; overflow: hidden;
+            display: inline-block; width: 100%;
         }
         .file-input-wrapper input[type=file] {
-            position: absolute;
-            left: 0;
-            top: 0;
-            opacity: 0;
-            width: 100%;
-            height: 100%;
-            cursor: pointer;
+            position: absolute; left: 0; top: 0;
+            opacity: 0; width: 100%; height: 100%; cursor: pointer;
         }
         .btn-edit {
-            background-color: #28a745;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
+            background-color: #28a745; color: white;
+            border: none; padding: 5px 10px;
+            border-radius: 4px; cursor: pointer;
+        }
+        .btn-view {
+            background-color: #17a2b8; color: white;
+            border: none; padding: 5px 10px;
+            border-radius: 4px; cursor: pointer;
         }
         .btn-delete {
-            background-color: #dc3545;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
+            background-color: #dc3545; color: white;
+            border: none; padding: 5px 10px;
+            border-radius: 4px; cursor: pointer;
         }
         .action-buttons {
-            display: flex;
-            gap: 5px;
+            display: flex; gap: 5px;
         }
-        .action-buttons form {
-            display: inline;
-        }
+        .action-buttons form { display: inline; }
         .btn-secondary {
-            background-color: #6c757d;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
+            background-color: #6c757d; color: white;
+            border: none; padding: 8px 16px;
+            border-radius: 4px; cursor: pointer;
         }
-        .btn-secondary:hover {
-            background-color: #5a6268;
-        }
+        .btn-secondary:hover { background-color: #5a6268; }
         .cloudinary-badge {
-            background-color: #3448C5;
-            color: white;
-            font-size: 10px;
-            padding: 2px 6px;
+            background-color: #3448C5; color: white;
+            font-size: 10px; padding: 2px 6px;
+            border-radius: 10px; margin-left: 5px;
+        }
+        
+        /* ===== VIEW PRODUCT MODAL ===== */
+        #viewProductModal .modal-content {
+            max-width: 900px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .view-product-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+        
+        .view-gallery {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .view-main-image {
+            position: relative;
+            width: 100%;
+            height: 340px;
             border-radius: 10px;
-            margin-left: 5px;
+            overflow: hidden;
+            background: #f5f5f5;
+            cursor: zoom-in;
+        }
+        
+        .view-main-image img {
+            width: 100%; height: 100%;
+            object-fit: contain;
+            display: block;
+            transition: opacity 0.25s ease;
+        }
+        
+        .view-image-counter {
+            position: absolute; top: 10px; left: 10px;
+            background: rgba(0,0,0,0.7); color: #fff;
+            font-size: 11px; padding: 4px 10px;
+            border-radius: 12px; font-weight: 600;
+            display: flex; align-items: center; gap: 5px;
+        }
+        
+        .view-gallery-nav {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            background: rgba(255,255,255,0.9); color: #333;
+            border: none; width: 36px; height: 36px;
+            border-radius: 50%; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 15px; transition: all 0.25s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .view-gallery-nav:hover { background: #05573c; color: #fff; }
+        .view-gallery-nav.prev { left: 10px; }
+        .view-gallery-nav.next { right: 10px; }
+        
+        .view-thumbs {
+            display: flex; gap: 8px;
+            overflow-x: auto; padding: 4px 2px;
+        }
+        .view-thumb {
+            flex: 0 0 64px; width: 64px; height: 64px;
+            border-radius: 6px; overflow: hidden;
+            cursor: pointer; border: 2px solid transparent;
+            transition: all 0.2s ease; background: #f5f5f5;
+        }
+        .view-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .view-thumb.active { border-color: #05573c; }
+        .view-thumb:hover { transform: translateY(-2px); }
+        
+        .view-details h2 {
+            margin: 0 0 8px 0;
+            color: #222;
+            font-size: 22px;
+        }
+        .view-details .view-price {
+            font-size: 26px; font-weight: 700;
+            color: #05573c; margin: 6px 0 14px;
+        }
+        .view-meta {
+            display: flex; flex-wrap: wrap;
+            gap: 8px; margin-bottom: 14px;
+        }
+        .view-meta-badge {
+            background: #f0f0f0; padding: 4px 12px;
+            border-radius: 12px; font-size: 12px;
+            color: #555; display: inline-flex;
+            align-items: center; gap: 5px;
+        }
+        .view-meta-badge.cloud { background: #e7eaff; color: #3448C5; font-weight: 600; }
+        
+        .view-section-title {
+            font-size: 12px; text-transform: uppercase;
+            letter-spacing: 0.5px; color: #888;
+            margin: 14px 0 6px; font-weight: 700;
+        }
+        .view-description {
+            color: #444; line-height: 1.7;
+            background: #f8f9fa; padding: 12px;
+            border-radius: 8px; font-size: 14px;
+            white-space: pre-wrap;
+        }
+        .view-data-row {
+            display: flex; justify-content: space-between;
+            padding: 6px 0; border-bottom: 1px solid #f0f0f0;
+            font-size: 13px;
+        }
+        .view-data-row:last-child { border-bottom: none; }
+        .view-data-row .label { color: #888; }
+        .view-data-row .value { color: #333; font-weight: 600; }
+        
+        /* ===== LIGHTBOX ===== */
+        .adm-lightbox {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.95);
+            z-index: 100000;
+            justify-content: center; align-items: center;
+            padding: 20px;
+        }
+        .adm-lightbox.active { display: flex; }
+        .adm-lightbox img {
+            max-width: 95vw; max-height: 90vh;
+            object-fit: contain;
+            border-radius: 6px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+        }
+        .adm-lightbox .adm-lb-close {
+            position: absolute; top: 20px; right: 24px;
+            background: rgba(255,255,255,0.15); color: #fff;
+            border: none; width: 44px; height: 44px;
+            border-radius: 50%; cursor: pointer;
+            font-size: 22px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .adm-lightbox .adm-lb-close:hover { background: rgba(255,255,255,0.3); }
+        .adm-lb-nav {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            background: rgba(255,255,255,0.15); color: #fff;
+            border: none; width: 50px; height: 50px;
+            border-radius: 50%; cursor: pointer; font-size: 20px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .adm-lb-nav:hover { background: rgba(255,255,255,0.3); }
+        .adm-lb-nav.prev { left: 20px; }
+        .adm-lb-nav.next { right: 20px; }
+        
+        @media (max-width: 768px) {
+            .view-product-grid { grid-template-columns: 1fr; }
+            .view-main-image { height: 240px; }
         }
     </style>
 </head>
@@ -412,7 +539,6 @@ $page_title = 'Products';
     <div class="admin-wrapper">
         <?php include "sidebar.php" ?>
 
-        <!-- Main Content -->
         <main class="admin-main">
             <header class="admin-header" style="margin-bottom:20px">
                 <button class="btn-primary" onclick="openModal('addProductModal')">
@@ -450,7 +576,8 @@ $page_title = 'Products';
                                         <td>
                                             <img src="<?php echo getProductImage($product['image'] ?? null, $product['image_url'] ?? null); ?>" 
                                                  alt="<?php echo htmlspecialchars($product['name']); ?>"
-                                                 class="product-image-thumb">
+                                                 class="product-image-thumb"
+                                                 onerror="this.src='../uploads/products/no-image.png'">
                                             <?php if (!empty($product['image_url'])): ?>
                                                 <span class="cloudinary-badge">Cloud</span>
                                             <?php endif; ?>
@@ -467,13 +594,16 @@ $page_title = 'Products';
                                         <td><?php echo date('M d, Y', strtotime($product['created_at'] ?? 'now')); ?></td>
                                         <td>
                                             <div class="action-buttons">
-                                                <button class="btn-edit" onclick="editProduct(<?php echo $product['id']; ?>)">
+                                                <button class="btn-view" onclick="viewProduct(<?php echo $product['id']; ?>)" title="View details">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                <button class="btn-edit" onclick="editProduct(<?php echo $product['id']; ?>)" title="Edit">
                                                     <i class="fas fa-edit"></i>
                                                 </button>
                                                 <form method="POST" onsubmit="return confirm('Are you sure you want to delete this product?')">
                                                     <input type="hidden" name="action" value="delete">
                                                     <input type="hidden" name="id" value="<?php echo $product['id']; ?>">
-                                                    <button type="submit" class="btn-delete">
+                                                    <button type="submit" class="btn-delete" title="Delete">
                                                         <i class="fas fa-trash"></i>
                                                     </button>
                                                 </form>
@@ -494,7 +624,43 @@ $page_title = 'Products';
         </main>
     </div>
 
-    <!-- Add Product Modal -->
+    <!-- ============================================
+         VIEW PRODUCT MODAL
+         ============================================ -->
+    <div id="viewProductModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-eye"></i> Product Details</h2>
+                <span class="close" onclick="closeModal('viewProductModal')">&times;</span>
+            </div>
+            
+            <div id="viewProductContent">
+                <p style="text-align:center;padding:40px;color:#888;">
+                    <i class="fas fa-spinner fa-spin"></i> Loading product…
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================
+         ADMIN LIGHTBOX
+         ============================================ -->
+    <div class="adm-lightbox" id="admLightbox">
+        <button class="adm-lb-close" onclick="closeAdmLightbox()" aria-label="Close">
+            <i class="fas fa-times"></i>
+        </button>
+        <button class="adm-lb-nav prev" onclick="admLightboxPrev()" aria-label="Previous">
+            <i class="fas fa-chevron-left"></i>
+        </button>
+        <img src="" alt="Preview" id="admLightboxImg">
+        <button class="adm-lb-nav next" onclick="admLightboxNext()" aria-label="Next">
+            <i class="fas fa-chevron-right"></i>
+        </button>
+    </div>
+
+    <!-- ============================================
+         ADD PRODUCT MODAL
+         ============================================ -->
     <div id="addProductModal" class="modal">
         <div class="modal-content" style="max-width: 600px;">
             <div class="modal-header">
@@ -534,6 +700,22 @@ $page_title = 'Products';
                 
                 <div class="form-row">
                     <div class="form-group">
+                        <label><i class="fas fa-cubes"></i> Stock</label>
+                        <input type="number" name="stock" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-barcode"></i> SKU</label>
+                        <input type="text" name="sku" placeholder="Optional">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-truck"></i> Supplier</label>
+                    <input type="text" name="supplier" placeholder="Supplier name">
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
                         <label><i class="fas fa-image"></i> Product Image</label>
                         <div class="file-input-wrapper">
                             <button type="button" class="btn-secondary" style="width:100%;">
@@ -562,7 +744,9 @@ $page_title = 'Products';
         </div>
     </div>
 
-    <!-- Edit Product Modal -->
+    <!-- ============================================
+         EDIT PRODUCT MODAL
+         ============================================ -->
     <div id="editProductModal" class="modal">
         <div class="modal-content" style="max-width: 600px;">
             <div class="modal-header">
@@ -603,6 +787,22 @@ $page_title = 'Products';
                 
                 <div class="form-row">
                     <div class="form-group">
+                        <label><i class="fas fa-cubes"></i> Stock</label>
+                        <input type="number" name="stock" id="editProductStock" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-barcode"></i> SKU</label>
+                        <input type="text" name="sku" id="editProductSku" placeholder="Optional">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label><i class="fas fa-truck"></i> Supplier</label>
+                    <input type="text" name="supplier" id="editProductSupplier" placeholder="Supplier name">
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
                         <label><i class="fas fa-image"></i> Product Image</label>
                         <div id="editProductImagePreview" style="margin-bottom:10px;"></div>
                         <div class="file-input-wrapper">
@@ -633,7 +833,7 @@ $page_title = 'Products';
     </div>
 
     <script>
-        // Store product data for editing - UPDATED with Cloudinary data
+        // Store product data for editing
         var productData = {};
         
         <?php foreach ($products as $product): ?>
@@ -643,7 +843,10 @@ $page_title = 'Products';
                 description: '<?php echo jsEscape($product['description'] ?? ''); ?>',
                 price: '<?php echo $product['price']; ?>',
                 category_id: '<?php echo $product['category_id'] ?? ''; ?>',
-                status: '<?php echo $product['status'] ?? 'active'; ?>',
+                status: '<?php echo jsEscape($product['status'] ?? 'active'); ?>',
+                stock: '<?php echo intval($product['stock'] ?? 0); ?>',
+                sku: '<?php echo jsEscape($product['sku'] ?? ''); ?>',
+                supplier: '<?php echo jsEscape($product['supplier'] ?? ''); ?>',
                 image: '<?php echo $product['image'] ? jsEscape($product['image']) : ''; ?>',
                 image_url: '<?php echo $product['image_url'] ? jsEscape($product['image_url']) : ''; ?>'
             };
@@ -659,57 +862,247 @@ $page_title = 'Products';
             document.body.style.overflow = 'auto';
         }
         
-        function editProduct(productId) {
-            // Get product data
-            var data = productData[productId];
-            if (!data) {
-                alert('Product data not found!');
-                return;
+        // ============================================
+        // VIEW PRODUCT MODAL
+        // ============================================
+        let viewGallery = [];      // array of image URLs
+        let viewGalleryIndex = 0;
+        let viewProductName = '';
+        
+        function viewProduct(productId) {
+            const data = productData[productId];
+            if (!data) { alert('Product not found'); return; }
+            
+            viewProductName = data.name;
+            
+            // Show loading state
+            document.getElementById('viewProductContent').innerHTML =
+                '<p style="text-align:center;padding:40px;color:#888;">' +
+                '<i class="fas fa-spinner fa-spin"></i> Loading gallery…</p>';
+            
+            openModal('viewProductModal');
+            
+            // Fetch gallery images
+            fetch('includes/ajax.php?action=get_product_images&id=' + productId)
+                .then(r => r.json())
+                .then(res => {
+                    let images = [];
+                    
+                    if (res.success && res.images && res.images.length) {
+                        images = res.images.map(i => i.image_url);
+                    } else {
+                        // Fallback to main image
+                        if (data.image_url) images.push(data.image_url);
+                        else if (data.image) images.push('../uploads/products/' + data.image);
+                        else images.push('../uploads/products/no-image.png');
+                    }
+                    
+                    viewGallery = images;
+                    viewGalleryIndex = 0;
+                    
+                    renderViewProduct(data);
+                })
+                .catch(err => {
+                    console.error(err);
+                    // Fallback to main image only
+                    viewGallery = [];
+                    if (data.image_url) viewGallery.push(data.image_url);
+                    else if (data.image) viewGallery.push('../uploads/products/' + data.image);
+                    else viewGallery.push('../uploads/products/no-image.png');
+                    viewGalleryIndex = 0;
+                    renderViewProduct(data);
+                });
+        }
+        
+        function renderViewProduct(data) {
+            const hasMultiple = viewGallery.length > 1;
+            const isCloudinary = data.image_url && data.image_url.includes('cloudinary.com');
+            const stockVal = parseInt(data.stock) || 0;
+            
+            let thumbsHtml = '';
+            if (hasMultiple) {
+                thumbsHtml = '<div class="view-thumbs" id="viewThumbs">';
+                viewGallery.forEach((url, i) => {
+                    thumbsHtml += '<div class="view-thumb ' + (i === 0 ? 'active' : '') + '" data-index="' + i + '">' +
+                                  '<img src="' + url + '" alt="Image ' + (i+1) + '"></div>';
+                });
+                thumbsHtml += '</div>';
             }
             
-            // Populate edit form
+            const html = `
+                <div class="view-product-grid">
+                    <div class="view-gallery">
+                        <div class="view-main-image" onclick="openAdmLightbox(${viewGalleryIndex})">
+                            <img src="${viewGallery[0]}" alt="${escapeHtml(data.name)}" id="viewMainImage">
+                            <span class="view-image-counter">
+                                <i class="fas fa-images"></i>
+                                <span id="viewImageCounter">1</span> / ${viewGallery.length}
+                            </span>
+                            ${hasMultiple ? `
+                                <button type="button" class="view-gallery-nav prev" onclick="event.stopPropagation();viewGalleryPrev()">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <button type="button" class="view-gallery-nav next" onclick="event.stopPropagation();viewGalleryNext()">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                        ${thumbsHtml}
+                    </div>
+                    
+                    <div class="view-details">
+                        <h2>${escapeHtml(data.name)}</h2>
+                        <div class="view-price">Ksh ${parseFloat(data.price).toLocaleString()}</div>
+                        
+                        <div class="view-meta">
+                            <span class="view-meta-badge">
+                                <i class="fas fa-tag"></i> ${escapeHtml(productData[data.id].category_name || 'Uncategorized')}
+                            </span>
+                            <span class="view-meta-badge" style="${stockVal > 0 ? 'background:#d4edda;color:#155724;' : 'background:#f8d7da;color:#721c24;'}">
+                                <i class="fas fa-cubes"></i> ${stockVal > 0 ? 'In Stock (' + stockVal + ')' : 'Out of Stock'}
+                            </span>
+                            <span class="view-meta-badge">
+                                <i class="fas fa-toggle-on"></i> ${escapeHtml(data.status)}
+                            </span>
+                            ${isCloudinary ? '<span class="view-meta-badge cloud"><i class="fas fa-cloud"></i> Cloudinary</span>' : ''}
+                        </div>
+                        
+                        <div class="view-section-title">Description</div>
+                        <div class="view-description">${escapeHtml(data.description || 'No description provided.')}</div>
+                        
+                        <div class="view-section-title">Details</div>
+                        <div class="view-data-row"><span class="label">Product ID</span><span class="value">#${data.id}</span></div>
+                        ${data.sku ? `<div class="view-data-row"><span class="label">SKU</span><span class="value">${escapeHtml(data.sku)}</span></div>` : ''}
+                        ${data.supplier ? `<div class="view-data-row"><span class="label">Supplier</span><span class="value">${escapeHtml(data.supplier)}</span></div>` : ''}
+                        <div class="view-data-row"><span class="label">Images</span><span class="value">${viewGallery.length}</span></div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('viewProductContent').innerHTML = html;
+            
+            // Attach thumb handlers
+            document.querySelectorAll('#viewThumbs .view-thumb').forEach(thumb => {
+                thumb.addEventListener('click', function() {
+                    const idx = parseInt(this.dataset.index);
+                    setViewImage(idx);
+                });
+            });
+        }
+        
+        function setViewImage(idx) {
+            if (idx < 0) idx = viewGallery.length - 1;
+            if (idx >= viewGallery.length) idx = 0;
+            viewGalleryIndex = idx;
+            
+            const mainImg = document.getElementById('viewMainImage');
+            const counter = document.getElementById('viewImageCounter');
+            
+            if (mainImg) {
+                mainImg.style.opacity = '0.4';
+                setTimeout(() => {
+                    mainImg.src = viewGallery[idx];
+                    mainImg.style.opacity = '1';
+                }, 100);
+            }
+            if (counter) counter.textContent = idx + 1;
+            
+            document.querySelectorAll('#viewThumbs .view-thumb').forEach((t, i) => {
+                t.classList.toggle('active', i === idx);
+            });
+        }
+        
+        function viewGalleryPrev() { setViewImage(viewGalleryIndex - 1); }
+        function viewGalleryNext() { setViewImage(viewGalleryIndex + 1); }
+        
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+        
+        // ============================================
+        // ADMIN LIGHTBOX
+        // ============================================
+        function openAdmLightbox(idx) {
+            if (!viewGallery.length) return;
+            document.getElementById('admLightboxImg').src = viewGallery[idx];
+            document.getElementById('admLightbox').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+        
+        function closeAdmLightbox() {
+            document.getElementById('admLightbox').classList.remove('active');
+            document.body.style.overflow = 'auto';
+        }
+        
+        function admLightboxPrev() { setViewImage(viewGalleryIndex - 1); document.getElementById('admLightboxImg').src = viewGallery[viewGalleryIndex]; }
+        function admLightboxNext() { setViewImage(viewGalleryIndex + 1); document.getElementById('admLightboxImg').src = viewGallery[viewGalleryIndex]; }
+        
+        // ============================================
+        // EDIT PRODUCT
+        // ============================================
+        function editProduct(productId) {
+            var data = productData[productId];
+            if (!data) { alert('Product data not found!'); return; }
+            
             document.getElementById('editProductId').value = data.id;
             document.getElementById('editProductName').value = data.name;
             document.getElementById('editProductDescription').value = data.description;
             document.getElementById('editProductPrice').value = data.price;
             document.getElementById('editProductCategory').value = data.category_id;
             document.getElementById('editProductStatus').value = data.status;
+            document.getElementById('editProductStock').value = data.stock;
+            document.getElementById('editProductSku').value = data.sku;
+            document.getElementById('editProductSupplier').value = data.supplier;
             
-            // Show current image - UPDATED for Cloudinary
             var imagePreview = document.getElementById('editProductImagePreview');
             if (data.image_url) {
                 imagePreview.innerHTML = '<img src="' + data.image_url + '" alt="Current image" style="max-height:100px; border-radius:4px;"><br>' +
-                                        '<small style="color:#666;">' +
-                                        '<i class="fas fa-cloud" style="color:#3448C5;"></i> Cloudinary image' +
-                                        '</small>';
+                                        '<small style="color:#666;"><i class="fas fa-cloud" style="color:#3448C5;"></i> Cloudinary image</small>';
             } else if (data.image) {
-                imagePreview.innerHTML = '<img src="<?php echo '../uploads/products/'; ?>' + data.image + '" alt="Current image" style="max-height:100px; border-radius:4px;"><br>' +
+                imagePreview.innerHTML = '<img src="../uploads/products/' + data.image + '" alt="Current image" style="max-height:100px; border-radius:4px;"><br>' +
                                         '<small style="color:#666;">Local image: ' + data.image + '</small>';
             } else {
                 imagePreview.innerHTML = '<small style="color:#666;">No image uploaded</small>';
             }
             
-            // Open the modal
             openModal('editProductModal');
         }
         
-        // Auto-open edit modal if edit parameter is set
         <?php if ($edit_product): ?>
             window.onload = function() {
                 editProduct(<?php echo $edit_product['id']; ?>);
             };
         <?php endif; ?>
         
-        // Close modal on outside click
+        // ============================================
+        // GLOBAL MODAL / EVENT HANDLERS
+        // ============================================
         window.onclick = function(event) {
             if (event.target.classList.contains('modal')) {
                 event.target.style.display = 'none';
                 document.body.style.overflow = 'auto';
             }
+            if (event.target.id === 'admLightbox') {
+                closeAdmLightbox();
+            }
         }
         
-        // Close modal with Escape key
         document.addEventListener('keydown', function(e) {
+            // Close lightbox first
+            if (document.getElementById('admLightbox').classList.contains('active')) {
+                if (e.key === 'Escape') closeAdmLightbox();
+                if (e.key === 'ArrowLeft') admLightboxPrev();
+                if (e.key === 'ArrowRight') admLightboxNext();
+                return;
+            }
+            
+            // Close modals
             if (e.key === 'Escape') {
                 document.querySelectorAll('.modal').forEach(function(modal) {
                     modal.style.display = 'none';
@@ -718,9 +1111,9 @@ $page_title = 'Products';
             }
         });
         
-        // File input styling - show filename
+        // File input styling
         document.querySelectorAll('.file-input-wrapper input[type="file"]').forEach(function(input) {
-            input.addEventListener('change', function(e) {
+            input.addEventListener('change', function() {
                 var fileName = this.files[0] ? this.files[0].name : 'No file chosen';
                 var parent = this.closest('.file-input-wrapper');
                 var btn = parent.querySelector('button');
