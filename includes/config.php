@@ -34,9 +34,23 @@ if (!$autoload_loaded) {
 if (session_status() === PHP_SESSION_NONE) {
     ini_set('session.cookie_httponly', 1);
     ini_set('session.use_only_cookies', 1);
+    ini_set('session.cookie_samesite', 'Lax');
     
-    if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
+    // Detect HTTPS even behind Render's proxy
+    $is_https = (
+        (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ||
+        (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') ||
+        (isset($_SERVER['HTTP_X_FORWARDED_SSL']) && $_SERVER['HTTP_X_FORWARDED_SSL'] === 'on') ||
+        (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443)
+    );
+    
+    if ($is_https) {
         ini_set('session.cookie_secure', 1);
+    }
+    
+    // Use a writable session path on Render
+    if (is_writable('/tmp')) {
+        session_save_path('/tmp');
     }
     
     session_start();
