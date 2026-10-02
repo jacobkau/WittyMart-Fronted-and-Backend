@@ -31,7 +31,7 @@ function isActive($page) {
         </a>
         
         <div class="sidebar-label">Store</div>
-        <a href="products.php" class="<?php echo isActive('products.php'); ?>">
+        <a href="products.php" class="<?php echo isActive('manage_products.php'); ?>">
             <i class="fas fa-box"></i> Products
         </a>
         <a href="orders.php" class="<?php echo isActive('orders.php'); ?>">
