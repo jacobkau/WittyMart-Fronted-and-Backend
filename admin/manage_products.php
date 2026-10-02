@@ -15,7 +15,6 @@ $messageType = '';
 
 /**
  * Upload multiple files to Cloudinary.
- * Returns array of ['url' => ..., 'public_id' => ...] for successful uploads.
  */
 function uploadMultipleProductImages($files) {
     $uploaded = [];
@@ -24,7 +23,7 @@ function uploadMultipleProductImages($files) {
     $count = count($files['name']);
     for ($i = 0; $i < $count; $i++) {
         if ($files['error'][$i] !== UPLOAD_ERR_OK) continue;
-        if ($files['size'][$i] > 5 * 1024 * 1024) continue; // 5MB cap
+        if ($files['size'][$i] > 5 * 1024 * 1024) continue;
         
         $tmp = $files['tmp_name'][$i];
         $type = mime_content_type($tmp);
@@ -65,14 +64,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $image_name = null;
                 $upload_message = '';
                 
-                // Primary image (single file input named "image")
                 if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
                     $upload_result = uploadToCloudinary($_FILES['image']['tmp_name'], 'products');
                     
                     if ($upload_result['success']) {
                         $image_url = $upload_result['url'];
                         $image_public_id = $upload_result['public_id'];
-                        $upload_message = 'Main image uploaded to Cloudinary. ';
+                        $upload_message = 'Main image uploaded. ';
                         
                         $upload_dir = UPLOAD_DIR;
                         if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
@@ -81,7 +79,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
                 
-                // Additional gallery images
                 $gallery_uploads = [];
                 if (isset($_FILES['product_images']) && !empty($_FILES['product_images']['name'][0])) {
                     $gallery_uploads = uploadMultipleProductImages($_FILES['product_images']);
@@ -103,7 +100,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ])) {
                         $new_product_id = $pdo->lastInsertId();
                         
-                        // Insert primary image
                         if ($image_url) {
                             try {
                                 $stmtImg = $pdo->prepare("
@@ -117,7 +113,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
                         }
                         
-                        // Insert additional gallery images
                         $order = 1;
                         foreach ($gallery_uploads as $img) {
                             try {
@@ -208,7 +203,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $result = $stmt->execute($params);
                     
                     if ($result) {
-                        // Sync primary image row
                         if ($image_url !== null) {
                             try {
                                 $stmtUpd = $pdo->prepare("
@@ -231,7 +225,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             }
                         }
                         
-                        // ===== HANDLE ADDITIONAL GALLERY IMAGES =====
                         if (isset($_FILES['product_images']) && !empty($_FILES['product_images']['name'][0])) {
                             $new_gallery = uploadMultipleProductImages($_FILES['product_images']);
                             
@@ -380,19 +373,110 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// ===== GET PRODUCTS =====
+// ============================================
+// FILTERS + SEARCH + PAGINATION
+// ============================================
+$search        = trim($_GET['q'] ?? '');
+$filter_cat    = intval($_GET['category'] ?? 0);
+$filter_status = trim($_GET['status'] ?? '');
+$filter_stock  = trim($_GET['stock'] ?? '');
+$sort          = $_GET['sort'] ?? 'newest';
+
+// Pagination
+$page      = max(1, intval($_GET['page'] ?? 1));
+$per_page  = 12;
+$offset    = ($page - 1) * $per_page;
+
+// Build WHERE clause
+$where = [];
+$params = [];
+
+if ($search !== '') {
+    $where[] = "(p.name ILIKE ? OR p.description ILIKE ? OR p.sku ILIKE ? OR p.supplier ILIKE ?)";
+    $s = "%$search%";
+    array_push($params, $s, $s, $s, $s);
+}
+
+if ($filter_cat > 0) {
+    $where[] = "p.category_id = ?";
+    $params[] = $filter_cat;
+}
+
+if ($filter_status !== '') {
+    $where[] = "p.status = ?";
+    $params[] = $filter_status;
+}
+
+if ($filter_stock === 'in') {
+    $where[] = "p.stock > 5";
+} elseif ($filter_stock === 'low') {
+    $where[] = "p.stock > 0 AND p.stock <= 5";
+} elseif ($filter_stock === 'out') {
+    $where[] = "(p.stock IS NULL OR p.stock <= 0)";
+}
+
+$where_sql = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
+
+// Order by
+$order_sql = 'ORDER BY p.created_at DESC';
+switch ($sort) {
+    case 'oldest':  $order_sql = 'ORDER BY p.created_at ASC'; break;
+    case 'name':    $order_sql = 'ORDER BY p.name ASC'; break;
+    case 'price_low':  $order_sql = 'ORDER BY p.price ASC'; break;
+    case 'price_high': $order_sql = 'ORDER BY p.price DESC'; break;
+    case 'stock_low':  $order_sql = 'ORDER BY p.stock ASC NULLS LAST'; break;
+    case 'newest':
+    default:        $order_sql = 'ORDER BY p.created_at DESC'; break;
+}
+
+// ===== Get total count for pagination =====
+$total_products = 0;
 try {
-    $stmt = $pdo->prepare("
+    $count_sql = "SELECT COUNT(*) FROM products p $where_sql";
+    $stmt = $pdo->prepare($count_sql);
+    $stmt->execute($params);
+    $total_products = intval($stmt->fetchColumn());
+} catch (PDOException $e) {
+    error_log('Count products error: ' . $e->getMessage());
+}
+
+$total_pages = max(1, ceil($total_products / $per_page));
+if ($page > $total_pages) $page = $total_pages;
+$offset = ($page - 1) * $per_page;
+
+// ===== GET PAGE OF PRODUCTS =====
+$products = [];
+try {
+    $sql = "
         SELECT p.*, c.name as category_name 
         FROM products p
         LEFT JOIN categories c ON p.category_id = c.id
-        ORDER BY p.created_at DESC
-    ");
-    $stmt->execute();
+        $where_sql
+        $order_sql
+        LIMIT $per_page OFFSET $offset
+    ";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
     $products = $stmt->fetchAll();
 } catch (PDOException $e) {
     error_log('Get products error: ' . $e->getMessage());
     $products = [];
+}
+
+// ===== STATS (unfiltered totals) =====
+$stats = [
+    'total'          => 0,
+    'active'         => 0,
+    'low_stock'      => 0,
+    'out_of_stock'   => 0,
+];
+try {
+    $stats['total'] = intval($pdo->query("SELECT COUNT(*) FROM products")->fetchColumn());
+    $stats['active'] = intval($pdo->query("SELECT COUNT(*) FROM products WHERE status = 'active' OR status IS NULL")->fetchColumn());
+    $stats['low_stock'] = intval($pdo->query("SELECT COUNT(*) FROM products WHERE stock > 0 AND stock <= 5")->fetchColumn());
+    $stats['out_of_stock'] = intval($pdo->query("SELECT COUNT(*) FROM products WHERE stock IS NULL OR stock <= 0")->fetchColumn());
+} catch (PDOException $e) {
+    error_log('Stats error: ' . $e->getMessage());
 }
 
 // ===== GET CATEGORIES =====
@@ -426,6 +510,15 @@ function jsEscape($str) {
     return $str;
 }
 
+function buildQueryString($overrides = []) {
+    $params = $_GET;
+    foreach ($overrides as $k => $v) {
+        if ($v === null || $v === '') unset($params[$k]);
+        else $params[$k] = $v;
+    }
+    return http_build_query($params);
+}
+
 $page_title = 'Products';
 ?>
 <!DOCTYPE html>
@@ -445,11 +538,317 @@ $page_title = 'Products';
         .status-badge {
             padding: 3px 10px; border-radius: 12px;
             font-size: 12px; color: white;
+            display: inline-block;
         }
         .status-active { background-color: #28a745; }
         .status-inactive { background-color: #dc3545; }
         .status-draft { background-color: #ffc107; color: #333; }
         
+        /* ============================================
+           STATS ROW
+           ============================================ */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        
+        .stat-card {
+            background: #fff;
+            padding: 14px 18px;
+            border-radius: 10px;
+            border-left: 4px solid #05573c;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: transform 0.2s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+        }
+        
+        .stat-card .stat-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: #fff;
+            background: #05573c;
+            flex-shrink: 0;
+        }
+        
+        .stat-card.warning .stat-icon { background: #fd7e14; }
+        .stat-card.warning { border-left-color: #fd7e14; }
+        .stat-card.danger .stat-icon { background: #dc3545; }
+        .stat-card.danger { border-left-color: #dc3545; }
+        .stat-card.info .stat-icon { background: #17a2b8; }
+        .stat-card.info { border-left-color: #17a2b8; }
+        
+        .stat-card .stat-body {
+            min-width: 0;
+        }
+        
+        .stat-card .stat-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #888;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+        
+        .stat-card .stat-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: #222;
+            line-height: 1;
+        }
+        
+        /* ============================================
+           TOOLBAR (filter card)
+           ============================================ */
+        .toolbar-card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 14px 18px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+            margin-bottom: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .toolbar-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .toolbar-search {
+            flex: 1 1 260px;
+            position: relative;
+            min-width: 200px;
+        }
+        
+        .toolbar-search i {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #999;
+            font-size: 14px;
+            pointer-events: none;
+        }
+        
+        .toolbar-search input {
+            width: 100%;
+            padding: 9px 36px 9px 38px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            background: #fafafa;
+            transition: all 0.2s ease;
+        }
+        
+        .toolbar-search input:focus {
+            outline: none;
+            border-color: #05573c;
+            background: #fff;
+            box-shadow: 0 0 0 3px rgba(5, 87, 60, 0.1);
+        }
+        
+        .toolbar-search .clear-btn {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #e0e0e0;
+            border: none;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            cursor: pointer;
+            color: #666;
+            font-size: 11px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .toolbar-search .clear-btn.visible { display: flex; }
+        
+        .toolbar-select {
+            padding: 9px 32px 9px 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #fafafa;
+            color: #333;
+            font-size: 13px;
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20292.4%20292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            background-size: 10px;
+            min-width: 130px;
+        }
+        
+        .toolbar-select:focus {
+            outline: none;
+            border-color: #05573c;
+            box-shadow: 0 0 0 3px rgba(5, 87, 60, 0.1);
+        }
+        
+        .toolbar-btn {
+            padding: 9px 16px;
+            border: none;
+            border-radius: 8px;
+            background: #05573c;
+            color: #fff;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 13px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+        
+        .toolbar-btn:hover { background: #03402c; }
+        
+        .toolbar-btn.secondary {
+            background: #f0f0f0;
+            color: #555;
+        }
+        
+        .toolbar-btn.secondary:hover {
+            background: #e0e0e0;
+            color: #333;
+        }
+        
+        .toolbar-results {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 4px;
+            border-top: 1px solid #f0f0f0;
+            font-size: 13px;
+            color: #666;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .toolbar-results strong {
+            color: #05573c;
+        }
+        
+        /* ============================================
+           TABLE CARD
+           ============================================ */
+        .table-card {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+        
+        .table-card .table-inner {
+            overflow-x: auto;
+            padding: 4px 8px 8px;
+        }
+        
+        /* ============================================
+           PAGINATION
+           ============================================ */
+        .pagination {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 18px;
+            border-top: 1px solid #f0f0f0;
+            background: #fafafa;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .pagination-info {
+            font-size: 13px;
+            color: #666;
+        }
+        
+        .pagination-info strong {
+            color: #05573c;
+        }
+        
+        .pagination-links {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+        
+        .page-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 34px;
+            height: 34px;
+            padding: 0 8px;
+            border-radius: 6px;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            color: #555;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.15s ease;
+            cursor: pointer;
+        }
+        
+        .page-link:hover {
+            background: #e8f5f0;
+            border-color: #05573c;
+            color: #05573c;
+        }
+        
+        .page-link.active {
+            background: #05573c;
+            border-color: #05573c;
+            color: #fff;
+            cursor: default;
+        }
+        
+        .page-link.disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        
+        .page-link.disabled:hover {
+            background: #fff;
+            border-color: #e0e0e0;
+            color: #555;
+        }
+        
+        .page-ellipsis {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 34px;
+            height: 34px;
+            color: #999;
+            font-weight: 600;
+        }
+        
+        /* ============================================
+           OTHER
+           ============================================ */
         .form-row {
             display: grid; grid-template-columns: 1fr 1fr; gap: 15px;
         }
@@ -492,16 +891,15 @@ $page_title = 'Products';
             border-radius: 10px; margin-left: 5px;
         }
         
-        /* ===== IMAGE PREVIEW GRID ===== */
+        /* Image preview grid */
         .image-preview-grid {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
             margin-top: 10px;
-            min-height: 40px;
+            min-height: 0;
         }
-        
-        .preview-thumb {
+        .preview-thumb, .existing-thumb {
             position: relative;
             width: 70px;
             height: 70px;
@@ -510,12 +908,12 @@ $page_title = 'Products';
             border: 2px solid #e0e0e0;
             background: #f5f5f5;
         }
-        .preview-thumb img {
+        .preview-thumb img, .existing-thumb img {
             width: 100%; height: 100%;
             object-fit: cover;
             display: block;
         }
-        .preview-thumb .thumb-label {
+        .preview-thumb .thumb-label, .existing-thumb .thumb-label {
             position: absolute;
             bottom: 0; left: 0; right: 0;
             background: rgba(5, 87, 60, 0.9);
@@ -526,37 +924,7 @@ $page_title = 'Products';
             padding: 1px 0;
             letter-spacing: 0.3px;
         }
-        
-        /* Existing gallery image thumbs (in edit modal) */
-        .existing-thumb {
-            position: relative;
-            width: 70px;
-            height: 70px;
-            border-radius: 6px;
-            overflow: hidden;
-            border: 2px solid #e0e0e0;
-            background: #f5f5f5;
-        }
-        .existing-thumb.primary {
-            border-color: #05573c;
-            box-shadow: 0 0 0 2px rgba(5, 87, 60, 0.15);
-        }
-        .existing-thumb img {
-            width: 100%; height: 100%;
-            object-fit: cover;
-            display: block;
-        }
-        .existing-thumb .thumb-label {
-            position: absolute;
-            bottom: 0; left: 0; right: 0;
-            background: rgba(5, 87, 60, 0.9);
-            color: #fff;
-            font-size: 9px;
-            text-align: center;
-            font-weight: 700;
-            padding: 1px 0;
-            letter-spacing: 0.3px;
-        }
+        .existing-thumb.primary { border-color: #05573c; }
         .existing-thumb .thumb-delete {
             position: absolute;
             top: 2px; right: 2px;
@@ -571,12 +939,7 @@ $page_title = 'Products';
             padding: 0;
             z-index: 2;
         }
-        .existing-thumb .thumb-delete:hover {
-            background: #dc3545;
-            transform: scale(1.1);
-        }
-        
-        /* Main image preview (edit) */
+        .existing-thumb .thumb-delete:hover { background: #dc3545; }
         .main-image-preview {
             margin-bottom: 8px;
         }
@@ -592,19 +955,16 @@ $page_title = 'Products';
             max-height: 90vh;
             overflow-y: auto;
         }
-        
         .view-product-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 24px;
         }
-        
         .view-gallery {
             display: flex;
             flex-direction: column;
             gap: 12px;
         }
-        
         .view-main-image {
             position: relative;
             width: 100%;
@@ -614,14 +974,12 @@ $page_title = 'Products';
             background: #f5f5f5;
             cursor: zoom-in;
         }
-        
         .view-main-image img {
             width: 100%; height: 100%;
             object-fit: contain;
             display: block;
             transition: opacity 0.25s ease;
         }
-        
         .view-image-counter {
             position: absolute; top: 10px; left: 10px;
             background: rgba(0,0,0,0.7); color: #fff;
@@ -629,7 +987,6 @@ $page_title = 'Products';
             border-radius: 12px; font-weight: 600;
             display: flex; align-items: center; gap: 5px;
         }
-        
         .view-gallery-nav {
             position: absolute; top: 50%; transform: translateY(-50%);
             background: rgba(255,255,255,0.9); color: #333;
@@ -642,7 +999,6 @@ $page_title = 'Products';
         .view-gallery-nav:hover { background: #05573c; color: #fff; }
         .view-gallery-nav.prev { left: 10px; }
         .view-gallery-nav.next { right: 10px; }
-        
         .view-thumbs {
             display: flex; gap: 8px;
             overflow-x: auto; padding: 4px 2px;
@@ -656,7 +1012,6 @@ $page_title = 'Products';
         .view-thumb img { width: 100%; height: 100%; object-fit: cover; }
         .view-thumb.active { border-color: #05573c; }
         .view-thumb:hover { transform: translateY(-2px); }
-        
         .view-details h2 {
             margin: 0 0 8px 0; color: #222; font-size: 22px;
         }
@@ -675,7 +1030,6 @@ $page_title = 'Products';
             align-items: center; gap: 5px;
         }
         .view-meta-badge.cloud { background: #e7eaff; color: #3448C5; font-weight: 600; }
-        
         .view-section-title {
             font-size: 12px; text-transform: uppercase;
             letter-spacing: 0.5px; color: #888;
@@ -696,7 +1050,7 @@ $page_title = 'Products';
         .view-data-row .label { color: #888; }
         .view-data-row .value { color: #333; font-weight: 600; }
         
-        /* ===== LIGHTBOX ===== */
+        /* Lightbox */
         .adm-lightbox {
             display: none; position: fixed; inset: 0;
             background: rgba(0,0,0,0.95);
@@ -732,6 +1086,8 @@ $page_title = 'Products';
         @media (max-width: 768px) {
             .view-product-grid { grid-template-columns: 1fr; }
             .view-main-image { height: 240px; }
+            .toolbar-row { flex-direction: column; align-items: stretch; }
+            .toolbar-select { width: 100%; }
         }
     </style>
 </head>
@@ -741,7 +1097,16 @@ $page_title = 'Products';
         <?php include "sidebar.php" ?>
 
         <main class="admin-main">
-            <header class="admin-header" style="margin-bottom:20px">
+            <!-- ===== HEADER ===== -->
+            <header class="admin-header" style="margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <div>
+                    <h1 style="margin:0; font-size:22px;">
+                        <i class="fas fa-box"></i> Products
+                    </h1>
+                    <p style="margin:4px 0 0; color:#888; font-size:13px;">
+                        Manage your product catalog, images, and stock.
+                    </p>
+                </div>
                 <button class="btn-primary" onclick="openModal('addProductModal')">
                     <i class="fas fa-plus"></i> Add Product
                 </button>
@@ -754,10 +1119,117 @@ $page_title = 'Products';
                 </div>
             <?php endif; ?>
 
-            <!-- Products Table -->
-            <div class="admin-card" style="padding:14px">
-                <div class="card-body" style="padding:14px">
-                    <?php if (count($products) > 0): ?>
+            <!-- ===== STATS ROW ===== -->
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-boxes"></i></div>
+                    <div class="stat-body">
+                        <div class="stat-label">Total Products</div>
+                        <div class="stat-value"><?php echo $stats['total']; ?></div>
+                    </div>
+                </div>
+                <div class="stat-card info">
+                    <div class="stat-icon"><i class="fas fa-check-circle"></i></div>
+                    <div class="stat-body">
+                        <div class="stat-label">Active</div>
+                        <div class="stat-value"><?php echo $stats['active']; ?></div>
+                    </div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div class="stat-body">
+                        <div class="stat-label">Low Stock</div>
+                        <div class="stat-value"><?php echo $stats['low_stock']; ?></div>
+                    </div>
+                </div>
+                <div class="stat-card danger">
+                    <div class="stat-icon"><i class="fas fa-times-circle"></i></div>
+                    <div class="stat-body">
+                        <div class="stat-label">Out of Stock</div>
+                        <div class="stat-value"><?php echo $stats['out_of_stock']; ?></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== TOOLBAR (SEPARATE CARD) ===== -->
+            <div class="toolbar-card">
+                <form method="GET" action="products.php" id="filterForm">
+                    <div class="toolbar-row">
+                        <div class="toolbar-search">
+                            <i class="fas fa-search"></i>
+                            <input type="text"
+                                   name="q"
+                                   id="searchInput"
+                                   placeholder="Search by name, SKU, supplier, description…"
+                                   value="<?php echo htmlspecialchars($search); ?>"
+                                   autocomplete="off">
+                            <button type="button" class="clear-btn <?php echo $search !== '' ? 'visible' : ''; ?>" id="clearSearchBtn" title="Clear">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        
+                        <select name="category" class="toolbar-select" onchange="document.getElementById('filterForm').submit()">
+                            <option value="">All Categories</option>
+                            <?php foreach ($categories as $cat): ?>
+                                <option value="<?php echo $cat['id']; ?>" <?php echo $filter_cat == $cat['id'] ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($cat['name']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        
+                        <select name="status" class="toolbar-select" onchange="document.getElementById('filterForm').submit()">
+                            <option value="">All Status</option>
+                            <option value="active"   <?php echo $filter_status === 'active'   ? 'selected' : ''; ?>>Active</option>
+                            <option value="inactive" <?php echo $filter_status === 'inactive' ? 'selected' : ''; ?>>Inactive</option>
+                            <option value="draft"    <?php echo $filter_status === 'draft'    ? 'selected' : ''; ?>>Draft</option>
+                        </select>
+                        
+                        <select name="stock" class="toolbar-select" onchange="document.getElementById('filterForm').submit()">
+                            <option value="">All Stock</option>
+                            <option value="in"  <?php echo $filter_stock === 'in'  ? 'selected' : ''; ?>>In Stock (&gt;5)</option>
+                            <option value="low" <?php echo $filter_stock === 'low' ? 'selected' : ''; ?>>Low Stock (1–5)</option>
+                            <option value="out" <?php echo $filter_stock === 'out' ? 'selected' : ''; ?>>Out of Stock (0)</option>
+                        </select>
+                        
+                        <select name="sort" class="toolbar-select" onchange="document.getElementById('filterForm').submit()">
+                            <option value="newest"     <?php echo $sort === 'newest'     ? 'selected' : ''; ?>>Newest First</option>
+                            <option value="oldest"     <?php echo $sort === 'oldest'     ? 'selected' : ''; ?>>Oldest First</option>
+                            <option value="name"       <?php echo $sort === 'name'       ? 'selected' : ''; ?>>Name (A–Z)</option>
+                            <option value="price_low"  <?php echo $sort === 'price_low'  ? 'selected' : ''; ?>>Price (Low → High)</option>
+                            <option value="price_high" <?php echo $sort === 'price_high' ? 'selected' : ''; ?>>Price (High → Low)</option>
+                            <option value="stock_low"  <?php echo $sort === 'stock_low'  ? 'selected' : ''; ?>>Lowest Stock</option>
+                        </select>
+                        
+                        <button type="submit" class="toolbar-btn">
+                            <i class="fas fa-filter"></i> Apply
+                        </button>
+                        
+                        <?php if ($search || $filter_cat || $filter_status || $filter_stock || $sort !== 'newest'): ?>
+                            <a href="products.php" class="toolbar-btn secondary">
+                                <i class="fas fa-times"></i> Reset
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </form>
+                
+                <div class="toolbar-results">
+                    <span>
+                        Showing <strong><?php echo count($products); ?></strong>
+                        of <strong><?php echo $total_products; ?></strong> products
+                        <?php if ($search || $filter_cat || $filter_status || $filter_stock): ?>
+                            (filtered)
+                        <?php endif; ?>
+                    </span>
+                    <?php if ($total_pages > 1): ?>
+                        <span>Page <strong><?php echo $page; ?></strong> of <strong><?php echo $total_pages; ?></strong></span>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <!-- ===== TABLE CARD (SEPARATE FROM TOOLBAR) ===== -->
+            <div class="table-card">
+                <?php if (count($products) > 0): ?>
+                    <div class="table-inner">
                         <table class="admin-table">
                             <thead>
                                 <tr>
@@ -814,19 +1286,81 @@ $page_title = 'Products';
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
-                    <?php else: ?>
-                        <p class="text-muted text-center" style="padding: 40px 0;">
-                            <i class="fas fa-box" style="font-size: 48px; display: block; margin-bottom: 10px; opacity: 0.5;"></i>
-                            No products found
-                        </p>
+                    </div>
+                    
+                    <!-- ===== PAGINATION ===== -->
+                    <?php if ($total_pages > 1): ?>
+                        <div class="pagination">
+                            <div class="pagination-info">
+                                Showing <strong><?php echo $offset + 1; ?></strong>–<strong><?php echo min($offset + $per_page, $total_products); ?></strong>
+                                of <strong><?php echo $total_products; ?></strong>
+                            </div>
+                            
+                            <div class="pagination-links">
+                                <?php 
+                                // Prev
+                                $prev_disabled = $page <= 1;
+                                ?>
+                                <a href="<?php echo $prev_disabled ? '#' : '?' . buildQueryString(['page' => $page - 1]); ?>"
+                                   class="page-link <?php echo $prev_disabled ? 'disabled' : ''; ?>"
+                                   <?php echo $prev_disabled ? 'onclick="return false;"' : ''; ?>>
+                                    <i class="fas fa-chevron-left"></i>
+                                </a>
+                                
+                                <?php
+                                // Page numbers with ellipsis
+                                $range = 2;
+                                $start = max(1, $page - $range);
+                                $end = min($total_pages, $page + $range);
+                                
+                                if ($start > 1) {
+                                    echo '<a href="?' . buildQueryString(['page' => 1]) . '" class="page-link">1</a>';
+                                    if ($start > 2) echo '<span class="page-ellipsis">…</span>';
+                                }
+                                
+                                for ($i = $start; $i <= $end; $i++) {
+                                    $active = $i === $page;
+                                    echo '<a href="' . ($active ? '#' : '?' . buildQueryString(['page' => $i])) . '" '
+                                       . 'class="page-link ' . ($active ? 'active' : '') . '" '
+                                       . ($active ? 'onclick="return false;"' : '') . '>'
+                                       . $i . '</a>';
+                                }
+                                
+                                if ($end < $total_pages) {
+                                    if ($end < $total_pages - 1) echo '<span class="page-ellipsis">…</span>';
+                                    echo '<a href="?' . buildQueryString(['page' => $total_pages]) . '" class="page-link">' . $total_pages . '</a>';
+                                }
+                                
+                                // Next
+                                $next_disabled = $page >= $total_pages;
+                                ?>
+                                <a href="<?php echo $next_disabled ? '#' : '?' . buildQueryString(['page' => $page + 1]); ?>"
+                                   class="page-link <?php echo $next_disabled ? 'disabled' : ''; ?>"
+                                   <?php echo $next_disabled ? 'onclick="return false;"' : ''; ?>>
+                                    <i class="fas fa-chevron-right"></i>
+                                </a>
+                            </div>
+                        </div>
                     <?php endif; ?>
-                </div>
+                <?php else: ?>
+                    <div style="text-align:center; padding:60px 20px; color:#888;">
+                        <i class="fas fa-box-open" style="font-size:56px; display:block; margin-bottom:16px; opacity:0.3;"></i>
+                        <h3 style="margin:0 0 8px; color:#555;">No products found</h3>
+                        <p style="margin:0;">
+                            <?php if ($search || $filter_cat || $filter_status || $filter_stock): ?>
+                                Try adjusting your filters or <a href="products.php" style="color:#05573c; font-weight:600;">reset</a>.
+                            <?php else: ?>
+                                Click "Add Product" to get started.
+                            <?php endif; ?>
+                        </p>
+                    </div>
+                <?php endif; ?>
             </div>
         </main>
     </div>
 
     <!-- ============================================
-         VIEW PRODUCT MODAL
+         VIEW PRODUCT MODAL (unchanged)
          ============================================ -->
     <div id="viewProductModal" class="modal">
         <div class="modal-content">
@@ -834,7 +1368,6 @@ $page_title = 'Products';
                 <h2><i class="fas fa-eye"></i> Product Details</h2>
                 <span class="close" onclick="closeModal('viewProductModal')">&times;</span>
             </div>
-            
             <div id="viewProductContent">
                 <p style="text-align:center;padding:40px;color:#888;">
                     <i class="fas fa-spinner fa-spin"></i> Loading product…
@@ -844,7 +1377,7 @@ $page_title = 'Products';
     </div>
 
     <!-- ============================================
-         ADMIN LIGHTBOX
+         ADMIN LIGHTBOX (unchanged)
          ============================================ -->
     <div class="adm-lightbox" id="admLightbox">
         <button class="adm-lb-close" onclick="closeAdmLightbox()" aria-label="Close">
@@ -860,7 +1393,7 @@ $page_title = 'Products';
     </div>
 
     <!-- ============================================
-         ADD PRODUCT MODAL
+         ADD PRODUCT MODAL (unchanged from previous)
          ============================================ -->
     <div id="addProductModal" class="modal">
         <div class="modal-content" style="max-width: 650px;">
@@ -922,11 +1455,11 @@ $page_title = 'Products';
                             <button type="button" class="btn-secondary" style="width:100%;">
                                 <i class="fas fa-upload"></i> Choose Main Image
                             </button>
-                            <input type="file" name="image" accept="image/*" id="addMainImage" onchange="previewImages(this, 'addMainPreview')">
+                            <input type="file" name="image" accept="image/*" onchange="previewImages(this, 'addMainPreview')">
                         </div>
                         <div class="image-preview-grid" id="addMainPreview"></div>
                         <small style="display:block; margin-top:5px; color:#666;">
-                            <i class="fas fa-cloud-upload-alt"></i> This becomes the primary image.
+                            <i class="fas fa-cloud-upload-alt"></i> Becomes the primary image.
                         </small>
                     </div>
                     <div class="form-group">
@@ -945,12 +1478,9 @@ $page_title = 'Products';
                         <button type="button" class="btn-secondary" style="width:100%;">
                             <i class="fas fa-upload"></i> Choose Multiple Images
                         </button>
-                        <input type="file" name="product_images[]" accept="image/*" multiple id="addGalleryImages" onchange="previewImages(this, 'addGalleryPreview', true)">
+                        <input type="file" name="product_images[]" accept="image/*" multiple onchange="previewImages(this, 'addGalleryPreview', true)">
                     </div>
                     <div class="image-preview-grid" id="addGalleryPreview"></div>
-                    <small style="display:block; margin-top:5px; color:#666;">
-                        <i class="fas fa-cloud-upload-alt"></i> Select multiple. Max 5MB each.
-                    </small>
                 </div>
                 
                 <button type="submit" class="btn-primary" style="width:100%; margin-top:10px;">
@@ -961,7 +1491,7 @@ $page_title = 'Products';
     </div>
 
     <!-- ============================================
-         EDIT PRODUCT MODAL
+         EDIT PRODUCT MODAL (unchanged from previous)
          ============================================ -->
     <div id="editProductModal" class="modal">
         <div class="modal-content" style="max-width: 650px;">
@@ -1028,9 +1558,7 @@ $page_title = 'Products';
                             <input type="file" name="image" accept="image/*" onchange="previewImages(this, 'editMainPreview')">
                         </div>
                         <div class="image-preview-grid" id="editMainPreview"></div>
-                        <small style="display:block; margin-top:5px; color:#666;">
-                            Leave empty to keep current.
-                        </small>
+                        <small style="display:block; margin-top:5px; color:#666;">Leave empty to keep current.</small>
                     </div>
                     <div class="form-group">
                         <label><i class="fas fa-toggle-on"></i> Status</label>
@@ -1066,7 +1594,6 @@ $page_title = 'Products';
     </div>
 
     <script>
-        // Store product data for editing
         var productData = {};
         
         <?php foreach ($products as $product): ?>
@@ -1076,6 +1603,7 @@ $page_title = 'Products';
                 description: '<?php echo jsEscape($product['description'] ?? ''); ?>',
                 price: '<?php echo $product['price']; ?>',
                 category_id: '<?php echo $product['category_id'] ?? ''; ?>',
+                category_name: '<?php echo jsEscape($product['category_name'] ?? 'Uncategorized'); ?>',
                 status: '<?php echo jsEscape($product['status'] ?? 'active'); ?>',
                 stock: '<?php echo intval($product['stock'] ?? 0); ?>',
                 sku: '<?php echo jsEscape($product['sku'] ?? ''); ?>',
@@ -1089,11 +1617,40 @@ $page_title = 'Products';
             document.getElementById(id).style.display = 'block';
             document.body.style.overflow = 'hidden';
         }
-        
         function closeModal(id) {
             document.getElementById(id).style.display = 'none';
             document.body.style.overflow = 'auto';
         }
+        
+        // ============================================
+        // SEARCH - LIVE (debounced) + clear button
+        // ============================================
+        (function() {
+            const input = document.getElementById('searchInput');
+            const clearBtn = document.getElementById('clearSearchBtn');
+            const form = document.getElementById('filterForm');
+            if (!input || !form) return;
+            
+            let timer = null;
+            input.addEventListener('input', function() {
+                if (clearBtn) clearBtn.classList.toggle('visible', this.value.length > 0);
+                clearTimeout(timer);
+                timer = setTimeout(() => {
+                    // Reset to page 1 when search changes
+                    const pageInput = form.querySelector('input[name="page"]');
+                    if (pageInput) pageInput.value = '1';
+                    form.submit();
+                }, 600);
+            });
+            
+            if (clearBtn) {
+                clearBtn.addEventListener('click', function() {
+                    input.value = '';
+                    this.classList.remove('visible');
+                    form.submit();
+                });
+            }
+        })();
         
         // ============================================
         // LIVE IMAGE PREVIEW
@@ -1109,7 +1666,6 @@ $page_title = 'Products';
             
             files.forEach((file, index) => {
                 if (!file.type.startsWith('image/')) return;
-                
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     const wrap = document.createElement('div');
@@ -1125,7 +1681,7 @@ $page_title = 'Products';
         }
         
         // ============================================
-        // LOAD EXISTING GALLERY (Edit modal)
+        // LOAD EXISTING GALLERY
         // ============================================
         function loadExistingGallery(productId) {
             const container = document.getElementById('editExistingGallery');
@@ -1135,7 +1691,6 @@ $page_title = 'Products';
                 .then(r => r.json())
                 .then(res => {
                     container.innerHTML = '';
-                    
                     if (!res.success || !res.images || !res.images.length) {
                         container.innerHTML = '<small style="color:#888;">No gallery images</small>';
                         return;
@@ -1159,24 +1714,17 @@ $page_title = 'Products';
                 });
         }
         
-        // Delete a single gallery image
         function deleteGalleryImage(imageId) {
             if (!confirm('Delete this gallery image?')) return;
-            
             const fd = new FormData();
             fd.append('action', 'delete_image');
             fd.append('image_id', imageId);
-            
             fetch('products.php', { method: 'POST', body: fd })
                 .then(() => {
-                    // Reload the gallery
                     const pid = document.getElementById('editProductId').value;
                     loadExistingGallery(pid);
                 })
-                .catch(err => {
-                    console.error(err);
-                    alert('Failed to delete image');
-                });
+                .catch(err => { console.error(err); alert('Failed to delete image'); });
         }
         
         // ============================================
@@ -1192,14 +1740,12 @@ $page_title = 'Products';
             document.getElementById('viewProductContent').innerHTML =
                 '<p style="text-align:center;padding:40px;color:#888;">' +
                 '<i class="fas fa-spinner fa-spin"></i> Loading gallery…</p>';
-            
             openModal('viewProductModal');
             
             fetch('includes/ajax.php?action=get_product_images&id=' + productId)
                 .then(r => r.json())
                 .then(res => {
                     let images = [];
-                    
                     if (res.success && res.images && res.images.length) {
                         images = res.images.map(i => i.image_url);
                     } else {
@@ -1207,13 +1753,11 @@ $page_title = 'Products';
                         else if (data.image) images.push('../uploads/products/' + data.image);
                         else images.push('../uploads/products/no-image.png');
                     }
-                    
                     viewGallery = images;
                     viewGalleryIndex = 0;
                     renderViewProduct(data);
                 })
-                .catch(err => {
-                    console.error(err);
+                .catch(() => {
                     viewGallery = [];
                     if (data.image_url) viewGallery.push(data.image_url);
                     else if (data.image) viewGallery.push('../uploads/products/' + data.image);
@@ -1258,14 +1802,12 @@ $page_title = 'Products';
                         </div>
                         ${thumbsHtml}
                     </div>
-                    
                     <div class="view-details">
                         <h2>${escapeHtml(data.name)}</h2>
                         <div class="view-price">Ksh ${parseFloat(data.price).toLocaleString()}</div>
-                        
                         <div class="view-meta">
                             <span class="view-meta-badge">
-                                <i class="fas fa-tag"></i> ${escapeHtml(productData[data.id].category_name || 'Uncategorized')}
+                                <i class="fas fa-tag"></i> ${escapeHtml(data.category_name || 'Uncategorized')}
                             </span>
                             <span class="view-meta-badge" style="${stockVal > 0 ? 'background:#d4edda;color:#155724;' : 'background:#f8d7da;color:#721c24;'}">
                                 <i class="fas fa-cubes"></i> ${stockVal > 0 ? 'In Stock (' + stockVal + ')' : 'Out of Stock'}
@@ -1275,10 +1817,8 @@ $page_title = 'Products';
                             </span>
                             ${isCloudinary ? '<span class="view-meta-badge cloud"><i class="fas fa-cloud"></i> Cloudinary</span>' : ''}
                         </div>
-                        
                         <div class="view-section-title">Description</div>
                         <div class="view-description">${escapeHtml(data.description || 'No description provided.')}</div>
-                        
                         <div class="view-section-title">Details</div>
                         <div class="view-data-row"><span class="label">Product ID</span><span class="value">#${data.id}</span></div>
                         ${data.sku ? `<div class="view-data-row"><span class="label">SKU</span><span class="value">${escapeHtml(data.sku)}</span></div>` : ''}
@@ -1287,9 +1827,7 @@ $page_title = 'Products';
                     </div>
                 </div>
             `;
-            
             document.getElementById('viewProductContent').innerHTML = html;
-            
             document.querySelectorAll('#viewThumbs .view-thumb').forEach(thumb => {
                 thumb.addEventListener('click', function() {
                     setViewImage(parseInt(this.dataset.index));
@@ -1301,58 +1839,40 @@ $page_title = 'Products';
             if (idx < 0) idx = viewGallery.length - 1;
             if (idx >= viewGallery.length) idx = 0;
             viewGalleryIndex = idx;
-            
             const mainImg = document.getElementById('viewMainImage');
             const counter = document.getElementById('viewImageCounter');
-            
             if (mainImg) {
                 mainImg.style.opacity = '0.4';
-                setTimeout(() => {
-                    mainImg.src = viewGallery[idx];
-                    mainImg.style.opacity = '1';
-                }, 100);
+                setTimeout(() => { mainImg.src = viewGallery[idx]; mainImg.style.opacity = '1'; }, 100);
             }
             if (counter) counter.textContent = idx + 1;
-            
             document.querySelectorAll('#viewThumbs .view-thumb').forEach((t, i) => {
                 t.classList.toggle('active', i === idx);
             });
         }
-        
         function viewGalleryPrev() { setViewImage(viewGalleryIndex - 1); }
         function viewGalleryNext() { setViewImage(viewGalleryIndex + 1); }
         
         function escapeHtml(str) {
             if (str === null || str === undefined) return '';
-            return String(str)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
         
-        // ============================================
-        // ADMIN LIGHTBOX
-        // ============================================
+        // Lightbox
         function openAdmLightbox(idx) {
             if (!viewGallery.length) return;
             document.getElementById('admLightboxImg').src = viewGallery[idx];
             document.getElementById('admLightbox').classList.add('active');
             document.body.style.overflow = 'hidden';
         }
-        
         function closeAdmLightbox() {
             document.getElementById('admLightbox').classList.remove('active');
             document.body.style.overflow = 'auto';
         }
-        
         function admLightboxPrev() { setViewImage(viewGalleryIndex - 1); document.getElementById('admLightboxImg').src = viewGallery[viewGalleryIndex]; }
         function admLightboxNext() { setViewImage(viewGalleryIndex + 1); document.getElementById('admLightboxImg').src = viewGallery[viewGalleryIndex]; }
         
-        // ============================================
-        // EDIT PRODUCT
-        // ============================================
+        // Edit product
         function editProduct(productId) {
             var data = productData[productId];
             if (!data) { alert('Product data not found!'); return; }
@@ -1367,7 +1887,6 @@ $page_title = 'Products';
             document.getElementById('editProductSku').value = data.sku;
             document.getElementById('editProductSupplier').value = data.supplier;
             
-            // Main image preview
             var imagePreview = document.getElementById('editProductImagePreview');
             if (data.image_url) {
                 imagePreview.innerHTML = '<img src="' + data.image_url + '" alt="Current image"><br>' +
@@ -1379,11 +1898,8 @@ $page_title = 'Products';
                 imagePreview.innerHTML = '<small style="color:#666;">No image uploaded</small>';
             }
             
-            // Clear any leftover preview grids
             document.getElementById('editMainPreview').innerHTML = '';
             document.getElementById('editNewGalleryPreview').innerHTML = '';
-            
-            // Load gallery
             loadExistingGallery(productId);
             
             openModal('editProductModal');
@@ -1395,17 +1911,12 @@ $page_title = 'Products';
             };
         <?php endif; ?>
         
-        // ============================================
-        // GLOBAL MODAL / EVENT HANDLERS
-        // ============================================
         window.onclick = function(event) {
             if (event.target.classList.contains('modal')) {
                 event.target.style.display = 'none';
                 document.body.style.overflow = 'auto';
             }
-            if (event.target.id === 'admLightbox') {
-                closeAdmLightbox();
-            }
+            if (event.target.id === 'admLightbox') closeAdmLightbox();
         }
         
         document.addEventListener('keydown', function(e) {
@@ -1415,7 +1926,6 @@ $page_title = 'Products';
                 if (e.key === 'ArrowRight') admLightboxNext();
                 return;
             }
-            
             if (e.key === 'Escape') {
                 document.querySelectorAll('.modal').forEach(function(modal) {
                     modal.style.display = 'none';
@@ -1424,17 +1934,12 @@ $page_title = 'Products';
             }
         });
         
-        // File input button label update
         document.querySelectorAll('.file-input-wrapper input[type="file"]').forEach(function(input) {
             input.addEventListener('change', function() {
                 var fileName;
-                if (this.multiple && this.files.length > 1) {
-                    fileName = this.files.length + ' files selected';
-                } else if (this.files.length > 0) {
-                    fileName = this.files[0].name;
-                } else {
-                    fileName = 'No file chosen';
-                }
+                if (this.multiple && this.files.length > 1) fileName = this.files.length + ' files selected';
+                else if (this.files.length > 0) fileName = this.files[0].name;
+                else fileName = 'No file chosen';
                 var parent = this.closest('.file-input-wrapper');
                 var btn = parent.querySelector('button');
                 btn.innerHTML = '<i class="fas fa-file"></i> ' + fileName;
