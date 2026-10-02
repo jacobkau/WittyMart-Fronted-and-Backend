@@ -59,7 +59,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $supplier = sanitize($_POST['supplier'] ?? '');
                 $sku = sanitize(trim($_POST['sku'] ?? ''));
                 
-                // Auto-generate SKU if empty
                 if ($sku === '') {
                     $stmt = $pdo->prepare("SELECT name FROM categories WHERE id = ?");
                     $stmt->execute([$category_id]);
@@ -415,12 +414,10 @@ $filter_status = trim($_GET['status'] ?? '');
 $filter_stock  = trim($_GET['stock'] ?? '');
 $sort          = $_GET['sort'] ?? 'newest';
 
-// Pagination
 $page      = max(1, intval($_GET['page'] ?? 1));
 $per_page  = 12;
 $offset    = ($page - 1) * $per_page;
 
-// Build WHERE clause
 $where = [];
 $params = [];
 
@@ -450,7 +447,6 @@ if ($filter_stock === 'in') {
 
 $where_sql = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
 
-// Order by
 $order_sql = 'ORDER BY p.created_at DESC';
 switch ($sort) {
     case 'oldest':     $order_sql = 'ORDER BY p.created_at ASC'; break;
@@ -462,7 +458,6 @@ switch ($sort) {
     default:           $order_sql = 'ORDER BY p.created_at DESC'; break;
 }
 
-// ===== Get total count for pagination =====
 $total_products = 0;
 try {
     $count_sql = "SELECT COUNT(*) FROM products p $where_sql";
@@ -477,7 +472,6 @@ $total_pages = max(1, ceil($total_products / $per_page));
 if ($page > $total_pages) $page = $total_pages;
 $offset = ($page - 1) * $per_page;
 
-// ===== GET PAGE OF PRODUCTS =====
 $products = [];
 try {
     $sql = "
@@ -496,13 +490,8 @@ try {
     $products = [];
 }
 
-// ===== STATS (unfiltered totals) =====
-$stats = [
-    'total'          => 0,
-    'active'         => 0,
-    'low_stock'      => 0,
-    'out_of_stock'   => 0,
-];
+// Stats
+$stats = ['total' => 0, 'active' => 0, 'low_stock' => 0, 'out_of_stock' => 0];
 try {
     $stats['total'] = intval($pdo->query("SELECT COUNT(*) FROM products")->fetchColumn());
     $stats['active'] = intval($pdo->query("SELECT COUNT(*) FROM products WHERE status = 'active' OR status IS NULL")->fetchColumn());
@@ -512,12 +501,10 @@ try {
     error_log('Stats error: ' . $e->getMessage());
 }
 
-// ===== GET CATEGORIES =====
 try {
     $stmt = $pdo->query("SELECT * FROM categories ORDER BY name");
     $categories = $stmt->fetchAll();
 } catch (PDOException $e) {
-    error_log('Get categories error: ' . $e->getMessage());
     $categories = [];
 }
 
@@ -766,6 +753,7 @@ $page_title = 'Products';
             align-items: center;
             gap: 6px;
             transition: all 0.2s ease;
+            text-decoration: none;
         }
         
         .toolbar-btn:hover { background: #03402c; }
@@ -796,6 +784,17 @@ $page_title = 'Products';
             color: #05573c;
         }
         
+        /* Loading state */
+        .toolbar-search.loading input {
+            background-image: linear-gradient(90deg, #fafafa 0%, #f0f0f0 50%, #fafafa 100%);
+            background-size: 200% 100%;
+            animation: shimmer 1.2s infinite;
+        }
+        @keyframes shimmer {
+            0%   { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
         /* ============================================
            TABLE CARD
            ============================================ */
@@ -809,6 +808,7 @@ $page_title = 'Products';
         .table-card .table-inner {
             overflow-x: auto;
             padding: 4px 8px 8px;
+            transition: opacity 0.2s ease;
         }
         
         /* ============================================
@@ -874,12 +874,6 @@ $page_title = 'Products';
         .page-link.disabled {
             opacity: 0.4;
             cursor: not-allowed;
-        }
-        
-        .page-link.disabled:hover {
-            background: #fff;
-            border-color: #e0e0e0;
-            color: #555;
         }
         
         .page-ellipsis {
@@ -1143,7 +1137,6 @@ $page_title = 'Products';
         <?php include "sidebar.php" ?>
 
         <main class="admin-main">
-            <!-- ===== HEADER ===== -->
             <header class="admin-header" style="margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                 <div>
                     <h1 style="margin:0; font-size:22px;">
@@ -1165,7 +1158,7 @@ $page_title = 'Products';
                 </div>
             <?php endif; ?>
 
-            <!-- ===== STATS ROW ===== -->
+            <!-- STATS ROW -->
             <div class="stats-row">
                 <div class="stat-card">
                     <div class="stat-icon"><i class="fas fa-boxes"></i></div>
@@ -1197,16 +1190,16 @@ $page_title = 'Products';
                 </div>
             </div>
 
-            <!-- ===== TOOLBAR ===== -->
+            <!-- TOOLBAR -->
             <div class="toolbar-card">
-                <form method="GET" action="manage_products.php" id="filterForm">
+                <form method="GET" action="manage_products.php" id="filterForm" onsubmit="return false;">
                     <div class="toolbar-row">
-                        <div class="toolbar-search">
+                        <div class="toolbar-search" id="searchWrap">
                             <i class="fas fa-search"></i>
                             <input type="text"
                                    name="q"
                                    id="searchInput"
-                                   placeholder="Search by name, SKU, supplier, description…"
+                                   placeholder="Search products as you type..."
                                    value="<?php echo htmlspecialchars($search); ?>"
                                    autocomplete="off">
                             <button type="button" class="clear-btn <?php echo $search !== '' ? 'visible' : ''; ?>" id="clearSearchBtn" title="Clear">
@@ -1214,7 +1207,7 @@ $page_title = 'Products';
                             </button>
                         </div>
                         
-                        <select name="category" class="toolbar-select <?php echo $filter_cat == 0 ? 'is-placeholder' : ''; ?>" onchange="document.getElementById('filterForm').submit()">
+                        <select name="category" class="toolbar-select <?php echo $filter_cat == 0 ? 'is-placeholder' : ''; ?>">
                             <option value="">All Categories</option>
                             <?php foreach ($categories as $cat): ?>
                                 <option value="<?php echo $cat['id']; ?>" <?php echo $filter_cat == $cat['id'] ? 'selected' : ''; ?>>
@@ -1223,21 +1216,21 @@ $page_title = 'Products';
                             <?php endforeach; ?>
                         </select>
                         
-                        <select name="status" class="toolbar-select <?php echo $filter_status === '' ? 'is-placeholder' : ''; ?>" onchange="document.getElementById('filterForm').submit()">
+                        <select name="status" class="toolbar-select <?php echo $filter_status === '' ? 'is-placeholder' : ''; ?>">
                             <option value="">All Status</option>
                             <option value="active"   <?php echo $filter_status === 'active'   ? 'selected' : ''; ?>>Active</option>
                             <option value="inactive" <?php echo $filter_status === 'inactive' ? 'selected' : ''; ?>>Inactive</option>
                             <option value="draft"    <?php echo $filter_status === 'draft'    ? 'selected' : ''; ?>>Draft</option>
                         </select>
                         
-                        <select name="stock" class="toolbar-select <?php echo $filter_stock === '' ? 'is-placeholder' : ''; ?>" onchange="document.getElementById('filterForm').submit()">
+                        <select name="stock" class="toolbar-select <?php echo $filter_stock === '' ? 'is-placeholder' : ''; ?>">
                             <option value="">All Stock</option>
                             <option value="in"  <?php echo $filter_stock === 'in'  ? 'selected' : ''; ?>>In Stock (&gt;5)</option>
                             <option value="low" <?php echo $filter_stock === 'low' ? 'selected' : ''; ?>>Low Stock (1–5)</option>
                             <option value="out" <?php echo $filter_stock === 'out' ? 'selected' : ''; ?>>Out of Stock (0)</option>
                         </select>
                         
-                        <select name="sort" class="toolbar-select" onchange="document.getElementById('filterForm').submit()">
+                        <select name="sort" class="toolbar-select">
                             <option value="newest"     <?php echo $sort === 'newest'     ? 'selected' : ''; ?>>Newest First</option>
                             <option value="oldest"     <?php echo $sort === 'oldest'     ? 'selected' : ''; ?>>Oldest First</option>
                             <option value="name"       <?php echo $sort === 'name'       ? 'selected' : ''; ?>>Name (A–Z)</option>
@@ -1245,10 +1238,6 @@ $page_title = 'Products';
                             <option value="price_high" <?php echo $sort === 'price_high' ? 'selected' : ''; ?>>Price (High → Low)</option>
                             <option value="stock_low"  <?php echo $sort === 'stock_low'  ? 'selected' : ''; ?>>Lowest Stock</option>
                         </select>
-                        
-                        <button type="submit" class="toolbar-btn">
-                            <i class="fas fa-filter"></i> Apply
-                        </button>
                         
                         <?php if ($search || $filter_cat || $filter_status || $filter_stock || $sort !== 'newest'): ?>
                             <a href="manage_products.php" class="toolbar-btn secondary">
@@ -1259,7 +1248,7 @@ $page_title = 'Products';
                 </form>
                 
                 <div class="toolbar-results">
-                    <span>
+                    <span id="resultsCount">
                         Showing <strong><?php echo count($products); ?></strong>
                         of <strong><?php echo $total_products; ?></strong> products
                         <?php if ($search || $filter_cat || $filter_status || $filter_stock): ?>
@@ -1267,16 +1256,19 @@ $page_title = 'Products';
                         <?php endif; ?>
                     </span>
                     <?php if ($total_pages > 1): ?>
-                        <span>Page <strong><?php echo $page; ?></strong> of <strong><?php echo $total_pages; ?></strong></span>
+                        <span id="paginationInfo">Page <strong><?php echo $page; ?></strong> of <strong><?php echo $total_pages; ?></strong></span>
+                    <?php else: ?>
+                        <span id="paginationInfo"></span>
                     <?php endif; ?>
                 </div>
             </div>
 
-            <!-- ===== TABLE CARD ===== -->
+            <!-- TABLE CARD -->
             <div class="table-card">
+                <div id="tableContainer">
                 <?php if (count($products) > 0): ?>
                     <div class="table-inner">
-                        <table class="admin-table">
+                        <table class="admin-table" id="productsTable">
                             <thead>
                                 <tr>
                                     <th>Image</th>
@@ -1350,7 +1342,7 @@ $page_title = 'Products';
                         </table>
                     </div>
                     
-                    <!-- ===== PAGINATION ===== -->
+                    <!-- PAGINATION -->
                     <?php if ($total_pages > 1): ?>
                         <div class="pagination">
                             <div class="pagination-info">
@@ -1360,9 +1352,8 @@ $page_title = 'Products';
                             
                             <div class="pagination-links">
                                 <?php $prev_disabled = $page <= 1; ?>
-                                <a href="<?php echo $prev_disabled ? '#' : '?' . buildQueryString(['page' => $page - 1]); ?>"
-                                   class="page-link <?php echo $prev_disabled ? 'disabled' : ''; ?>"
-                                   <?php echo $prev_disabled ? 'onclick="return false;"' : ''; ?>>
+                                <a href="#" data-page="<?php echo $page - 1; ?>"
+                                   class="page-link <?php echo $prev_disabled ? 'disabled' : ''; ?>">
                                     <i class="fas fa-chevron-left"></i>
                                 </a>
                                 
@@ -1372,28 +1363,24 @@ $page_title = 'Products';
                                 $end = min($total_pages, $page + $range);
                                 
                                 if ($start > 1) {
-                                    echo '<a href="?' . buildQueryString(['page' => 1]) . '" class="page-link">1</a>';
+                                    echo '<a href="#" data-page="1" class="page-link">1</a>';
                                     if ($start > 2) echo '<span class="page-ellipsis">…</span>';
                                 }
                                 
                                 for ($i = $start; $i <= $end; $i++) {
                                     $active = $i === $page;
-                                    echo '<a href="' . ($active ? '#' : '?' . buildQueryString(['page' => $i])) . '" '
-                                       . 'class="page-link ' . ($active ? 'active' : '') . '" '
-                                       . ($active ? 'onclick="return false;"' : '') . '>'
-                                       . $i . '</a>';
+                                    echo '<a href="#" data-page="' . $i . '" class="page-link ' . ($active ? 'active' : '') . '">' . $i . '</a>';
                                 }
                                 
                                 if ($end < $total_pages) {
                                     if ($end < $total_pages - 1) echo '<span class="page-ellipsis">…</span>';
-                                    echo '<a href="?' . buildQueryString(['page' => $total_pages]) . '" class="page-link">' . $total_pages . '</a>';
+                                    echo '<a href="#" data-page="' . $total_pages . '" class="page-link">' . $total_pages . '</a>';
                                 }
                                 
                                 $next_disabled = $page >= $total_pages;
                                 ?>
-                                <a href="<?php echo $next_disabled ? '#' : '?' . buildQueryString(['page' => $page + 1]); ?>"
-                                   class="page-link <?php echo $next_disabled ? 'disabled' : ''; ?>"
-                                   <?php echo $next_disabled ? 'onclick="return false;"' : ''; ?>>
+                                <a href="#" data-page="<?php echo $page + 1; ?>"
+                                   class="page-link <?php echo $next_disabled ? 'disabled' : ''; ?>">
                                     <i class="fas fa-chevron-right"></i>
                                 </a>
                             </div>
@@ -1412,13 +1399,12 @@ $page_title = 'Products';
                         </p>
                     </div>
                 <?php endif; ?>
+                </div>
             </div>
         </main>
     </div>
 
-    <!-- ============================================
-         VIEW PRODUCT MODAL
-         ============================================ -->
+    <!-- VIEW PRODUCT MODAL -->
     <div id="viewProductModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -1433,9 +1419,7 @@ $page_title = 'Products';
         </div>
     </div>
 
-    <!-- ============================================
-         ADMIN LIGHTBOX
-         ============================================ -->
+    <!-- ADMIN LIGHTBOX -->
     <div class="adm-lightbox" id="admLightbox">
         <button class="adm-lb-close" onclick="closeAdmLightbox()" aria-label="Close">
             <i class="fas fa-times"></i>
@@ -1449,9 +1433,7 @@ $page_title = 'Products';
         </button>
     </div>
 
-    <!-- ============================================
-         ADD PRODUCT MODAL
-         ============================================ -->
+    <!-- ADD PRODUCT MODAL -->
     <div id="addProductModal" class="modal">
         <div class="modal-content" style="max-width: 650px;">
             <div class="modal-header">
@@ -1515,9 +1497,6 @@ $page_title = 'Products';
                             <input type="file" name="image" accept="image/*" onchange="previewImages(this, 'addMainPreview')">
                         </div>
                         <div class="image-preview-grid" id="addMainPreview"></div>
-                        <small style="display:block; margin-top:5px; color:#666;">
-                            <i class="fas fa-cloud-upload-alt"></i> Becomes the primary image.
-                        </small>
                     </div>
                     <div class="form-group">
                         <label><i class="fas fa-toggle-on"></i> Status</label>
@@ -1547,9 +1526,7 @@ $page_title = 'Products';
         </div>
     </div>
 
-    <!-- ============================================
-         EDIT PRODUCT MODAL
-         ============================================ -->
+    <!-- EDIT PRODUCT MODAL -->
     <div id="editProductModal" class="modal">
         <div class="modal-content" style="max-width: 650px;">
             <div class="modal-header">
@@ -1615,7 +1592,6 @@ $page_title = 'Products';
                             <input type="file" name="image" accept="image/*" onchange="previewImages(this, 'editMainPreview')">
                         </div>
                         <div class="image-preview-grid" id="editMainPreview"></div>
-                        <small style="display:block; margin-top:5px; color:#666;">Leave empty to keep current.</small>
                     </div>
                     <div class="form-group">
                         <label><i class="fas fa-toggle-on"></i> Status</label>
@@ -1651,6 +1627,9 @@ $page_title = 'Products';
     </div>
 
     <script>
+        // ============================================
+        // PRODUCT DATA FOR EDIT / VIEW
+        // ============================================
         var productData = {};
         
         <?php foreach ($products as $product): ?>
@@ -1680,34 +1659,195 @@ $page_title = 'Products';
         }
         
         // ============================================
-        // SEARCH: type freely, submit on Enter or Apply
+        // LIVE SEARCH — debounced AJAX, no page reload
         // ============================================
         (function() {
-            const input = document.getElementById('searchInput');
-            const clearBtn = document.getElementById('clearSearchBtn');
-            const form = document.getElementById('filterForm');
-            if (!input || !form) return;
+            const input         = document.getElementById('searchInput');
+            const clearBtn      = document.getElementById('clearSearchBtn');
+            const form          = document.getElementById('filterForm');
+            const tableContainer = document.getElementById('tableContainer');
+            const resultsCount   = document.getElementById('resultsCount');
+            const searchWrap     = document.getElementById('searchWrap');
+            
+            if (!input || !form || !tableContainer) return;
+            
+            let debounceTimer = null;
             
             function updateClearBtn() {
                 if (clearBtn) clearBtn.classList.toggle('visible', input.value.length > 0);
             }
             updateClearBtn();
             
-            input.addEventListener('input', updateClearBtn);
+            function buildQuery() {
+                const data = new FormData(form);
+                const params = new URLSearchParams();
+                for (const [k, v] of data.entries()) {
+                    if (v !== '') params.append(k, v);
+                }
+                return params.toString();
+            }
             
+            function liveSearch() {
+                const query = buildQuery();
+                
+                // Loading shimmer
+                searchWrap.classList.add('loading');
+                tableContainer.style.opacity = '0.5';
+                
+                fetch('includes/ajax.php?action=admin_search_products&' + query)
+                    .then(r => r.json())
+                    .then(res => {
+                        searchWrap.classList.remove('loading');
+                        tableContainer.style.opacity = '1';
+                        
+                        if (!res.success) {
+                            console.warn('Search failed:', res.message);
+                            return;
+                        }
+                        
+                        // Rebuild the whole tableContainer
+                        if (res.shown === 0) {
+                            tableContainer.innerHTML = `
+                                <div style="text-align:center; padding:60px 20px; color:#888;">
+                                    <i class="fas fa-box-open" style="font-size:56px; display:block; margin-bottom:16px; opacity:0.3;"></i>
+                                    <h3 style="margin:0 0 8px; color:#555;">No products found</h3>
+                                    <p style="margin:0;">Try adjusting your search or filters.</p>
+                                </div>
+                            `;
+                        } else {
+                            // Build pagination HTML
+                            let paginationHtml = '';
+                            if (res.total_pages > 1) {
+                                const startOffset = (res.page - 1) * 12 + 1;
+                                const endOffset = Math.min(res.page * 12, res.total);
+                                
+                                let linksHtml = '';
+                                linksHtml += `<a href="#" class="page-link ${res.page <= 1 ? 'disabled' : ''}" data-page="${res.page - 1}"><i class="fas fa-chevron-left"></i></a>`;
+                                
+                                const range = 2;
+                                const startP = Math.max(1, res.page - range);
+                                const endP = Math.min(res.total_pages, res.page + range);
+                                
+                                if (startP > 1) {
+                                    linksHtml += `<a href="#" class="page-link" data-page="1">1</a>`;
+                                    if (startP > 2) linksHtml += `<span class="page-ellipsis">…</span>`;
+                                }
+                                for (let i = startP; i <= endP; i++) {
+                                    const active = i === res.page;
+                                    linksHtml += `<a href="#" class="page-link ${active ? 'active' : ''}" data-page="${i}">${i}</a>`;
+                                }
+                                if (endP < res.total_pages) {
+                                    if (endP < res.total_pages - 1) linksHtml += `<span class="page-ellipsis">…</span>`;
+                                    linksHtml += `<a href="#" class="page-link" data-page="${res.total_pages}">${res.total_pages}</a>`;
+                                }
+                                linksHtml += `<a href="#" class="page-link ${res.page >= res.total_pages ? 'disabled' : ''}" data-page="${res.page + 1}"><i class="fas fa-chevron-right"></i></a>`;
+                                
+                                paginationHtml = `
+                                    <div class="pagination">
+                                        <div class="pagination-info">
+                                            Showing <strong>${startOffset}</strong>–<strong>${endOffset}</strong> of <strong>${res.total}</strong>
+                                        </div>
+                                        <div class="pagination-links">${linksHtml}</div>
+                                    </div>
+                                `;
+                            }
+                            
+                            tableContainer.innerHTML = `
+                                <div class="table-inner">
+                                    <table class="admin-table" id="productsTable">
+                                        <thead>
+                                            <tr>
+                                                <th>Image</th>
+                                                <th>Name</th>
+                                                <th>SKU</th>
+                                                <th>Price</th>
+                                                <th>Stock</th>
+                                                <th>Supplier</th>
+                                                <th>Category</th>
+                                                <th>Status</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>${res.html}</tbody>
+                                    </table>
+                                </div>
+                                ${paginationHtml}
+                            `;
+                            
+                            // Attach pagination listeners
+                            tableContainer.querySelectorAll('.pagination-links .page-link').forEach(link => {
+                                link.addEventListener('click', function(e) {
+                                    e.preventDefault();
+                                    if (this.classList.contains('disabled') || this.classList.contains('active')) return;
+                                    const pageNum = this.dataset.page;
+                                    // Update hidden page input if present, else append to URL
+                                    const url = new URL(window.location.href);
+                                    url.searchParams.set('page', pageNum);
+                                    // Preserve current filters
+                                    const curParams = new URLSearchParams(buildQuery());
+                                    curParams.forEach((v, k) => url.searchParams.set(k, v));
+                                    url.searchParams.set('page', pageNum);
+                                    history.replaceState({}, '', url);
+                                    liveSearch();
+                                });
+                            });
+                        }
+                        
+                        // Update results text
+                        if (resultsCount) {
+                            resultsCount.innerHTML =
+                                'Showing <strong>' + res.shown + '</strong> of <strong>' + res.total + '</strong> products' +
+                                (query ? ' (filtered)' : '');
+                        }
+                        
+                        // Update URL without reload
+                        const newUrl = window.location.pathname + (query ? '?' + query : '');
+                        history.replaceState({}, '', newUrl);
+                    })
+                    .catch(err => {
+                        console.error('Search error:', err);
+                        searchWrap.classList.remove('loading');
+                        tableContainer.style.opacity = '1';
+                    });
+            }
+            
+            // Debounced input
+            input.addEventListener('input', function() {
+                updateClearBtn();
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(liveSearch, 400);
+            });
+            
+            // Clear
             if (clearBtn) {
                 clearBtn.addEventListener('click', function() {
                     input.value = '';
                     updateClearBtn();
-                    form.submit();
+                    clearTimeout(debounceTimer);
+                    liveSearch();
+                    input.focus();
                 });
             }
             
+            // Enter — immediate
             input.addEventListener('keydown', function(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    form.submit();
+                    clearTimeout(debounceTimer);
+                    liveSearch();
                 }
+            });
+            
+            // Dropdown change — immediate
+            form.querySelectorAll('select').forEach(sel => {
+                sel.addEventListener('change', function() {
+                    // Update is-placeholder visual
+                    if (this.name === 'category' || this.name === 'status' || this.name === 'stock') {
+                        this.classList.toggle('is-placeholder', this.value === '');
+                    }
+                    clearTimeout(debounceTimer);
+                    liveSearch();
+                });
             });
         })();
         
