@@ -40,6 +40,11 @@ function isActive($page) {
         <a href="customers.php" class="<?php echo isActive('customers.php'); ?>">
             <i class="fas fa-users"></i> Customers
         </a>
+        
+    <a href="suppliers.php" class="<?php echo isActive('customers.php'); ?>">
+        <i class="fas fa-truck"></i> Suppliers
+    </a>
+
         <a href="categories.php" class="<?php echo isActive('categories.php'); ?>">
             <i class="fas fa-tags"></i> Categories
         </a>
