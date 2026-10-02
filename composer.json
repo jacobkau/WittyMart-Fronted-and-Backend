@@ -2,13 +2,24 @@
     "name": "wittymart/ecommerce",
     "description": "WittyMart E-commerce Application",
     "type": "project",
+    "license": "proprietary",
     "require": {
         "php": ">=7.4",
-        "cloudinary/cloudinary_php": "^2.0"
+        "ext-pdo": "*",
+        "ext-pdo_pgsql": "*",
+        "ext-mbstring": "*",
+        "ext-json": "*",
+        "cloudinary/cloudinary_php": "^2.0",
+        "setasign/fpdf": "^1.8"
+    },
+    "require-dev": {
+        "vlucas/phpdotenv": "^5.5"
     },
     "config": {
         "optimize-autoloader": true,
-        "preferred-install": "dist"
+        "preferred-install": "dist",
+        "sort-packages": true
     },
-    "minimum-stability": "stable"
+    "minimum-stability": "stable",
+    "prefer-stable": true
 }
