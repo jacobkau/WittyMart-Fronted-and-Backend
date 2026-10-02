@@ -1,6 +1,6 @@
 <?php
 // ============================================
-// ORDER CONFIRMATION WITH EMAILJS
+// ORDER CONFIRMATION WITH DEFERRED STK PUSH + EMAILJS
 // ============================================
 require_once 'includes/config.php';
 
@@ -9,12 +9,27 @@ if (!isset($_SESSION['order_success']) || !isset($_SESSION['order_number'])) {
     exit();
 }
 
-$order_number   = $_SESSION['order_number'];
-$mpesa_pending  = !empty($_SESSION['mpesa_pending']);
-$mpesa_message  = $_SESSION['mpesa_message'] ?? '';
+$order_number = $_SESSION['order_number'];
 
-// Clear flash keys (do NOT clear order_number yet; we need it below)
-unset($_SESSION['order_success'], $_SESSION['mpesa_pending'], $_SESSION['mpesa_message']);
+// ============================================
+// CAPTURE STK DETAILS BEFORE CLEARING SESSION
+// ============================================
+$stk_needed    = !empty($_SESSION['stk_needed']);
+$stk_phone     = $_SESSION['stk_phone']     ?? '';
+$stk_amount    = $_SESSION['stk_amount']    ?? 0;
+$stk_reference = $_SESSION['stk_reference'] ?? '';
+$stk_order_id  = $_SESSION['order_id']      ?? 0;
+
+// Clear the transient session keys immediately so refresh doesn't re-trigger anything
+unset(
+    $_SESSION['order_success'],
+    $_SESSION['order_number'],
+    $_SESSION['order_id'],
+    $_SESSION['stk_needed'],
+    $_SESSION['stk_phone'],
+    $_SESSION['stk_amount'],
+    $_SESSION['stk_reference']
+);
 
 // ============================================
 // FETCH ORDER + ITEMS FOR DISPLAY AND EMAIL
@@ -41,7 +56,7 @@ try {
 
 $user = getCurrentUser();
 
-// Build items text for the email body
+// Build items text for email
 $itemsText = '';
 foreach ($items as $it) {
     $itemsText .= $it['product_name'] . ' × ' . $it['quantity'] . ' — Ksh ' . number_format($it['total'], 0) . "\n";
@@ -182,6 +197,22 @@ $page_title = 'Order Confirmed';
         }
         .email-status .ok { color: #28a745; }
         .email-status .err { color: #ffc107; }
+
+        /* Payment polling indicator */
+        .pay-status {
+            margin-top: 16px;
+            font-size: 13px;
+            color: #0c5460;
+            background: #e8f4f8;
+            padding: 10px 14px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .pay-status.paid { background: #d4edda; color: #155724; }
+        .pay-status.failed { background: #f8d7da; color: #721c24; }
     </style>
 </head>
 <body>
@@ -208,43 +239,30 @@ $page_title = 'Order Confirmed';
                         <span>Ksh <?php echo number_format($order['shipping_fee'] ?? 0, 0); ?></span>
                     </div>
                     <div class="oc-line total">
-                        <span>Total Paid</span>
+                        <span>Total</span>
                         <span>Ksh <?php echo number_format($order['total'], 0); ?></span>
                     </div>
                 </div>
 
                 <?php if (in_array($order['payment_method'], ['mpesa', 'paybill'])): ?>
-                    <?php if ($mpesa_pending): ?>
-                        <div class="oc-status-card mpesa">
-                            <i class="fas fa-mobile-alt"></i>
-                            <div>
-                                <strong>M-Pesa Payment Request Sent</strong>
-                                Check your phone
-                                <strong><?php echo htmlspecialchars($order['mpesa_phone'] ?? ''); ?></strong>
-                                and enter your PIN to complete payment of
-                                <strong>Ksh <?php echo number_format($order['total'], 0); ?></strong>.
-                                <small>
-                                    Didn't receive the prompt? Dial <strong>*334#</strong>
-                                    or visit <a href="orders.php" style="color:#0c5460; font-weight:600;">My Orders</a> to retry.
-                                </small>
-                            </div>
+                    <div class="oc-status-card mpesa" id="mpesaCard">
+                        <i class="fas fa-mobile-alt"></i>
+                        <div>
+                            <strong>Payment Request Sent</strong>
+                            Check your phone <strong><?php echo htmlspecialchars($order['mpesa_phone'] ?? ''); ?></strong>
+                            and enter your M-Pesa PIN to complete payment of
+                            <strong>Ksh <?php echo number_format($order['total'], 0); ?></strong>.
+                            <small>
+                                Didn't receive the prompt? Dial <strong>*334#</strong>
+                                or visit <a href="orders.php" style="color:#0c5460; font-weight:600;">My Orders</a> to retry.
+                            </small>
                         </div>
-                    <?php else: ?>
-                        <div class="oc-status-card mpesa-warn">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            <div>
-                                <strong>Payment Prompt Not Sent</strong>
-                                We couldn't initiate the M-Pesa prompt automatically.
-                                <?php if (!empty($mpesa_message)): ?>
-                                    <br><small><?php echo htmlspecialchars($mpesa_message); ?></small>
-                                <?php endif; ?>
-                                <small>
-                                    Please retry from <a href="orders.php" style="color:#856404; font-weight:600;">My Orders</a>
-                                    or contact support.
-                                </small>
-                            </div>
-                        </div>
-                    <?php endif; ?>
+                    </div>
+
+                    <div class="pay-status" id="payStatus">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span>Waiting for payment confirmation…</span>
+                    </div>
 
                 <?php elseif ($order['payment_method'] === 'pay_on_delivery'): ?>
                     <div class="oc-status-card cod">
@@ -281,7 +299,7 @@ $page_title = 'Order Confirmed';
     <script>
         (function() {
             if (typeof emailjs !== 'undefined') {
-                emailjs.init("YOUR_PUBLIC_KEY"); // TODO: replace with your EmailJS public key
+                emailjs.init("YOUR_PUBLIC_KEY"); // TODO: replace
             }
         })();
 
@@ -289,7 +307,6 @@ $page_title = 'Order Confirmed';
             const statusEl = document.getElementById('emailStatus');
             if (typeof emailjs === 'undefined' || !statusEl) return;
 
-            // Build items list string for the email
             const itemsText = <?php echo json_encode($itemsText); ?>;
 
             const params = {
@@ -301,25 +318,112 @@ $page_title = 'Order Confirmed';
                 delivery_to:  <?php echo json_encode($order['shipping_address'] ?? ''); ?>
             };
 
-            if (!params.to_email) {
-                statusEl.textContent = '';
-                return;
-            }
+            if (!params.to_email) return;
 
             statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending confirmation email…';
 
             emailjs.send("YOUR_SERVICE_ID", "YOUR_TEMPLATE_ID", params)
-                .then(function(res) {
-                    statusEl.innerHTML =
-                        '<i class="fas fa-check-circle ok"></i> Confirmation email sent to ' +
-                        params.to_email;
+                .then(function() {
+                    statusEl.innerHTML = '<i class="fas fa-check-circle ok"></i> Confirmation email sent to ' + params.to_email;
                 })
                 .catch(function(err) {
                     console.error('Email send failed:', err);
-                    statusEl.innerHTML =
-                        '<i class="fas fa-exclamation-triangle err"></i> Could not send email confirmation.';
+                    statusEl.innerHTML = '<i class="fas fa-exclamation-triangle err"></i> Could not send email confirmation.';
                 });
+
+            // ============================================
+            // POLL PAYMENT STATUS (for M-Pesa orders)
+            // ============================================
+            <?php if ($order && in_array($order['payment_method'], ['mpesa','paybill'])): ?>
+            const payStatusEl = document.getElementById('payStatus');
+            const orderId = <?php echo (int)$order['id']; ?>;
+            let pollCount = 0;
+            const maxPolls = 40; // ~3.3 min at 5s intervals
+
+            function pollPayment() {
+                pollCount++;
+                fetch('check_payment_status.php?order_id=' + orderId)
+                    .then(r => r.json())
+                    .then(data => {
+                        if (!payStatusEl) return;
+                        if (data.status === 'paid') {
+                            payStatusEl.className = 'pay-status paid';
+                            payStatusEl.innerHTML = '<i class="fas fa-check-circle"></i> <span>Payment confirmed! Your order is being processed.</span>';
+                            return;
+                        }
+                        if (data.status === 'failed') {
+                            payStatusEl.className = 'pay-status failed';
+                            payStatusEl.innerHTML = '<i class="fas fa-times-circle"></i> <span>Payment failed or cancelled. <a href="orders.php" style="color:inherit;text-decoration:underline;">Retry</a></span>';
+                            return;
+                        }
+                        if (pollCount >= maxPolls) {
+                            payStatusEl.innerHTML = '<i class="fas fa-clock"></i> <span>Still waiting… check <a href="orders.php" style="color:inherit;text-decoration:underline;">My Orders</a> for updates.</span>';
+                            return;
+                        }
+                        setTimeout(pollPayment, 5000);
+                    })
+                    .catch(() => setTimeout(pollPayment, 8000));
+            }
+
+            if (payStatusEl) setTimeout(pollPayment, 3000);
+            <?php endif; ?>
         });
     </script>
 </body>
 </html>
+
+<?php
+// ============================================
+// DEFERRED STK PUSH TRIGGER
+// This runs AFTER the page has been fully sent to the user.
+// The browser has already closed its connection — only the server
+// process continues here.
+// ============================================
+
+// Flush all output to the client so the browser is done
+if (function_exists('fastcgi_finish_request')) {
+    fastcgi_finish_request();
+} else {
+    ignore_user_abort(true);
+    if (ob_get_level() > 0) {
+        ob_end_flush();
+    }
+    flush();
+}
+
+// ---- Only server continues from here ----
+
+if ($stk_needed && $stk_phone && $stk_order_id) {
+    try {
+        require_once 'includes/mpesa_service.php';
+        $mpesa = new MpesaService();
+        $normalized = MpesaService::normalizePhone($stk_phone);
+
+        $push = $mpesa->stkPush($normalized, $stk_amount, $stk_reference, 'WittyMart Order');
+
+        if ($push && !empty($push['CheckoutRequestID'])) {
+            $stmt = $pdo->prepare("
+                UPDATE orders 
+                SET mpesa_checkout_id = ?, 
+                    payment_reference = ?,
+                    updated_at = NOW()
+                WHERE id = ?
+            ");
+            $stmt->execute([
+                $push['CheckoutRequestID'],
+                $push['CheckoutRequestID'],
+                $stk_order_id
+            ]);
+            error_log("STK Push sent: {$push['CheckoutRequestID']} for order #{$stk_order_id}");
+        } else {
+            error_log("STK Push FAILED for order #{$stk_order_id}");
+            $pdo->prepare("
+                UPDATE orders 
+                SET payment_status = 'failed', updated_at = NOW() 
+                WHERE id = ?
+            ")->execute([$stk_order_id]);
+        }
+    } catch (Exception $e) {
+        error_log('Deferred STK Push error: ' . $e->getMessage());
+    }
+}
