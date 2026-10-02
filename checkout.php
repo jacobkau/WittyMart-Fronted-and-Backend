@@ -1,7 +1,12 @@
 <?php
 // ============================================
-// WITTYMART CHECKOUT WITH DEFERRED M-PESA STK PUSH
+// TEMPORARY DEBUG — REMOVE AFTER FIXING
 // ============================================
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+
+
 require_once 'includes/config.php';
 require_once 'includes/cloudinary_helper.php';
 
@@ -240,11 +245,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
                 exit();
             }
         }
-    } catch (Exception $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
-        error_log('Checkout error: ' . $e->getMessage());
-        $order_error = 'An error occurred while processing your order. Please try again.';
-    }
+   } catch (Exception $e) {
+    if ($pdo->inTransaction()) $pdo->rollBack();
+    error_log('Checkout error: ' . $e->getMessage());
+    $order_error = 'DEBUG: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine();
+}
 }
 
 $page_title = 'Checkout';
