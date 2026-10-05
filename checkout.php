@@ -1,37 +1,8 @@
 <?php
 // ============================================
-// TEMPORARY DEBUG — REMOVE AFTER FIXING
+// WITTYMART CHECKOUT
 // ============================================
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-
-
 require_once 'includes/config.php';
-// ============================================
-// TEMPORARY DEBUG — REMOVE AFTER FIXING
-// ============================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    echo "<div style='background:#000;color:#0f0;padding:20px;font-family:monospace;font-size:13px;'>";
-    echo "=== POST RECEIVED ===<br>";
-    echo "place_order is set: " . (isset($_POST['place_order']) ? 'YES' : 'NO') . "<br>";
-    echo "payment_method: " . ($_POST['payment_method'] ?? 'not set') . "<br>";
-    echo "address_id: " . ($_POST['address_id'] ?? 'not set') . "<br>";
-    echo "mpesa_phone: " . ($_POST['mpesa_phone'] ?? 'not set') . "<br>";
-    echo "Cart items in DB: ";
-    $dbg = $pdo->prepare("SELECT COUNT(*) FROM cart WHERE user_id = ?");
-    $dbg->execute([$_SESSION['user_id'] ?? 0]);
-    echo $dbg->fetchColumn() . "<br>";
-    echo "Addresses in DB: ";
-    $dbg2 = $pdo->prepare("SELECT COUNT(*) FROM user_addresses WHERE user_id = ?");
-    $dbg2->execute([$_SESSION['user_id'] ?? 0]);
-    echo $dbg2->fetchColumn() . "<br>";
-    echo "</div>";
-    exit; // Stop here — no processing yet
-}
-// ============================================
-// END TEMPORARY DEBUG
-// ============================================
 require_once 'includes/cloudinary_helper.php';
 
 if (!isset($_SESSION['user_id'])) {
@@ -237,24 +208,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
 
                 // Coupon use
                 if (!empty($_SESSION['coupon']['id'])) {
-                    $pdo->prepare("UPDATE coupons SET uses = uses + 1 WHERE id = ?")
-                        ->execute([$_SESSION['coupon']['id']]);
+                    try {
+                        $pdo->prepare("UPDATE coupons SET uses = uses + 1 WHERE id = ?")
+                            ->execute([$_SESSION['coupon']['id']]);
+                    } catch (PDOException $e) {
+                        // Column might be named used_count — try fallback
+                        try {
+                            $pdo->prepare("UPDATE coupons SET used_count = used_count + 1 WHERE id = ?")
+                                ->execute([$_SESSION['coupon']['id']]);
+                        } catch (PDOException $e2) {
+                            error_log('Coupon increment failed: ' . $e2->getMessage());
+                        }
+                    }
                 }
 
                 // Clear cart
                 $pdo->prepare("DELETE FROM cart WHERE user_id = ?")->execute([$user_id]);
 
                 $pdo->commit();
-                error_log("CHECKOUT DEBUG: Order #$order_number created, ID=$order_id");
-                error_log("CHECKOUT DEBUG: Redirecting to order_confirmation.php");
 
                 logActivity('order_placed', 'Order #' . $order_number, $user_id, $user_name);
 
-                // ============================================
-                // STASH STK DETAILS IN SESSION — DO NOT CALL MPESA HERE
-                // The push will be triggered from order_confirmation.php
-                // AFTER the response has been sent to the user.
-                // ============================================
+                // Stash STK details in session for the deferred trigger
                 $stk_needed = in_array($payment_method, ['mpesa', 'paybill']) && !empty($mpesa_phone);
 
                 $_SESSION['order_success']  = true;
@@ -271,11 +246,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
                 exit();
             }
         }
-   } catch (Exception $e) {
-    if ($pdo->inTransaction()) $pdo->rollBack();
-    error_log('Checkout error: ' . $e->getMessage());
-    $order_error = 'DEBUG: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine();
-}
+    } catch (Exception $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('Checkout error: ' . $e->getMessage());
+        $order_error = 'An error occurred while processing your order. Please try again.';
+    }
 }
 
 $page_title = 'Checkout';
@@ -429,6 +404,8 @@ $page_title = 'Checkout';
                     </div>
 
                     <form method="POST" id="checkoutForm">
+                        <!-- Hidden input ensures place_order is always POSTed -->
+                        <input type="hidden" name="place_order" value="1">
                         <input type="hidden" name="address_id" value="<?php echo (int)$selectedAddress['id']; ?>">
 
                         <div class="form-group">
@@ -467,7 +444,7 @@ $page_title = 'Checkout';
                             </div>
                         </div>
 
-                        <button type="submit" name="place_order" class="btn-place-order" id="placeOrderBtn">
+                        <button type="submit" class="btn-place-order" id="placeOrderBtn">
                             <i class="fas fa-check-circle"></i> Place Order — Ksh <?php echo number_format($grandTotal, 0); ?>
                         </button>
                     </form>
@@ -530,7 +507,8 @@ $page_title = 'Checkout';
         }
 
         function toggleMpesa() {
-            const m = document.querySelector('input[name="payment_method"]:checked').value;
+            const checked = document.querySelector('input[name="payment_method"]:checked');
+            const m = checked ? checked.value : 'pay_on_delivery';
             const fields = document.getElementById('mpesaFields');
             const phone = document.getElementById('mpesaPhone');
             if (m === 'mpesa' || m === 'paybill') {
@@ -542,15 +520,20 @@ $page_title = 'Checkout';
             }
         }
 
+        // Disable the button AFTER the browser has serialized the form.
+        // Otherwise place_order gets dropped from the POST body.
         document.getElementById('checkoutForm').addEventListener('submit', function(e) {
             const btn = document.getElementById('placeOrderBtn');
-            const method = document.querySelector('input[name="payment_method"]:checked').value;
+            const checked = document.querySelector('input[name="payment_method"]:checked');
+            const method = checked ? checked.value : 'pay_on_delivery';
             const isMpesa = (method === 'mpesa' || method === 'paybill');
 
-            btn.disabled = true;
-            btn.innerHTML = isMpesa
-                ? '<i class="fas fa-spinner fa-spin"></i> Sending M-Pesa prompt…'
-                : '<i class="fas fa-spinner fa-spin"></i> Placing order…';
+            setTimeout(function() {
+                btn.disabled = true;
+                btn.innerHTML = isMpesa
+                    ? '<i class="fas fa-spinner fa-spin"></i> Sending M-Pesa prompt…'
+                    : '<i class="fas fa-spinner fa-spin"></i> Placing order…';
+            }, 0);
         });
 
         toggleMpesa();
