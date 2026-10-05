@@ -13,9 +13,6 @@ $user_id = $_SESSION['user_id'];
 
 // ============================================
 // RESOLVE ORDER NUMBER
-// Priority 1: session flash (fast path after normal redirect)
-// Priority 2: ?order= query param
-// Priority 3: latest order for this user (fallback if session lost)
 // ============================================
 $order_number = $_SESSION['order_number'] ?? '';
 
@@ -51,7 +48,6 @@ $stk_amount    = $_SESSION['stk_amount']    ?? 0;
 $stk_reference = $_SESSION['stk_reference'] ?? '';
 $stk_order_id  = $_SESSION['order_id']      ?? 0;
 
-// Clear the transient session keys so a refresh doesn't re-trigger anything
 unset(
     $_SESSION['order_success'],
     $_SESSION['order_number'],
@@ -63,7 +59,7 @@ unset(
 );
 
 // ============================================
-// FETCH ORDER + ITEMS FOR DISPLAY AND EMAIL
+// FETCH ORDER + ITEMS
 // ============================================
 $order = null;
 $items = [];
@@ -81,7 +77,6 @@ try {
         $stmt->execute([$order['id']]);
         $items = $stmt->fetchAll();
 
-        // If session was lost but we found the order, recover STK details from the order row
         if (!$stk_order_id) {
             $stk_order_id  = (int)$order['id'];
             $stk_phone     = $order['mpesa_phone'] ?? '';
@@ -98,7 +93,6 @@ try {
 
 $user = getCurrentUser();
 
-// Build items text for email
 $itemsText = '';
 foreach ($items as $it) {
     $itemsText .= $it['product_name'] . ' × ' . $it['quantity'] . ' — Ksh ' . number_format($it['total'], 0) . "\n";
@@ -125,11 +119,7 @@ $page_title = 'Order Confirmed';
             box-shadow: 0 4px 20px rgba(0,0,0,0.08);
             text-align: center;
         }
-        .oc-wrap i.big {
-            font-size: 72px;
-            color: #28a745;
-            margin-bottom: 20px;
-        }
+        .oc-wrap i.big { font-size: 72px; color: #28a745; margin-bottom: 20px; }
         .oc-wrap h1 { color: #05573c; margin: 0 0 10px; font-size: 26px; }
         .oc-wrap p { color: #666; line-height: 1.6; font-size: 15px; }
 
@@ -188,24 +178,13 @@ $page_title = 'Order Confirmed';
             align-items: flex-start;
         }
         .oc-status-card i { font-size: 20px; flex-shrink: 0; margin-top: 2px; }
-
-        .oc-status-card.mpesa {
-            background: #d1ecf1;
-            color: #0c5460;
-            border-left: 4px solid #17a2b8;
-        }
-        .oc-status-card.mpesa-warn {
-            background: #fff3cd;
-            color: #856404;
-            border-left: 4px solid #ffc107;
-        }
-        .oc-status-card.cod {
-            background: #d4edda;
-            color: #155724;
-            border-left: 4px solid #28a745;
-        }
         .oc-status-card strong { display: block; margin-bottom: 4px; }
         .oc-status-card small { opacity: 0.85; display: block; margin-top: 6px; }
+
+        .oc-status-card.mpesa { background: #d1ecf1; color: #0c5460; border-left: 4px solid #17a2b8; }
+        .oc-status-card.mpesa-warn { background: #fff3cd; color: #856404; border-left: 4px solid #ffc107; }
+        .oc-status-card.cod { background: #d4edda; color: #155724; border-left: 4px solid #28a745; }
+        .oc-status-card.failed { background: #f8d7da; color: #721c24; border-left: 4px solid #dc3545; }
 
         .oc-actions {
             display: flex;
@@ -226,6 +205,9 @@ $page_title = 'Order Confirmed';
             gap: 8px;
             font-size: 14px;
             transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
         }
         .oc-btn:hover { background: #03402c; }
         .oc-btn.secondary { background: #6c757d; }
@@ -240,21 +222,60 @@ $page_title = 'Order Confirmed';
         .email-status .ok { color: #28a745; }
         .email-status .err { color: #ffc107; }
 
-        /* Payment polling indicator */
+        /* ============================================
+           PAYMENT STATUS WIDGET
+           ============================================ */
         .pay-status {
             margin-top: 16px;
             font-size: 13px;
             color: #0c5460;
             background: #e8f4f8;
-            padding: 10px 14px;
+            padding: 12px 14px;
             border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 8px;
+            flex-wrap: wrap;
         }
         .pay-status.paid { background: #d4edda; color: #155724; }
         .pay-status.failed { background: #f8d7da; color: #721c24; }
+        .pay-status.timeout { background: #fff3cd; color: #856404; }
+
+        .pay-status .pay-actions {
+            display: flex;
+            gap: 8px;
+            margin-left: 8px;
+            flex-wrap: wrap;
+        }
+        .pay-status .pay-actions a,
+        .pay-status .pay-actions button {
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            border: none;
+            font-family: inherit;
+        }
+        .pay-status .btn-retry {
+            background: #05573c;
+            color: #fff;
+        }
+        .pay-status .btn-retry:hover { background: #03402c; }
+        .pay-status .btn-orders {
+            background: rgba(0,0,0,0.08);
+            color: inherit;
+        }
+        .pay-status .btn-orders:hover { background: rgba(0,0,0,0.15); }
+
+        /* Countdown timer */
+        .pay-countdown {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-left: 4px;
+        }
     </style>
 </head>
 <body>
@@ -288,7 +309,7 @@ $page_title = 'Order Confirmed';
 
                 <?php if (in_array($order['payment_method'], ['mpesa', 'paybill'])): ?>
                     <?php if ($order['payment_status'] === 'paid'): ?>
-                        <div class="oc-status-card cod">
+                        <div class="oc-status-card cod" id="mpesaCard">
                             <i class="fas fa-check-circle"></i>
                             <div>
                                 <strong>Payment Confirmed</strong>
@@ -306,15 +327,16 @@ $page_title = 'Order Confirmed';
                                 and enter your M-Pesa PIN to complete payment of
                                 <strong>Ksh <?php echo number_format($order['total'], 0); ?></strong>.
                                 <small>
-                                    Didn't receive the prompt? Dial <strong>*334#</strong>
-                                    or visit <a href="orders.php" style="color:#0c5460; font-weight:600;">My Orders</a> to retry.
+                                    Didn't receive the prompt? Wait for the counter below or
+                                    <a href="orders.php" style="color:#0c5460; font-weight:600;">retry from My Orders</a>.
                                 </small>
                             </div>
                         </div>
 
                         <div class="pay-status" id="payStatus">
                             <i class="fas fa-spinner fa-spin"></i>
-                            <span>Waiting for payment confirmation…</span>
+                            <span id="payStatusText">Waiting for payment confirmation…</span>
+                            <span class="pay-countdown" id="payCountdown"></span>
                         </div>
                     <?php endif; ?>
 
@@ -352,7 +374,7 @@ $page_title = 'Order Confirmed';
     <?php include "footer.php"; ?>
 
     <!-- ============================================
-         EMAILJS CONFIRMATION + PAYMENT POLLING
+         EMAILJS + PAYMENT STATUS POLLING
          ============================================ -->
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <script>
@@ -399,42 +421,131 @@ $page_title = 'Order Confirmed';
             // ============================================
             <?php if ($order && in_array($order['payment_method'], ['mpesa','paybill']) && $order['payment_status'] !== 'paid'): ?>
             const payStatusEl = document.getElementById('payStatus');
+            const payStatusText = document.getElementById('payStatusText');
+            const payCountdown = document.getElementById('payCountdown');
             const orderId = <?php echo (int)$order['id']; ?>;
+            const orderNumberJs = <?php echo json_encode($order_number); ?>;
+
             let pollCount = 0;
-            const maxPolls = 40; // ~3.3 min at 5s intervals
+            const maxPolls = 40;         // 40 × 5s = ~3.3 min
+            const startTime = Date.now();
+            const maxDurationMs = maxPolls * 5000;
+
+            function stopPolling() {
+                // No more polling — just leave whatever state is shown
+            }
+
+            function setStatus(state, html) {
+                if (!payStatusEl) return;
+                payStatusEl.className = 'pay-status ' + state;
+                payStatusEl.innerHTML = html;
+            }
+
+            function showCountdown() {
+                if (!payCountdown) return;
+                const elapsed = Date.now() - startTime;
+                const remaining = Math.max(0, Math.floor((maxDurationMs - elapsed) / 1000));
+                if (remaining <= 0) {
+                    payCountdown.textContent = '';
+                } else {
+                    const mins = Math.floor(remaining / 60);
+                    const secs = remaining % 60;
+                    payCountdown.textContent = '(' + mins + ':' + (secs < 10 ? '0' : '') + secs + ')';
+                }
+            }
+
+            function showFailed(reason) {
+                const msg = reason || 'Payment was cancelled or timed out.';
+                setStatus('failed',
+                    '<i class="fas fa-times-circle"></i>' +
+                    '<span>' + msg + '</span>' +
+                    '<div class="pay-actions">' +
+                        '<a href="orders.php" class="btn-retry"><i class="fas fa-redo"></i> Retry Payment</a>' +
+                        '<a href="orders.php" class="btn-orders">My Orders</a>' +
+                    '</div>'
+                );
+
+                // Swap the top card too
+                const mpesaCard = document.getElementById('mpesaCard');
+                if (mpesaCard) {
+                    mpesaCard.className = 'oc-status-card failed';
+                    mpesaCard.innerHTML = '<i class="fas fa-times-circle"></i><div><strong>Payment Not Completed</strong>Your M-Pesa payment was cancelled or timed out. Your order is still saved — retry from <a href="orders.php" style="color:#721c24; font-weight:600; text-decoration:underline;">My Orders</a>.</div>';
+                }
+            }
+
+            function showTimeout() {
+                setStatus('timeout',
+                    '<i class="fas fa-clock"></i>' +
+                    '<span>Still waiting for payment…</span>' +
+                    '<div class="pay-actions">' +
+                        '<a href="orders.php" class="btn-retry"><i class="fas fa-sync"></i> Check Status</a>' +
+                        '<a href="orders.php" class="btn-orders">My Orders</a>' +
+                    '</div>'
+                );
+            }
+
+            function showPaid(receipt) {
+                const receiptLine = receipt
+                    ? '<small style="display:block; margin-top:4px; opacity:0.8;">Receipt: ' + receipt + '</small>'
+                    : '';
+
+                setStatus('paid',
+                    '<i class="fas fa-check-circle"></i>' +
+                    '<span>Payment confirmed! Your order is being processed.</span>' +
+                    receiptLine
+                );
+
+                const mpesaCard = document.getElementById('mpesaCard');
+                if (mpesaCard) {
+                    mpesaCard.className = 'oc-status-card cod';
+                    mpesaCard.innerHTML = '<i class="fas fa-check-circle"></i><div><strong>Payment Confirmed</strong>We have received your payment of <strong>Ksh ' + <?php echo json_encode(number_format($order['total'], 0)); ?> + '</strong>. Your order is now being processed.</div>';
+                }
+            }
 
             function pollPayment() {
                 pollCount++;
-                fetch('check_payment_status.php?order_id=' + orderId)
+
+                fetch('check_payment_status.php?order_id=' + orderId + '&_=' + Date.now())
                     .then(r => r.json())
                     .then(data => {
                         if (!payStatusEl) return;
+
                         if (data.status === 'paid') {
-                            payStatusEl.className = 'pay-status paid';
-                            payStatusEl.innerHTML = '<i class="fas fa-check-circle"></i> <span>Payment confirmed! Your order is being processed.</span>';
-                            // Also swap the top card
-                            const mpesaCard = document.getElementById('mpesaCard');
-                            if (mpesaCard) {
-                                mpesaCard.className = 'oc-status-card cod';
-                                mpesaCard.innerHTML = '<i class="fas fa-check-circle"></i><div><strong>Payment Confirmed</strong>We\\'ve received your payment. Your order is now being processed.</div>';
-                            }
-                            return;
+                            showPaid(data.receipt || null);
+                            return; // STOP polling
                         }
+
                         if (data.status === 'failed') {
-                            payStatusEl.className = 'pay-status failed';
-                            payStatusEl.innerHTML = '<i class="fas fa-times-circle"></i> <span>Payment failed or cancelled. <a href="orders.php" style="color:inherit;text-decoration:underline;">Retry</a></span>';
-                            return;
+                            showFailed();
+                            return; // STOP polling
                         }
+
+                        // Still pending
+                        showCountdown();
+
                         if (pollCount >= maxPolls) {
-                            payStatusEl.innerHTML = '<i class="fas fa-clock"></i> <span>Still waiting… check <a href="orders.php" style="color:inherit;text-decoration:underline;">My Orders</a> for updates.</span>';
-                            return;
+                            showTimeout();
+                            return; // STOP polling after max
                         }
+
                         setTimeout(pollPayment, 5000);
                     })
-                    .catch(() => setTimeout(pollPayment, 8000));
+                    .catch(() => {
+                        // Network hiccup — retry up to max
+                        showCountdown();
+                        if (pollCount >= maxPolls) {
+                            showTimeout();
+                            return;
+                        }
+                        setTimeout(pollPayment, 8000);
+                    });
             }
 
-            if (payStatusEl) setTimeout(pollPayment, 3000);
+            // Start polling after a short delay
+            if (payStatusEl) {
+                showCountdown();
+                setTimeout(pollPayment, 3000);
+            }
             <?php endif; ?>
         });
     </script>
@@ -446,8 +557,6 @@ $page_title = 'Order Confirmed';
 // DEFERRED STK PUSH TRIGGER
 // Runs AFTER the page has been sent to the user.
 // ============================================
-
-// Flush all output to the client so the browser is done
 if (function_exists('fastcgi_finish_request')) {
     fastcgi_finish_request();
 } else {
@@ -457,8 +566,6 @@ if (function_exists('fastcgi_finish_request')) {
     }
     flush();
 }
-
-// ---- Only server continues from here ----
 
 if ($stk_needed && $stk_phone && $stk_order_id) {
     try {
