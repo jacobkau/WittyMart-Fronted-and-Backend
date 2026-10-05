@@ -8,6 +8,30 @@ ini_set('display_startup_errors', 1);
 
 
 require_once 'includes/config.php';
+// ============================================
+// TEMPORARY DEBUG — REMOVE AFTER FIXING
+// ============================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    echo "<div style='background:#000;color:#0f0;padding:20px;font-family:monospace;font-size:13px;'>";
+    echo "=== POST RECEIVED ===<br>";
+    echo "place_order is set: " . (isset($_POST['place_order']) ? 'YES' : 'NO') . "<br>";
+    echo "payment_method: " . ($_POST['payment_method'] ?? 'not set') . "<br>";
+    echo "address_id: " . ($_POST['address_id'] ?? 'not set') . "<br>";
+    echo "mpesa_phone: " . ($_POST['mpesa_phone'] ?? 'not set') . "<br>";
+    echo "Cart items in DB: ";
+    $dbg = $pdo->prepare("SELECT COUNT(*) FROM cart WHERE user_id = ?");
+    $dbg->execute([$_SESSION['user_id'] ?? 0]);
+    echo $dbg->fetchColumn() . "<br>";
+    echo "Addresses in DB: ";
+    $dbg2 = $pdo->prepare("SELECT COUNT(*) FROM user_addresses WHERE user_id = ?");
+    $dbg2->execute([$_SESSION['user_id'] ?? 0]);
+    echo $dbg2->fetchColumn() . "<br>";
+    echo "</div>";
+    exit; // Stop here — no processing yet
+}
+// ============================================
+// END TEMPORARY DEBUG
+// ============================================
 require_once 'includes/cloudinary_helper.php';
 
 if (!isset($_SESSION['user_id'])) {
