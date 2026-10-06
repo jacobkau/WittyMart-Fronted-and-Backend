@@ -185,7 +185,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
                 break;
 
             case 'set_selected_address':
-                $_SESSION['selected_address_id'] = intval($_POST['id'] ?? 0);
+                $addr_id = $_POST['id'] ?? 0;
+                $_SESSION['selected_address_id'] = ($addr_id === 'pickup') ? 'pickup' : intval($addr_id);
                 $response = ['success'=>true];
                 break;
 
@@ -255,6 +256,7 @@ function getCartProductImage($product) {
 }
 
 function countyTransportFee($county) {
+    if ($county === '__PICKUP__') return 0; // Office pickup = free
     $nearby = ['Nairobi','Kiambu','Machakos','Kajiado',"Murang'a",'Nyeri','Kirinyaga','Embu','Nakuru'];
     $mid    = ['Mombasa','Kisumu','Uasin Gishu','Kakamega','Meru','Laikipia','Bungoma','Kisii','Nyamira','Kericho','Bomet','Narok'];
     if (in_array($county, $nearby, true)) return 100;
@@ -304,17 +306,19 @@ try {
 
 $selectedAddressId = $_SESSION['selected_address_id'] ?? 0;
 $selectedAddress = null;
-if ($selectedAddressId) {
+$isPickup = ($selectedAddressId === 'pickup');
+
+if (!$isPickup && $selectedAddressId) {
     foreach ($userAddresses as $a) if ((int)$a['id'] === (int)$selectedAddressId) { $selectedAddress = $a; break; }
 }
-if (!$selectedAddress && !empty($userAddresses)) {
+if (!$isPickup && !$selectedAddress && !empty($userAddresses)) {
     foreach ($userAddresses as $a) if ($a['is_default']) { $selectedAddress = $a; break; }
     if (!$selectedAddress) $selectedAddress = $userAddresses[0];
     $selectedAddressId = (int)$selectedAddress['id'];
     $_SESSION['selected_address_id'] = $selectedAddressId;
 }
 
-$transportFee = $selectedAddress ? countyTransportFee($selectedAddress['county']) : 0;
+$transportFee = $isPickup ? 0 : ($selectedAddress ? countyTransportFee($selectedAddress['county']) : 0);
 $grandTotal   = $totalAfterDiscount + $transportFee;
 
 $kenya_counties = [
@@ -339,7 +343,6 @@ $page_title = 'Cart';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
     <style>
-        /* ... (identical styles to my last cart.php version, plus coupon box) ... */
         .cart-items { display:flex; flex-direction:column; gap:15px; margin:20px 0; }
         .cart-item { display:flex; align-items:center; gap:20px; background:#fff; padding:15px; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.08); position:relative; }
         .cart-item .image-container { position:relative; width:100px; height:100px; flex-shrink:0; border-radius:8px; overflow:hidden; background:#f5f5f5; cursor:pointer; }
@@ -381,6 +384,8 @@ $page_title = 'Cart';
         .address-card .addr-actions .btn-set-default { color:#05573c; border-color:#05573c; }
         .address-card .addr-actions .btn-delete { color:#dc3545; border-color:#dc3545; }
         .address-card .addr-actions .btn-delete:hover { background:#dc3545; color:#fff; }
+        .address-card.pickup-card { border-style:dashed; }
+        .address-card.pickup-card.selected { border-style:solid; }
         .no-addresses { text-align:center; padding:30px 20px; background:#fafafa; border-radius:10px; color:#888; margin-bottom:16px; }
         .no-addresses i { font-size:40px; opacity:.3; display:block; margin-bottom:12px; }
         .no-addresses .btn-add-first { display:inline-block; margin-top:12px; padding:10px 22px; background:#05573c; color:#fff; border-radius:6px; border:none; cursor:pointer; font-weight:600; text-decoration:none; }
@@ -525,48 +530,64 @@ $page_title = 'Cart';
                         <a class="add-addr-link" onclick="openAddressModal(0)"><i class="fas fa-plus"></i> Add New Address</a>
                     </h2>
 
-                    <?php if (empty($userAddresses)): ?>
-                        <div class="no-addresses">
-                            <i class="fas fa-map-marked-alt"></i>
-                            <h3 style="margin:0 0 6px; color:#555;">No saved addresses yet</h3>
-                            <p style="margin:0;">Add a delivery address so we can send your order.</p>
-                            <button class="btn-add-first" onclick="openAddressModal(0)"><i class="fas fa-plus"></i> Add Your First Address</button>
-                        </div>
-                    <?php else: ?>
-                        <div class="address-list" id="addressList">
-                            <?php foreach ($userAddresses as $addr): ?>
-                                <?php $isSelected = (int)$addr['id'] === (int)$selectedAddressId; ?>
-                                <div class="address-card <?php echo $isSelected ? 'selected' : ''; ?>"
-                                     data-id="<?php echo (int)$addr['id']; ?>"
-                                     data-county="<?php echo htmlspecialchars($addr['county']); ?>"
-                                     onclick="selectAddress(<?php echo (int)$addr['id']; ?>, this)">
-                                    <div>
-                                        <span class="addr-label"><?php echo htmlspecialchars($addr['label']); ?></span>
-                                        <?php if ($addr['is_default']): ?><span class="addr-default-badge">DEFAULT</span><?php endif; ?>
-                                    </div>
-                                    <div class="addr-recipient"><?php echo htmlspecialchars($addr['recipient_name']); ?></div>
-                                    <div class="addr-line">
-                                        <?php echo htmlspecialchars($addr['address_line']); ?><br>
-                                        <?php echo htmlspecialchars($addr['county']); ?><?php if (!empty($addr['city'])): ?>, <?php echo htmlspecialchars($addr['city']); ?><?php endif; ?>
-                                    </div>
-                                    <div class="addr-phone"><i class="fas fa-phone"></i> <?php echo htmlspecialchars($addr['phone']); ?></div>
-                                    <div class="addr-actions" onclick="event.stopPropagation();">
-                                        <button onclick="openAddressModal(<?php echo (int)$addr['id']; ?>)"><i class="fas fa-edit"></i> Edit</button>
-                                        <?php if (!$addr['is_default']): ?>
-                                            <button class="btn-set-default" onclick="setDefaultAddress(<?php echo (int)$addr['id']; ?>)"><i class="fas fa-star"></i> Set Default</button>
-                                        <?php endif; ?>
-                                        <button class="btn-delete" onclick="deleteAddress(<?php echo (int)$addr['id']; ?>)"><i class="fas fa-trash"></i> Delete</button>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
+                    <div class="address-list" id="addressList">
+                        <!-- OFFICE PICKUP CARD (always first, transport = 0) -->
+                        <div class="address-card pickup-card <?php echo $isPickup ? 'selected' : ''; ?>"
+                             data-id="pickup"
+                             data-county="__PICKUP__"
+                             onclick="selectAddress('pickup', this)">
+                            <div>
+                                <span class="addr-label">Pickup</span>
+                                <span class="addr-default-badge" style="background:#05573c;color:#fff;">FREE</span>
+                            </div>
+                            <div class="addr-recipient"><i class="fas fa-store"></i> WittyMart Office Pickup</div>
+                            <div class="addr-line">
+                                WittyMart Headquarters<br>
+                                Nairobi CBD, Kenya
+                            </div>
+                            <div class="addr-phone"><i class="fas fa-phone"></i> +254 700 000 000</div>
+                            <div class="addr-actions" onclick="event.stopPropagation();">
+                                <span style="font-size:11px;color:#05573c;font-weight:700;"><i class="fas fa-check-circle"></i> No transport fee</span>
+                            </div>
                         </div>
 
-                        <?php if ($selectedAddress): ?>
-                            <div class="delivery-fee-note">
-                                <span><i class="fas fa-info-circle"></i> Transport to <strong><?php echo htmlspecialchars($selectedAddress['county']); ?></strong>:</span>
-                                <strong>Ksh <span id="transportFee"><?php echo number_format($transportFee, 0); ?></span></strong>
+                        <?php foreach ($userAddresses as $addr): ?>
+                            <?php $isSelected = ((int)$addr['id'] === (int)$selectedAddressId) && !$isPickup; ?>
+                            <div class="address-card <?php echo $isSelected ? 'selected' : ''; ?>"
+                                 data-id="<?php echo (int)$addr['id']; ?>"
+                                 data-county="<?php echo htmlspecialchars($addr['county']); ?>"
+                                 onclick="selectAddress(<?php echo (int)$addr['id']; ?>, this)">
+                                <div>
+                                    <span class="addr-label"><?php echo htmlspecialchars($addr['label']); ?></span>
+                                    <?php if ($addr['is_default']): ?><span class="addr-default-badge">DEFAULT</span><?php endif; ?>
+                                </div>
+                                <div class="addr-recipient"><?php echo htmlspecialchars($addr['recipient_name']); ?></div>
+                                <div class="addr-line">
+                                    <?php echo htmlspecialchars($addr['address_line']); ?><br>
+                                    <?php echo htmlspecialchars($addr['county']); ?><?php if (!empty($addr['city'])): ?>, <?php echo htmlspecialchars($addr['city']); ?><?php endif; ?>
+                                </div>
+                                <div class="addr-phone"><i class="fas fa-phone"></i> <?php echo htmlspecialchars($addr['phone']); ?></div>
+                                <div class="addr-actions" onclick="event.stopPropagation();">
+                                    <button onclick="openAddressModal(<?php echo (int)$addr['id']; ?>)"><i class="fas fa-edit"></i> Edit</button>
+                                    <?php if (!$addr['is_default']): ?>
+                                        <button class="btn-set-default" onclick="setDefaultAddress(<?php echo (int)$addr['id']; ?>)"><i class="fas fa-star"></i> Set Default</button>
+                                    <?php endif; ?>
+                                    <button class="btn-delete" onclick="deleteAddress(<?php echo (int)$addr['id']; ?>)"><i class="fas fa-trash"></i> Delete</button>
+                                </div>
                             </div>
-                        <?php endif; ?>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <?php if ($isPickup): ?>
+                        <div class="delivery-fee-note" style="border-left-color:#28a745; background:#d4edda;">
+                            <span><i class="fas fa-store"></i> <strong>Office Pickup</strong> — collect at WittyMart HQ, Nairobi CBD</span>
+                            <strong style="color:#28a745;">FREE</strong>
+                        </div>
+                    <?php elseif ($selectedAddress): ?>
+                        <div class="delivery-fee-note">
+                            <span><i class="fas fa-info-circle"></i> Transport to <strong><?php echo htmlspecialchars($selectedAddress['county']); ?></strong>:</span>
+                            <strong>Ksh <span id="transportFee"><?php echo number_format($transportFee, 0); ?></span></strong>
+                        </div>
                     <?php endif; ?>
                 </div>
 
@@ -709,6 +730,7 @@ $page_title = 'Cart';
     <script>
         function computeTransportFee(county) {
             if (!county) return 0;
+            if (county === '__PICKUP__') return 0; // Office pickup = free
             const nearby = ['Nairobi','Kiambu','Machakos','Kajiado',"Murang'a",'Nyeri','Kirinyaga','Embu','Nakuru'];
             const mid    = ['Mombasa','Kisumu','Uasin Gishu','Kakamega','Meru','Laikipia','Bungoma','Kisii','Nyamira','Kericho','Bomet','Narok'];
             if (nearby.includes(county)) return 100;
@@ -902,11 +924,17 @@ $page_title = 'Cart';
         function selectAddress(id, el) {
             document.querySelectorAll('.address-card').forEach(c => c.classList.remove('selected'));
             el.classList.add('selected');
+
             const county = el.dataset.county || '';
-            currentTransport = computeTransportFee(county);
+            if (id === 'pickup' || county === '__PICKUP__') {
+                currentTransport = 0;
+            } else {
+                currentTransport = computeTransportFee(county);
+            }
             refreshTotals();
             const tf = document.getElementById('transportFee');
             if (tf) tf.textContent = currentTransport.toLocaleString();
+
             const fd = new FormData();
             fd.append('ajax_action', 'set_selected_address');
             fd.append('id', id);
