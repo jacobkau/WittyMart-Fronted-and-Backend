@@ -1,8 +1,10 @@
 <?php
 // ============================================
-// RETRY PATCH: Fix the 6 previously-failed insertions
-// Run: https://your-site/apply_logging_patch.php?dry=1   (preview)
-//      https://your-site/apply_logging_patch.php         (apply)
+// FINAL RETRY: Fix the last 3 insertions
+// cart.php → remove_item
+// admin/manage_products.php → add_product, update_product
+// Run: https://your-site/apply_logging_patch_v3.php?dry=1   (preview)
+//      https://your-site/apply_logging_patch_v3.php         (apply)
 // ============================================
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
@@ -13,9 +15,6 @@ $dryRun = isset($_GET['dry']) && $_GET['dry'] === '1';
 $backupDir = $ROOT . '/_patch_backups_' . date('Ymd_His');
 if (!$dryRun) @mkdir($backupDir, 0755, true);
 
-/**
- * Insert block AFTER the FIRST occurrence of a marker.
- */
 function insertAfterMarker($filePath, $marker, $block, $idTag, $dryRun, $backupDir) {
     if (!file_exists($filePath)) return ['skip', "File not found: " . basename($filePath)];
     $content = file_get_contents($filePath);
@@ -29,7 +28,7 @@ function insertAfterMarker($filePath, $marker, $block, $idTag, $dryRun, $backupD
     $insertAt = $lineEnd + 1;
 
     $newContent = substr($content, 0, $insertAt)
-                . "\n    // [PATCH:{$idTag}] Added by patch.php\n"
+                . "\n    // [PATCH:{$idTag}] Added by apply_logging_patch_v3.php\n"
                 . $block . "\n"
                 . substr($content, $insertAt);
 
@@ -41,9 +40,6 @@ function insertAfterMarker($filePath, $marker, $block, $idTag, $dryRun, $backupD
     return ['ok', "Inserted after: " . substr($marker, 0, 55) . "..."];
 }
 
-/**
- * Insert block BEFORE the FIRST occurrence of a marker.
- */
 function insertBeforeMarker($filePath, $marker, $block, $idTag, $dryRun, $backupDir) {
     if (!file_exists($filePath)) return ['skip', "File not found: " . basename($filePath)];
     $content = file_get_contents($filePath);
@@ -56,7 +52,7 @@ function insertBeforeMarker($filePath, $marker, $block, $idTag, $dryRun, $backup
     $lineStart = ($lineStart === false) ? 0 : $lineStart + 1;
 
     $newContent = substr($content, 0, $lineStart)
-                . "    // [PATCH:{$idTag}] Added by patch.php\n"
+                . "    // [PATCH:{$idTag}] Added by apply_logging_patch_v3.php\n"
                 . $block . "\n\n"
                 . substr($content, $lineStart);
 
@@ -69,64 +65,16 @@ function insertBeforeMarker($filePath, $marker, $block, $idTag, $dryRun, $backup
 }
 
 // ============================================
-// PATCHES — matching YOUR actual code
+// PATCHES
 // ============================================
 $patches = [
 
     // ---------------------------------------------
-    // 1. home.php — REGISTER (insert after successful INSERT execute)
-    // ---------------------------------------------
-    [
-        'file'     => $ROOT . '/home.php',
-        'marker'   => '$userId = $pdo->lastInsertId();',
-        'block'    => <<<'PHP'
-                    // [PATCH:register_home] Log the registration
-                    if (function_exists('logActivity')) {
-                        logActivity('register', "New user registered: {$email} (username: {$username})", $userId, $name);
-                    }
-PHP,
-        'id'       => 'register_home',
-        'position' => 'after',
-    ],
-
-    // ---------------------------------------------
-    // 2. home.php — LOGIN (insert after $_SESSION assignments)
-    // ---------------------------------------------
-    [
-        'file'     => $ROOT . '/home.php',
-        'marker'   => "\$_SESSION['is_admin']   = (\$user['role'] === 'admin');",
-        'block'    => <<<'PHP'
-                        // [PATCH:login_home] Log the login
-                        if (function_exists('logActivity')) {
-                            logActivity('login', 'User logged in successfully', $user['id'], $user['name']);
-                        }
-PHP,
-        'id'       => 'login_home',
-        'position' => 'after',
-    ],
-
-    // ---------------------------------------------
-    // 3. home.php — FAILED LOGIN (insert before the else that returns error)
-    // ---------------------------------------------
-    [
-        'file'     => $ROOT . '/home.php',
-        'marker'   => "\$response = ['success' => false, 'message' => 'Invalid email or password'];",
-        'block'    => <<<'PHP'
-                    // [PATCH:failed_login_home] Log the failed attempt
-                    if (function_exists('logActivity')) {
-                        logActivity('failed_login', "Failed login attempt for email: {$email}");
-                    }
-PHP,
-        'id'       => 'failed_login_home',
-        'position' => 'before',
-    ],
-
-    // ---------------------------------------------
-    // 4. cart.php — REMOVE ITEM
+    // cart.php — remove_item (using the exact success line)
     // ---------------------------------------------
     [
         'file'     => $ROOT . '/cart.php',
-        'marker'   => "\$stmt->execute([\$cart_id, \$user_id]);\n                \$response = ['success'=>true, 'cart_count'=>getCartCount()];\n                break;\n\n            case 'clear_cart':",
+        'marker'   => "\$response = ['success'=>true, 'cart_count'=>getCartCount()];\n                break;\n\n            case 'clear_cart':",
         'block'    => <<<'PHP'
                 // [PATCH:remove_item_log] Log the removal
                 if (function_exists('logActivity')) {
@@ -138,47 +86,32 @@ PHP,
     ],
 
     // ---------------------------------------------
-    // 5. admin/product.php — ADD (verify then add if missing)
+    // admin/manage_products.php — ADD (marker: the full success line including .=)
     // ---------------------------------------------
     [
         'file'     => $ROOT . '/admin/manage_products.php',
-        'marker'   => "$message = 'Product added successfully! ' . $upload_message;",
+        'marker'   => "\$message = 'Product added successfully! ' . \$upload_message;",
         'block'    => <<<'PHP'
                         if (function_exists('logActivity')) {
                             logActivity('add_product', "Added product: {$name} (SKU: {$sku})", $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? null);
                         }
 PHP,
-        'id'       => 'add_product_v2',
+        'id'       => 'add_product_v3',
         'position' => 'before',
     ],
 
     // ---------------------------------------------
-    // 6. admin/product.php — UPDATE
+    // admin/manage_products.php — UPDATE (marker: the full success line including .=)
     // ---------------------------------------------
     [
         'file'     => $ROOT . '/admin/manage_products.php',
-        'marker'   => "$message = 'Product updated successfully! ' . $upload_message;",
+        'marker'   => "\$message = 'Product updated successfully! ' . \$upload_message;",
         'block'    => <<<'PHP'
                         if (function_exists('logActivity')) {
                             logActivity('update_product', "Updated product: {$name} (ID: {$id})", $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? null);
                         }
 PHP,
-        'id'       => 'update_product_v2',
-        'position' => 'before',
-    ],
-
-    // ---------------------------------------------
-    // 7. admin/product.php — DELETE
-    // ---------------------------------------------
-    [
-        'file'     => $ROOT . '/admin/manage_products.php',
-        'marker'   => "$message = 'Product deleted successfully!';",
-        'block'    => <<<'PHP'
-                    if (function_exists('logActivity')) {
-                        logActivity('delete_product', "Deleted product ID: {$id}", $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? null);
-                    }
-PHP,
-        'id'       => 'delete_product_v2',
+        'id'       => 'update_product_v3',
         'position' => 'before',
     ],
 ];
@@ -191,7 +124,7 @@ header('Content-Type: text/html; charset=utf-8');
 <!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
-<title>logActivity Patch (Retry)</title>
+<title>logActivity Patch v3</title>
 <style>
     body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; max-width: 900px; margin: 30px auto; padding: 20px; background: #f8f9fa; line-height: 1.6; }
     h1 { color: #05573c; }
@@ -209,12 +142,12 @@ header('Content-Type: text/html; charset=utf-8');
 </style>
 </head><body>
 
-<h1>🔧 logActivity() Patch — Retry</h1>
+<h1>🔧 logActivity Patch — v3 (Final)</h1>
 
 <?php if ($dryRun): ?>
-    <p style="background:#fff3cd; padding:14px 18px; border-radius:8px; color:#856404;"><strong>DRY-RUN MODE</strong> — no files modified. <a href="?">Run for real</a></p>
+    <p style="background:#fff3cd; padding:14px 18px; border-radius:8px; color:#856404;"><strong>DRY-RUN</strong> — no files changed. <a href="?">Run for real</a></p>
 <?php else: ?>
-    <p style="background:#d4edda; padding:14px 18px; border-radius:8px; color:#155724;"><strong>LIVE MODE</strong> — files patched. Backups: <code><?php echo htmlspecialchars(basename($backupDir)); ?></code> <a href="?dry=1">Preview only</a></p>
+    <p style="background:#d4edda; padding:14px 18px; border-radius:8px; color:#155724;"><strong>LIVE</strong> — files patched. Backups: <code><?php echo htmlspecialchars(basename($backupDir)); ?></code> <a href="?dry=1">Preview only</a></p>
 <?php endif; ?>
 
 <div class="box">
@@ -253,21 +186,17 @@ foreach ($patches as $p) {
 <div class="box actions">
 <h2>Next Steps</h2>
 <ol>
-    <li>Test: register a new user, log in, log in with wrong password, remove item from cart, add/edit/delete a product.</li>
-    <li>Check DB:
-        <pre style="background:#f0f0f0; padding:10px; border-radius:6px; font-size:12px;">SELECT action, description, user_name, created_at
-FROM activity_logs
-ORDER BY id DESC
-LIMIT 20;</pre>
-    </li>
-    <li><strong>Delete this file</strong> after verifying.</li>
+    <li>Remove item from cart → check <code>activity_logs</code></li>
+    <li>Add a product → check <code>activity_logs</code></li>
+    <li>Update a product → check <code>activity_logs</code></li>
+    <li><strong>Delete this file and the backup folder</strong></li>
 </ol>
 <?php if ($dryRun): ?>
     <a class="btn" href="?">▶ Apply for real</a>
-    <a class="btn secondary" href="index.php">Cancel</a>
+    <a class="btn secondary" href="../index.php">Cancel</a>
 <?php else: ?>
-    <a class="btn secondary" href="index.php">← Back to site</a>
-    <a class="btn danger" href="?" onclick="return confirm('Run again? (Safe — already-patched files are skipped)');">Run again</a>
+    <a class="btn secondary" href="../index.php">← Back to site</a>
+    <a class="btn danger" href="?" onclick="return confirm('Run again?');">Run again</a>
 <?php endif; ?>
 </div>
 
