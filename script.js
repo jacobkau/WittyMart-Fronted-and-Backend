@@ -1,9 +1,9 @@
 // ============================================
-// WITTYMART — PAGE-SPECIFIC SCRIPTS
+// WITTYMART 
 // ============================================
 
 // ============================================
-// HERO SLIDER 
+// HERO SLIDER
 // ============================================
 let currentSlide = 0;
 const slides = document.querySelectorAll('#heroSlides .slide');
@@ -33,7 +33,7 @@ if (totalSlides > 0) {
 }
 
 // ============================================
-// TESTIMONIAL SLIDER 
+// TESTIMONIAL SLIDER
 // ============================================
 let currentTestimonial = 0;
 const testimonials = document.querySelectorAll('#testimonialTrack .slide1');
@@ -63,10 +63,10 @@ if (totalTestimonials > 0) {
 }
 
 // ============================================
-// NEWSLETTER FORM 
+// NEWSLETTER FORM
 // ============================================
 const newsletterForm = document.getElementById('newsletter-form');
-if (newsletterForm) {
+if (newsletterForm && typeof window.subscribeNewsletter !== 'function') {
     newsletterForm.addEventListener('submit', function (e) {
         e.preventDefault();
         const email = this.querySelector('input[type="email"]');
@@ -78,7 +78,7 @@ if (newsletterForm) {
 }
 
 // ============================================
-// SHOW PAGE FUNCTION 
+// SHOW PAGE FUNCTION (terms page tabs)
 // ============================================
 function showPage(pageId) {
     var pages = document.querySelectorAll('.subpage');
@@ -115,7 +115,6 @@ document.addEventListener('keydown', function (e) {
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebarOverlay');
         if (sidebar && sidebar.classList.contains('active')) {
-            // Use header.php's toggleSidebar if available
             if (typeof window.toggleSidebar === 'function') {
                 window.toggleSidebar();
             } else {
@@ -180,7 +179,7 @@ function checkEmptyCart() {
                 <i class="fas fa-shopping-cart"></i>
                 <h2>Your cart is empty</h2>
                 <p>Looks like you haven't added any items yet.</p>
-                <a href="shop.html" class="shop-now">Start Shopping</a>
+                <a href="shop.php" class="shop-now">Start Shopping</a>
             </div>
         `;
     }
@@ -191,33 +190,6 @@ function checkout() {
     if (total) {
         alert(`Thank you for shopping with WittyMart!\nTotal: KES ${total.textContent}\nYour order has been placed successfully.`);
     }
-}
-
-// ============================================
-// CONTACT FORM
-// ============================================
-function handleContactForm(event) {
-    event.preventDefault();
-    const name = document.getElementById('name');
-    const email = document.getElementById('email');
-    const message = document.getElementById('message');
-    const status = document.getElementById('form-status');
-
-    if (name && email && message && name.value && email.value && message.value) {
-        if (status) {
-            status.className = 'form-status success';
-            status.textContent = '✅ Thank you, ' + name.value + '! Your message has been sent successfully. We\'ll get back to you soon.';
-        }
-        name.value = '';
-        email.value = '';
-        message.value = '';
-    } else {
-        if (status) {
-            status.className = 'form-status error';
-            status.textContent = '❌ Please fill in all fields.';
-        }
-    }
-    return false;
 }
 
 // ============================================
