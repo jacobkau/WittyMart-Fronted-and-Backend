@@ -1,30 +1,26 @@
 <?php
 require_once 'includes/config.php';
-
-
 ?>
-    <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Contact Us - WittyMart</title>
-     <link rel="icon" type="image/png" href="images/logo.png">
+    <link rel="icon" type="image/png" href="images/logo.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
- 
 </head>
 <body>
- <?php include "header.php"; ?>
+    <?php include "header.php"; ?>
     <?php include "sidebar.php"; ?>
-
 
     <!-- Main Content -->
     <main>
         <section class="contact-section">
-            <h1> Contact <span>Us</span></h1>
+            <h1>Contact <span>Us</span></h1>
             <p>We'd love to hear from you! Whether you have a question, or a feedback, please, reach out to us using the form below.</p>
-            
+
             <!-- Contact Info -->
             <div class="contact-info">
                 <article>
@@ -45,8 +41,9 @@ require_once 'includes/config.php';
             </div>
 
             <!-- Contact Form -->
-            <form class="contact-form" onsubmit="return handleContactForm(event)">
+            <form class="contact-form" id="contactForm" onsubmit="return handleContactForm(event)">
                 <p id="form-status" class="form-status"></p>
+
                 <label for="name">Your Name:</label>
                 <input type="text" id="name" name="name" required placeholder="Steve Ochieng'">
 
@@ -56,17 +53,19 @@ require_once 'includes/config.php';
                 <label for="message">Your Message:</label>
                 <textarea id="message" name="message" rows="5" required placeholder="Write your message here..."></textarea>
 
-                <button type="submit"><i class="fas fa-paper-plane"></i> Send Message</button>
+                <button type="submit" id="contactSubmitBtn">
+                    <i class="fas fa-paper-plane"></i> Send Message
+                </button>
             </form>
 
             <!-- Map -->
             <div class="map-placeholder">
-                <h2> Find Us <span>Here</span></h2>
+                <h2>Find Us <span>Here</span></h2>
                 <div class="map-box">
                     <iframe
                         src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2042026.9634323379!2d37.01177459031261!3d-1.5629716108985743!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x1824b19cc6a8df91%3A0x629cdb0fc90d2def!2sKitui%20County!5e0!3m2!1sen!2ske!4v1746260272741!5m2!1sen!2ske"
-                        allowfullscreen="" 
-                        loading="lazy" 
+                        allowfullscreen=""
+                        loading="lazy"
                         referrerpolicy="no-referrer-when-downgrade"
                     ></iframe>
                 </div>
@@ -74,8 +73,91 @@ require_once 'includes/config.php';
         </section>
     </main>
 
- <?php include "footer.php"; ?>
+    <?php include "footer.php"; ?>
 
-<script src="script.js"></script>
+    <script>
+    // ============================================
+    // CONTACT FORM 
+    // ============================================
+    function handleContactForm(event) {
+        event.preventDefault();
+
+        const form    = document.getElementById('contactForm');
+        const name    = document.getElementById('name');
+        const email   = document.getElementById('email');
+        const message = document.getElementById('message');
+        const status  = document.getElementById('form-status');
+        const btn     = document.getElementById('contactSubmitBtn');
+
+        // Reset status
+        status.className = 'form-status';
+        status.textContent = '';
+
+        // Client-side validation
+        if (!name.value.trim() || !email.value.trim() || !message.value.trim()) {
+            status.className = 'form-status error';
+            status.textContent = 'Failed Please fill in all fields.';
+            return false;
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())) {
+            status.className = 'form-status error';
+            status.textContent = 'Failed, Please enter a valid email address.';
+            return false;
+        }
+
+        const originalBtn = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending…';
+        }
+        status.className = 'form-status';
+        status.textContent = 'Sending your message…';
+
+        fetch('contact_sub.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                name:    name.value.trim(),
+                email:   email.value.trim(),
+                message: message.value.trim(),
+                subject: 'New WittyMart contact message',
+                page:    window.location.pathname
+            })
+        })
+        .then(async (response) => {
+            const data = await response.json().catch(() => ({}));
+            return { ok: response.ok, data };
+        })
+        .then(({ ok, data }) => {
+            if (ok && data.success) {
+                status.className = 'form-status success';
+                status.textContent = 'Success' + (data.message || 'Your message has been sent successfully.');
+                form.reset();
+            } else {
+                status.className = 'form-status error';
+                status.textContent = 'Failed' + (data.message || 'Something went wrong. Please try again.');
+            }
+        })
+        .catch((err) => {
+            console.error('Contact form error:', err);
+            status.className = 'form-status error';
+            status.textContent = 'X Network error. Please check your connection and try again.';
+        })
+        .finally(() => {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = originalBtn || '<i class="fas fa-paper-plane"></i> Send Message';
+            }
+        });
+
+        return false;
+    }
+    </script>
+
+    <!-- Optional: keep script.js if it has other page logic -->
+    <script src="script.js"></script>
 </body>
 </html>
