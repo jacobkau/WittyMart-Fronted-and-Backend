@@ -1,17 +1,19 @@
 <?php
-// Include config to get cart count
+// ============================================
+// WITTYMART HEADER
+// ============================================
 require_once 'includes/config.php';
 
 $isLoggedIn = isset($_SESSION['user_id']);
-$userName = $_SESSION['user_name'] ?? 'User';
-$userEmail = $_SESSION['user_email'] ?? '';
-$isAdmin = isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true;
+$userName   = $_SESSION['user_name']  ?? 'User';
+$userEmail  = $_SESSION['user_email'] ?? '';
+$isAdmin    = isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true;
 
-// Get cart count
+// Cart count
 $cartCount = 0;
 if ($isLoggedIn) {
     try {
-        $stmt = $pdo->prepare("SELECT SUM(quantity) as total FROM cart WHERE user_id = ?");
+        $stmt = $pdo->prepare("SELECT SUM(quantity) AS total FROM cart WHERE user_id = ?");
         $stmt->execute([$_SESSION['user_id']]);
         $result = $stmt->fetch();
         $cartCount = intval($result['total'] ?? 0);
@@ -32,7 +34,7 @@ if ($isLoggedIn) {
     <link rel="stylesheet" href="style.css">
     <style>
         /* ============================================
-           TWO-ROW HEADER STYLES
+           HEADER — TWO ROW LAYOUT
            ============================================ */
         header {
             position: sticky;
@@ -41,6 +43,7 @@ if ($isLoggedIn) {
             background: #fff;
             box-shadow: 0 2px 10px rgba(0,0,0,0.08);
             transition: box-shadow 0.3s ease;
+            overflow: visible; /* CRITICAL: allow dropdown to escape */
         }
 
         body.dark-mode header {
@@ -48,7 +51,7 @@ if ($isLoggedIn) {
             box-shadow: 0 2px 10px rgba(0,0,0,0.3);
         }
 
-        /* Top Row - Logo, Search, Actions */
+        /* -------- TOP ROW (logo / search / actions) -------- */
         .header-top {
             display: flex;
             justify-content: space-between;
@@ -59,13 +62,15 @@ if ($isLoggedIn) {
             gap: 15px;
             flex-wrap: wrap;
             border-bottom: 1px solid rgba(0,0,0,0.05);
+            position: relative;
+            z-index: 1; /* lower than header-bottom */
         }
 
         body.dark-mode .header-top {
             border-bottom-color: rgba(255,255,255,0.05);
         }
 
-        /* Bottom Row - Navigation */
+        /* -------- BOTTOM ROW (nav / theme / hamburger) -------- */
         .header-bottom {
             background: #f8f9fa;
             padding: 0 20px;
@@ -75,6 +80,7 @@ if ($isLoggedIn) {
             justify-content: center;
             align-items: center;
             position: relative;
+            z-index: 10; /* above header-top: prevents click-blocking */
         }
 
         body.dark-mode .header-bottom {
@@ -90,6 +96,8 @@ if ($isLoggedIn) {
             gap: 2px;
             flex-wrap: wrap;
             justify-content: center;
+            position: relative;
+            z-index: 10;
         }
 
         .header-bottom .nav-links li a {
@@ -129,7 +137,7 @@ if ($isLoggedIn) {
             color: #fff !important;
         }
 
-        /* Logo */
+        /* -------- LOGO -------- */
         .logo {
             display: flex;
             align-items: center;
@@ -290,11 +298,6 @@ if ($isLoggedIn) {
             font-size: 13px;
         }
 
-        .search-suggestions .suggestion-item .product-category {
-            font-size: 11px;
-            color: #888;
-        }
-
         .search-suggestions .suggestion-empty {
             padding: 20px;
             text-align: center;
@@ -367,26 +370,6 @@ if ($isLoggedIn) {
             display: none;
         }
 
-        .logout-btn {
-            background: none;
-            border: none;
-            color: #e74c3c;
-            font-size: 18px;
-            cursor: pointer;
-            padding: 5px 10px;
-            border-radius: 6px;
-            transition: all 0.3s ease;
-        }
-
-        .logout-btn:hover {
-            background: rgba(231, 76, 60, 0.1);
-            color: #c0392b;
-        }
-
-        body.dark-mode .logout-btn {
-            color: #e74c3c;
-        }
-
         .theme-toggle {
             background: none;
             border: none;
@@ -452,6 +435,11 @@ if ($isLoggedIn) {
             padding: 5px 10px;
             border-radius: 6px;
             transition: all 0.3s ease;
+
+            /* CRITICAL FIX: always on top, always clickable */
+            position: relative;
+            z-index: 9999;
+            pointer-events: auto;
         }
 
         .menu-toggle:hover {
@@ -467,7 +455,7 @@ if ($isLoggedIn) {
         }
 
         /* ============================================
-           USER DROPDOWN MENU
+           USER DROPDOWN
            ============================================ */
         .user-dropdown {
             position: relative;
@@ -487,6 +475,7 @@ if ($isLoggedIn) {
             padding: 8px 12px;
             border-radius: 6px;
             transition: all 0.3s ease;
+            font-family: inherit;
         }
 
         .user-dropdown .dropdown-toggle:hover {
@@ -639,7 +628,7 @@ if ($isLoggedIn) {
         }
 
         /* ============================================
-           MOBILE RESPONSIVE
+           MOBILE RESPONSIVE (≤ 992px)
            ============================================ */
         @media (max-width: 992px) {
             .search-wrapper {
@@ -652,16 +641,33 @@ if ($isLoggedIn) {
                 gap: 10px;
             }
 
+            /* Hide the desktop nav links */
             .header-bottom .nav-links {
                 display: none;
             }
 
+            /* Show the hamburger */
             .menu-toggle {
                 display: block;
+                margin-left: auto;
             }
 
+            /* Ensure header-bottom is clickable above header-top */
+            .header-bottom {
+                min-height: 48px;
+                padding: 5px 20px;
+                justify-content: flex-end;
+                z-index: 10;
+            }
+
+            /* ============================================
+               MOBILE NAV DROPDOWN PANEL
+               ============================================ */
             .header-bottom .nav-links.mobile-open {
-                display: flex;
+                display: flex !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+
                 flex-direction: column;
                 position: absolute;
                 top: 100%;
@@ -674,6 +680,7 @@ if ($isLoggedIn) {
                 border-radius: 0 0 12px 12px;
                 width: 100%;
                 gap: 2px;
+                justify-content: flex-start;
             }
 
             .header-bottom .nav-links.mobile-open li {
@@ -686,6 +693,7 @@ if ($isLoggedIn) {
                 border-radius: 6px;
                 width: 100%;
                 font-size: 16px;
+                text-align: left;
             }
 
             .header-bottom .nav-links.mobile-open li a i {
@@ -694,28 +702,21 @@ if ($isLoggedIn) {
                 text-align: center;
             }
 
+            .header-bottom .nav-links.mobile-open li button.theme-toggle {
+                width: 100%;
+                text-align: left;
+                padding: 12px 15px;
+            }
+
             body.dark-mode .header-bottom .nav-links.mobile-open {
                 background: #1a1a2e;
                 border-top: 1px solid #2a2a3e;
             }
-
-            .header-bottom {
-                position: relative;
-                padding: 5px 20px;
-                min-height: 48px;
-                justify-content: flex-end;
-            }
-
-            .header-bottom .menu-toggle {
-                display: block;
-                margin-left: auto;
-            }
-
-            .header-bottom .nav-links.mobile-open {
-                justify-content: flex-start;
-            }
         }
 
+        /* ============================================
+           TABLET / SMALL PHONES
+           ============================================ */
         @media (max-width: 768px) {
             .logo h1 {
                 font-size: 16px;
@@ -767,7 +768,7 @@ if ($isLoggedIn) {
                 font-size: 12px;
             }
 
-            .user-dropdown .dropdown-toggle span {
+            .user-dropdown .dropdown-toggle > span:not(.user-avatar) {
                 display: none;
             }
         }
@@ -806,7 +807,7 @@ if ($isLoggedIn) {
         }
 
         /* ============================================
-           SIDEBAR STYLES
+           SIDEBAR STYLES (used on every page)
            ============================================ */
         .sidebar-user-info {
             padding: 15px 20px;
@@ -876,7 +877,9 @@ if ($isLoggedIn) {
     </style>
 </head>
 <body>
-    <!-- Header -->
+    <!-- ============================================
+         HEADER
+         ============================================ -->
     <header>
         <!-- TOP ROW: Logo, Search, Actions -->
         <div class="header-top">
@@ -908,7 +911,7 @@ if ($isLoggedIn) {
 
                 <?php if ($isLoggedIn): ?>
                     <div class="user-dropdown" id="userDropdown">
-                        <button class="dropdown-toggle" onclick="toggleDropdown()" title="My Account">
+                        <button type="button" class="dropdown-toggle" onclick="toggleDropdown()" title="My Account">
                             <span class="user-avatar">
                                 <?php
                                 $initials = '';
@@ -916,7 +919,7 @@ if ($isLoggedIn) {
                                 foreach ($words as $word) {
                                     $initials .= strtoupper(substr($word, 0, 1));
                                 }
-                                echo substr($initials, 0, 2);
+                                echo htmlspecialchars(substr($initials, 0, 2));
                                 ?>
                             </span>
                             <span><?php echo htmlspecialchars($userName); ?></span>
@@ -953,7 +956,7 @@ if ($isLoggedIn) {
                     </a>
                 <?php endif; ?>
 
-                <button class="categories-btn" onclick="toggleSidebar()" title="Categories">
+                <button type="button" class="categories-btn" onclick="toggleSidebar()" title="Categories">
                     <i class="fas fa-th-list"></i>
                     <span>Categories</span>
                 </button>
@@ -966,11 +969,11 @@ if ($isLoggedIn) {
             $current_page = basename($_SERVER['PHP_SELF']);
 
             $nav_links = [
-                'index.php' => ['label' => 'Home', 'icon' => 'fa-home'],
-                'shop.php' => ['label' => 'Shop', 'icon' => 'fa-store'],
-                'about.php' => ['label' => 'About', 'icon' => 'fa-info-circle'],
+                'index.php'   => ['label' => 'Home',    'icon' => 'fa-home'],
+                'shop.php'    => ['label' => 'Shop',    'icon' => 'fa-store'],
+                'about.php'   => ['label' => 'About',   'icon' => 'fa-info-circle'],
                 'contact.php' => ['label' => 'Contact', 'icon' => 'fa-envelope'],
-                'terms.php' => ['label' => 'Terms', 'icon' => 'fa-file-contract']
+                'terms.php'   => ['label' => 'Terms',   'icon' => 'fa-file-contract'],
             ];
             ?>
 
@@ -978,15 +981,21 @@ if ($isLoggedIn) {
                 <?php foreach ($nav_links as $page => $data):
                     $active_class = ($current_page == $page) ? 'active' : '';
                 ?>
-                    <li><a href="<?php echo $page; ?>" class="<?php echo $active_class; ?>">
-                        <i class="fas <?php echo $data['icon']; ?>"></i> <?php echo $data['label']; ?>
-                    </a></li>
+                    <li>
+                        <a href="<?php echo $page; ?>" class="<?php echo $active_class; ?>">
+                            <i class="fas <?php echo $data['icon']; ?>"></i> <?php echo $data['label']; ?>
+                        </a>
+                    </li>
                 <?php endforeach; ?>
 
-                <li><button class="theme-toggle" onclick="toggleTheme()" id="theme-icon" title="Switch to Dark Mode"><i class="fas fa-sun"></i></button></li>
+                <li>
+                    <button type="button" class="theme-toggle" onclick="toggleTheme()" id="theme-icon" title="Switch to Dark Mode">
+                        <i class="fas fa-sun"></i>
+                    </button>
+                </li>
             </ul>
 
-            <button class="menu-toggle" onclick="toggleMenu()" aria-label="Toggle Menu" id="menuToggleBtn">
+            <button type="button" class="menu-toggle" onclick="toggleMenu()" aria-label="Toggle Menu" id="menuToggleBtn">
                 <i class="fas fa-bars" id="menuIcon"></i>
             </button>
         </div>
@@ -999,7 +1008,7 @@ if ($isLoggedIn) {
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <h2><i class="fas fa-th-list" style="color:#05573c;"></i> Categories</h2>
-            <button class="sidebar-close" onclick="toggleSidebar()">&times;</button>
+            <button type="button" class="sidebar-close" onclick="toggleSidebar()">&times;</button>
         </div>
         <?php if ($isLoggedIn): ?>
             <div class="sidebar-user-info">
@@ -1036,15 +1045,15 @@ if ($isLoggedIn) {
 
     <script>
     // ============================================
-    // HEADER SCRIPTS — ALL SCOPED TO AVOID COLLISIONS
+    // HEADER SCRIPTS — SCOPED IIFE, NO COLLISIONS
     // ============================================
     (function () {
         'use strict';
 
-        // ---------- USER DROPDOWN TOGGLE ----------
+        // ---------- USER DROPDOWN ----------
         window.toggleDropdown = function () {
-            const dropdown = document.getElementById('dropdownMenu');
-            if (dropdown) dropdown.classList.toggle('active');
+            const menu = document.getElementById('dropdownMenu');
+            if (menu) menu.classList.toggle('active');
         };
 
         document.addEventListener('click', function (event) {
@@ -1073,22 +1082,23 @@ if ($isLoggedIn) {
             }
         };
 
+        // Close when clicking outside the mobile nav
         document.addEventListener('click', function (event) {
             const navLinks = document.getElementById('navLinks');
             const menuToggle = document.getElementById('menuToggleBtn');
-            const headerBottom = document.querySelector('.header-bottom');
 
             if (navLinks && navLinks.classList.contains('mobile-open')) {
-                if (headerBottom && menuToggle &&
-                    !headerBottom.contains(event.target) &&
-                    !menuToggle.contains(event.target)) {
-                    navLinks.classList.remove('mobile-open');
-                    const menuIcon = document.getElementById('menuIcon');
-                    if (menuIcon) menuIcon.className = 'fas fa-bars';
+                // Ignore clicks on the nav itself or the toggle button
+                if (navLinks.contains(event.target) || menuToggle.contains(event.target)) {
+                    return;
                 }
+                navLinks.classList.remove('mobile-open');
+                const menuIcon = document.getElementById('menuIcon');
+                if (menuIcon) menuIcon.className = 'fas fa-bars';
             }
         });
 
+        // Close mobile nav when a link is tapped
         document.querySelectorAll('.nav-links a').forEach(function (link) {
             link.addEventListener('click', function () {
                 const navLinks = document.getElementById('navLinks');
@@ -1144,9 +1154,7 @@ if ($isLoggedIn) {
                                 suggestions.classList.add('active');
                             }
                         })
-                        .catch(error => {
-                            console.error('Search error:', error);
-                        });
+                        .catch(error => console.error('Search error:', error));
                 }, 300);
             });
 
@@ -1198,8 +1206,7 @@ if ($isLoggedIn) {
                 .catch(error => console.error('Error refreshing cart count:', error));
         };
 
-        // Auto-refresh every 3 seconds
-        setInterval(window.refreshCartCount, 3000);
+        setInterval(window.refreshCartCount, 30000);
 
         document.addEventListener('visibilitychange', function () {
             if (!document.hidden) window.refreshCartCount();
@@ -1217,7 +1224,7 @@ if ($isLoggedIn) {
             localStorage.setItem('theme', isDark ? 'dark' : 'light');
         };
 
-        // Load saved theme
+        // Apply saved theme on load
         const savedThemeHeader = localStorage.getItem('theme');
         if (savedThemeHeader === 'dark') {
             document.body.classList.add('dark-mode');
