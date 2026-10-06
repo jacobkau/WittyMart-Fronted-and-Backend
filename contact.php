@@ -23,7 +23,7 @@ require_once 'includes/config.php';
     <main>
         <section class="contact-section">
             <h1> Contact <span>Us</span></h1>
-            <p>We'd love to hear from you! Whether you have a question, feedback, or just want to say hi – reach out to us using the form below.</p>
+            <p>We'd love to hear from you! Whether you have a question, or a feedback, please, reach out to us using the form below.</p>
             
             <!-- Contact Info -->
             <div class="contact-info">
