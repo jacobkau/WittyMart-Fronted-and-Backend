@@ -34,8 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     break;
 
                 case 'newsletter':
-                    // Try 'inactive' first (common), fall back to 'read'
-                    // Update either way — just make the row disappear from 'pending' filter
+                    // Mark as active (i.e., no longer 'pending'/new)
                     $stmt = $pdo->prepare("UPDATE newsletter_subscribers SET status = 'active' WHERE id = ?");
                     $stmt->execute([$id]);
                     $rows = $stmt->rowCount();
@@ -57,25 +56,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     break;
 
                 case 'login':
-                    // activity_logs has no 'status' column.
-                    // We "mark as read" by writing a lightweight marker in the details,
-                    // OR by simply acknowledging it. Choose one:
-                    //
-                    // Option A (recommended): add a `read_at` column to activity_logs.
-                    //   ALTER TABLE activity_logs ADD COLUMN read_at TIMESTAMP NULL;
-                    // Then:
-                    // $stmt = $pdo->prepare("UPDATE activity_logs SET read_at = NOW() WHERE id = ?");
-                    //
-                    // Option B (no schema change): just acknowledge it here, and
-                    // stop showing it in the list by adjusting the fetch query.
-                    //
-                    // For now we do Option A if the column exists, else silently succeed.
                     try {
                         $stmt = $pdo->prepare("UPDATE activity_logs SET read_at = NOW() WHERE id = ?");
                         $stmt->execute([$id]);
                         $rows = $stmt->rowCount();
                     } catch (PDOException $e) {
-                        // Column doesn't exist — fall back to no-op (still counts as read)
                         $rows = 1;
                     }
                     $updated = true;
@@ -121,7 +106,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt = $pdo->exec("UPDATE orders SET status = 'processing' WHERE status = 'pending'");
             $total += $stmt;
 
-            // activity_logs: skip if no read_at column
             try {
                 $stmt = $pdo->exec("UPDATE activity_logs SET read_at = NOW() WHERE read_at IS NULL AND action = 'failed_login'");
                 $total += $stmt;
@@ -171,26 +155,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 $notifications = [];
 
 try {
-    // 1. Contact Us
+    // 1. Contact Us — show ALL (unread first, then recent read)
     try {
         $stmt = $pdo->query("
             SELECT id, name, email, message, status, created_at
             FROM contact_us
-            WHERE status = 'unread'
-            ORDER BY created_at DESC
+            ORDER BY
+                CASE WHEN status = 'unread' THEN 0 ELSE 1 END,
+                created_at DESC
+            LIMIT 50
         ");
         foreach ($stmt->fetchAll() as $notif) {
+            $isUnread = ($notif['status'] ?? 'unread') === 'unread';
             $notifications[] = [
                 'id'          => $notif['id'],
                 'type'        => 'contact',
                 'type_label'  => 'Contact Message',
                 'icon'        => 'fa-envelope',
                 'color'       => 'info',
-                'title'       => "New message from " . htmlspecialchars($notif['name']),
+                'title'       => "Message from " . htmlspecialchars($notif['name']),
                 'description' => substr(htmlspecialchars($notif['message']), 0, 100) . (strlen($notif['message']) > 100 ? '...' : ''),
                 'user'        => htmlspecialchars($notif['name']),
                 'email'       => htmlspecialchars($notif['email']),
-                'status'      => $notif['status'],
+                'status'      => $isUnread ? 'unread' : 'read',
                 'created_at'  => $notif['created_at'],
                 'link'        => 'contact_messages.php?id=' . $notif['id'],
             ];
@@ -199,26 +186,27 @@ try {
         error_log('Notifications: contact_us query failed — ' . $e->getMessage());
     }
 
-    // 2. Newsletter
+    // 2. Newsletter — show ALL subscribers (recent first, newest 50)
     try {
         $stmt = $pdo->query("
             SELECT id, email, status, created_at
             FROM newsletter_subscribers
-            WHERE status = 'pending'
             ORDER BY created_at DESC
+            LIMIT 50
         ");
         foreach ($stmt->fetchAll() as $notif) {
+            $status = $notif['status'] ?? 'active';
             $notifications[] = [
                 'id'          => $notif['id'],
                 'type'        => 'newsletter',
-                'type_label'  => 'Newsletter Subscription',
+                'type_label'  => 'Newsletter Subscriber',
                 'icon'        => 'fa-newspaper',
                 'color'       => 'success',
-                'title'       => "New newsletter subscription",
+                'title'       => "Newsletter subscriber",
                 'description' => "Email: " . htmlspecialchars($notif['email']),
                 'user'        => htmlspecialchars($notif['email']),
                 'email'       => htmlspecialchars($notif['email']),
-                'status'      => $notif['status'],
+                'status'      => $status,
                 'created_at'  => $notif['created_at'],
                 'link'        => 'newsletter.php?id=' . $notif['id'],
             ];
@@ -257,7 +245,7 @@ try {
         error_log('Notifications: agent_chat_requests query failed — ' . $e->getMessage());
     }
 
-    // 4. Failed Logins (activity_logs) — uses `details`, not `description`
+    // 4. Failed Logins
     try {
         $stmt = $pdo->query("
             SELECT id, user_name, action, details, ip_address, created_at
@@ -326,7 +314,15 @@ try {
     $notifications = [];
 }
 
+// ============================================
+// COUNTS
+// ============================================
 $totalNotifications = count($notifications);
+$unreadCount = 0;
+foreach ($notifications as $n) {
+    if (in_array($n['status'], ['unread', 'pending'], true)) $unreadCount++;
+}
+
 $page_title = 'Notifications';
 ?>
 <!DOCTYPE html>
@@ -345,9 +341,9 @@ $page_title = 'Notifications';
         <?php include "sidebar.php"; ?>
 
         <main class="admin-main">
-            <header class="admin-header" style="margin-bottom:20px;">
-                <span class="badge badge-info" style="margin-bottom:10px;">
-                    <?php echo $totalNotifications; ?> unread
+            <header class="admin-header" style="margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <span class="badge badge-info" style="padding:8px 16px; background:#e8f5f0; color:#05573c; border-radius:20px; font-weight:600;">
+                    <i class="fas fa-bell"></i> <?php echo $unreadCount; ?> unread / <?php echo $totalNotifications; ?> total
                 </span>
             </header>
 
@@ -375,7 +371,14 @@ $page_title = 'Notifications';
                                 <option value="order">Pending Orders</option>
                             </select>
                         </div>
-                        <?php if ($totalNotifications > 0): ?>
+                        <div class="filter-box">
+                            <select id="statusFilter" onchange="filterNotifications()">
+                                <option value="">All Statuses</option>
+                                <option value="unread">Unread / Pending only</option>
+                                <option value="read">Read / Done only</option>
+                            </select>
+                        </div>
+                        <?php if ($unreadCount > 0): ?>
                             <form method="POST" style="display:inline;">
                                 <input type="hidden" name="action" value="mark_all_read">
                                 <button type="submit" class="btn btn-primary" onclick="return confirm('Mark all notifications as read?')">
@@ -399,7 +402,13 @@ $page_title = 'Notifications';
                             </thead>
                             <tbody>
                                 <?php foreach ($notifications as $notif): ?>
-                                    <tr class="notification-<?php echo $notif['type']; ?>">
+                                    <?php
+                                        $isUnread  = in_array($notif['status'], ['unread', 'pending'], true);
+                                        $dataStatus = $isUnread ? 'unread' : 'read';
+                                    ?>
+                                    <tr class="notification-<?php echo $notif['type']; ?>"
+                                        data-type="<?php echo htmlspecialchars($notif['type']); ?>"
+                                        data-status="<?php echo $dataStatus; ?>">
                                         <td>
                                             <span class="notification-icon" style="background: <?php echo getColorClass($notif['color']); ?>;">
                                                 <i class="fas <?php echo $notif['icon']; ?>"></i>
@@ -428,22 +437,24 @@ $page_title = 'Notifications';
                                             </span>
                                         </td>
                                         <td>
-                                            <span class="badge <?php echo in_array($notif['status'], ['unread','pending']) ? 'badge-warning' : 'badge-success'; ?>">
+                                            <span class="badge <?php echo $isUnread ? 'badge-warning' : 'badge-success'; ?>">
                                                 <?php echo ucfirst($notif['status'] ?? 'unread'); ?>
                                             </span>
                                         </td>
                                         <td>
-                                            <a href="<?php echo $notif['link']; ?>" class="btn-sm btn-edit">
+                                            <a href="<?php echo $notif['link']; ?>" class="btn-sm btn-edit" title="View details">
                                                 <i class="fas fa-eye"></i>
                                             </a>
-                                            <form method="POST" style="display:inline;">
-                                                <input type="hidden" name="action" value="mark_read">
-                                                <input type="hidden" name="id" value="<?php echo $notif['id']; ?>">
-                                                <input type="hidden" name="type" value="<?php echo $notif['type']; ?>">
-                                                <button type="submit" class="btn-sm btn-success" title="Mark as read">
-                                                    <i class="fas fa-check"></i>
-                                                </button>
-                                            </form>
+                                            <?php if ($isUnread): ?>
+                                                <form method="POST" style="display:inline;">
+                                                    <input type="hidden" name="action" value="mark_read">
+                                                    <input type="hidden" name="id" value="<?php echo $notif['id']; ?>">
+                                                    <input type="hidden" name="type" value="<?php echo $notif['type']; ?>">
+                                                    <button type="submit" class="btn-sm btn-success" title="Mark as read">
+                                                        <i class="fas fa-check"></i>
+                                                    </button>
+                                                </form>
+                                            <?php endif; ?>
                                             <form method="POST" style="display:inline;">
                                                 <input type="hidden" name="action" value="delete">
                                                 <input type="hidden" name="id" value="<?php echo $notif['id']; ?>">
@@ -471,10 +482,16 @@ $page_title = 'Notifications';
 
     <script>
         function filterNotifications() {
-            const filter = document.getElementById('typeFilter').value;
+            const type   = document.getElementById('typeFilter').value;
+            const status = document.getElementById('statusFilter').value;
+
             document.querySelectorAll('#notificationsTable tbody tr').forEach(row => {
-                const type = row.className.replace('notification-', '');
-                row.style.display = !filter || type === filter ? '' : 'none';
+                const rowType   = row.dataset.type || '';
+                const rowStatus = row.dataset.status || '';
+                let show = true;
+                if (type && rowType !== type) show = false;
+                if (status && rowStatus !== status) show = false;
+                row.style.display = show ? '' : 'none';
             });
         }
 
