@@ -3,7 +3,36 @@
 require_once 'includes/config.php';
 requireAdmin();
 
-$page    = isset($_GET['page'])    ? max(1, intval($_GET['page'])) : 1;
+// ============================================
+// DETECT ACTUAL COLUMNS OF activity_logs
+// ============================================
+$availableCols = [];
+try {
+    $stmt = $pdo->query("
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'activity_logs'
+    ");
+    $availableCols = $stmt->fetchAll(PDO::FETCH_COLUMN);
+} catch (PDOException $e) {
+    error_log('Column detect error: ' . $e->getMessage());
+}
+
+// Helper to safely reference a column
+$hasCol = function ($name) use ($availableCols) {
+    return in_array($name, $availableCols, true);
+};
+
+// Work out which description column to use
+$descCol = $hasCol('details') ? 'details'
+         : ($hasCol('description') ? 'description'
+         : null);
+
+$userCol = $hasCol('user_name') ? 'user_name'
+         : ($hasCol('username') ? 'username'
+         : null);
+
+$page    = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
 $perPage = 20;
 
 // ============================================
@@ -14,11 +43,7 @@ $filterUser   = trim($_GET['filter_user']   ?? '');
 $filterFrom   = trim($_GET['filter_from']   ?? '');
 $filterTo     = trim($_GET['filter_to']     ?? '');
 
-/**
- * Build the WHERE clause + params from the current filters.
- * Returns [sqlWhereString, [params...]]
- */
-function buildActivityFilter($filterAction, $filterUser, $filterFrom, $filterTo) {
+function buildActivityFilter($filterAction, $filterUser, $filterFrom, $filterTo, $userCol) {
     $where  = [];
     $params = [];
 
@@ -26,8 +51,8 @@ function buildActivityFilter($filterAction, $filterUser, $filterFrom, $filterTo)
         $where[]  = "action = ?";
         $params[] = $filterAction;
     }
-    if ($filterUser !== '') {
-        $where[]  = "user_name ILIKE ?";
+    if ($filterUser !== '' && $userCol) {
+        $where[]  = "{$userCol} ILIKE ?";
         $params[] = '%' . $filterUser . '%';
     }
     if ($filterFrom !== '') {
@@ -39,92 +64,89 @@ function buildActivityFilter($filterAction, $filterUser, $filterFrom, $filterTo)
         $params[] = $filterTo . ' 23:59:59';
     }
 
-    $sql = '';
-    if (!empty($where)) {
-        $sql = ' WHERE ' . implode(' AND ', $where);
-    }
+    $sql = !empty($where) ? ' WHERE ' . implode(' AND ', $where) : '';
     return [$sql, $params];
 }
 
 // ============================================
-// CSV EXPORT 
+// CSV EXPORT
 // ============================================
 if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     try {
         list($whereSql, $params) = buildActivityFilter(
-            $filterAction, $filterUser, $filterFrom, $filterTo
+            $filterAction, $filterUser, $filterFrom, $filterTo, $userCol
         );
 
-        $sql = "SELECT id, user_id, user_name, action,
-                       details AS description, ip_address, user_agent, created_at
-                FROM activity_logs"
-             . $whereSql
+        $select = ['id'];
+        if ($hasCol('user_id'))    $select[] = 'user_id';
+        if ($userCol)              $select[] = $userCol . ' AS user_name';
+        if ($hasCol('action'))     $select[] = 'action';
+        if ($descCol)              $select[] = $descCol . ' AS description';
+        if ($hasCol('ip_address')) $select[] = 'ip_address';
+        if ($hasCol('user_agent')) $select[] = 'user_agent';
+        if ($hasCol('created_at')) $select[] = 'created_at';
+
+        $sql = "SELECT " . implode(', ', $select)
+             . " FROM activity_logs" . $whereSql
              . " ORDER BY created_at DESC";
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Filename reflects the filters
-        $parts = ['activity_logs'];
-        if ($filterAction) $parts[] = preg_replace('/[^a-z0-9]/i', '', $filterAction);
-        if ($filterFrom)   $parts[] = 'from_' . str_replace('-', '', $filterFrom);
-        if ($filterTo)     $parts[] = 'to_'   . str_replace('-', '', $filterTo);
-        $filename = implode('_', $parts) . '_' . date('Ymd_His') . '.csv';
-
         header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Content-Disposition: attachment; filename="activity_logs_' . date('Ymd_His') . '.csv"');
 
         $out = fopen('php://output', 'w');
-        fwrite($out, "\xEF\xBB\xBF"); 
-
-        fputcsv($out, [
-            'ID', 'User ID', 'User', 'Action', 'Description',
-            'IP Address', 'User Agent', 'Date'
-        ]);
-
+        fwrite($out, "\xEF\xBB\xBF");
+        fputcsv($out, ['ID', 'User ID', 'User', 'Action', 'Description', 'IP Address', 'User Agent', 'Date']);
         foreach ($rows as $r) {
             fputcsv($out, [
-                $r['id'],
-                $r['user_id'],
+                $r['id'] ?? '',
+                $r['user_id'] ?? '',
                 $r['user_name'] ?? 'System',
                 $r['action'] ?? '',
                 $r['description'] ?? '',
                 $r['ip_address'] ?? '',
                 $r['user_agent'] ?? '',
-                $r['created_at'],
+                $r['created_at'] ?? '',
             ]);
         }
         fclose($out);
         exit;
     } catch (PDOException $e) {
         error_log('Activity logs CSV export error: ' . $e->getMessage());
-        // fall through to page load
     }
 }
 
 // ============================================
-// PAGINATED FETCH 
+// PAGINATED FETCH
 // ============================================
 list($whereSql, $params) = buildActivityFilter(
-    $filterAction, $filterUser, $filterFrom, $filterTo
+    $filterAction, $filterUser, $filterFrom, $filterTo, $userCol
 );
 
 $offset = ($page - 1) * $perPage;
+$logs = [];
+$total = 0;
+$totalPages = 1;
 
 try {
-    // Count
-    $countSql = "SELECT COUNT(*) FROM activity_logs" . $whereSql;
-    $countStmt = $pdo->prepare($countSql);
+    $countStmt = $pdo->prepare("SELECT COUNT(*) FROM activity_logs" . $whereSql);
     $countStmt->execute($params);
     $total = (int)$countStmt->fetchColumn();
     $totalPages = max(1, (int)ceil($total / $perPage));
 
-    // Fetch page
-    $listSql = "SELECT id, user_id, user_name, action,
-                       details AS description, ip_address, created_at
-                FROM activity_logs"
-             . $whereSql
+    $select = ['id'];
+    if ($hasCol('user_id'))    $select[] = 'user_id';
+    if ($userCol)              $select[] = $userCol . ' AS user_name';
+    if ($hasCol('action'))     $select[] = 'action';
+    if ($descCol)              $select[] = $descCol . ' AS description';
+    if ($hasCol('ip_address')) $select[] = 'ip_address';
+    if ($hasCol('created_at')) $select[] = 'created_at';
+
+    $listSql = "SELECT " . implode(', ', $select)
+             . " FROM activity_logs" . $whereSql
              . " ORDER BY created_at DESC LIMIT ? OFFSET ?";
 
     $listStmt = $pdo->prepare($listSql);
@@ -161,7 +183,7 @@ if (isset($_GET['clear']) && $_GET['clear'] === 'true') {
 }
 
 // ============================================
-// DISTINCT ACTIONS (for the filter dropdown)
+// DISTINCT ACTIONS
 // ============================================
 $actionsList = [];
 try {
@@ -174,7 +196,6 @@ try {
     error_log('Fetch distinct actions error: ' . $e->getMessage());
 }
 
-/** Preserve current filters when building a URL */
 function buildQueryString($overrides = []) {
     $params = array_merge([
         'filter_action' => $_GET['filter_action'] ?? '',
@@ -183,7 +204,6 @@ function buildQueryString($overrides = []) {
         'filter_to'     => $_GET['filter_to']     ?? '',
         'page'          => $_GET['page']          ?? 1,
     ], $overrides);
-    // drop empty
     $params = array_filter($params, function ($v) { return $v !== '' && $v !== null; });
     return '?' . http_build_query($params);
 }
@@ -208,11 +228,7 @@ $page_title = 'Activity Logs';
         <main class="admin-main">
             <header class="admin-header" style="margin-bottom:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                 <span class="badge badge-info" style="padding:8px 16px; background:#e8f5f0; color:#05573c; border-radius:20px; font-weight:600;">
-                    <i class="fas fa-history"></i>
-                    Total: <?php echo $total; ?> logs
-                    <?php if ($filterAction || $filterUser || $filterFrom || $filterTo): ?>
-                        <span style="color:#888;">(filtered)</span>
-                    <?php endif; ?>
+                    <i class="fas fa-history"></i> Total: <?php echo $total; ?> logs
                 </span>
                 <div style="display:flex; gap:8px; flex-wrap:wrap;">
                     <button type="button" class="btn-sm btn-primary" onclick="window.print()">
@@ -221,9 +237,6 @@ $page_title = 'Activity Logs';
                     <a href="<?php echo htmlspecialchars(buildQueryString(['export' => 'csv', 'page' => null])); ?>"
                        class="btn-sm btn-success">
                         <i class="fas fa-file-csv"></i> Download CSV
-                        <?php if ($filterAction || $filterUser || $filterFrom || $filterTo): ?>
-                            (filtered)
-                        <?php endif; ?>
                     </a>
                     <button type="button" class="btn-sm btn-danger" onclick="clearLogs()">
                         <i class="fas fa-trash"></i> Clear Old Logs
@@ -240,10 +253,6 @@ $page_title = 'Activity Logs';
 
             <div class="admin-card">
                 <div class="card-body">
-
-                    <!-- ============================================
-                         FILTER TOOLBAR
-                         ============================================ -->
                     <form method="GET" class="logs-filter" style="padding:14px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; border-bottom:1px solid #eee;">
                         <div class="search-box" style="flex:1; min-width:220px;">
                             <i class="fas fa-search"></i>
@@ -251,7 +260,6 @@ $page_title = 'Activity Logs';
                                    value="<?php echo htmlspecialchars($filterUser); ?>"
                                    placeholder="Filter by user name...">
                         </div>
-
                         <select name="filter_action" class="filter-select">
                             <option value="">All Actions</option>
                             <?php foreach ($actionsList as $a): ?>
@@ -261,19 +269,15 @@ $page_title = 'Activity Logs';
                                 </option>
                             <?php endforeach; ?>
                         </select>
-
                         <input type="date" name="filter_from" class="filter-select"
                                value="<?php echo htmlspecialchars($filterFrom); ?>"
                                title="From date">
-
                         <input type="date" name="filter_to" class="filter-select"
                                value="<?php echo htmlspecialchars($filterTo); ?>"
                                title="To date">
-
                         <button type="submit" class="btn-sm btn-primary">
                             <i class="fas fa-filter"></i> Apply
                         </button>
-
                         <?php if ($filterAction || $filterUser || $filterFrom || $filterTo): ?>
                             <a href="activity_logs.php" class="btn-sm" style="background:#f0f0f0; color:#333; text-decoration:none; padding:6px 14px; border-radius:4px; font-size:12px; font-weight:600;">
                                 <i class="fas fa-times"></i> Clear
@@ -281,7 +285,6 @@ $page_title = 'Activity Logs';
                         <?php endif; ?>
                     </form>
 
-                    <!-- Local text filter on rendered rows -->
                     <div class="table-toolbar" style="padding:14px;">
                         <div class="search-box">
                             <i class="fas fa-search"></i>
@@ -306,22 +309,26 @@ $page_title = 'Activity Logs';
                             <tbody>
                                 <?php foreach ($logs as $log): ?>
                                     <tr>
-                                        <td>#<?php echo htmlspecialchars($log['id']); ?></td>
+                                        <td>#<?php echo htmlspecialchars($log['id'] ?? ''); ?></td>
                                         <td><?php echo htmlspecialchars($log['user_name'] ?? 'System'); ?></td>
                                         <td>
-                                            <span class="badge badge-<?php echo getActivityBadge($log['action']); ?>">
-                                                <?php echo ucfirst(htmlspecialchars($log['action'])); ?>
+                                            <span class="badge badge-<?php echo getActivityBadge($log['action'] ?? ''); ?>">
+                                                <?php echo ucfirst(htmlspecialchars($log['action'] ?? '')); ?>
                                             </span>
                                         </td>
                                         <td><?php echo htmlspecialchars($log['description'] ?? 'N/A'); ?></td>
                                         <td><?php echo htmlspecialchars($log['ip_address'] ?? 'N/A'); ?></td>
-                                        <td><?php echo date('M d, Y H:i', strtotime($log['created_at'])); ?></td>
+                                        <td>
+                                            <?php
+                                                $created = $log['created_at'] ?? null;
+                                                echo $created ? date('M d, Y H:i', strtotime($created)) : '—';
+                                            ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
 
-                        <!-- Pagination (keeps filters) -->
                         <?php if ($totalPages > 1): ?>
                             <div class="pagination no-print">
                                 <?php if ($page > 1): ?>
@@ -329,7 +336,6 @@ $page_title = 'Activity Logs';
                                         <i class="fas fa-chevron-left"></i> Prev
                                     </a>
                                 <?php endif; ?>
-
                                 <?php
                                     $start = max(1, $page - 2);
                                     $end   = min($totalPages, $page + 2);
@@ -344,7 +350,6 @@ $page_title = 'Activity Logs';
                                     endfor;
                                     if ($end < $totalPages) echo '<span class="page-link" style="pointer-events:none;">…</span>';
                                 ?>
-
                                 <?php if ($page < $totalPages): ?>
                                     <a href="<?php echo htmlspecialchars(buildQueryString(['page' => $page + 1])); ?>" class="page-link">
                                         Next <i class="fas fa-chevron-right"></i>
@@ -356,6 +361,9 @@ $page_title = 'Activity Logs';
                         <p class="text-muted text-center" style="padding: 40px 0;">
                             <i class="fas fa-inbox" style="font-size: 48px; display: block; margin-bottom: 10px; opacity: 0.5;"></i>
                             No activity logs found
+                            <?php if ($filterAction || $filterUser || $filterFrom || $filterTo): ?>
+                                <br><small style="color:#999;">(Filters are applied — try clearing them)</small>
+                            <?php endif; ?>
                         </p>
                     <?php endif; ?>
                 </div>
@@ -468,71 +476,32 @@ $page_title = 'Activity Logs';
         }
         .btn-sm.btn-success:hover { background: #218838; }
 
-        /* ============================================
-           PRINT STYLES
-           ============================================ */
         @media print {
             @page { margin: 12mm; size: A4; }
-
             header, .admin-header, .sidebar, .admin-sidebar,
             .logs-filter, .table-toolbar, .pagination,
             .alert, .btn-sm, button, form, nav {
                 display: none !important;
             }
-
-            body {
-                background: #fff !important;
-                color: #000 !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                font-size: 11pt;
-            }
-
+            body { background: #fff !important; color: #000 !important; padding: 0 !important; margin: 0 !important; font-size: 11pt; }
             .admin-wrapper { display: block !important; }
             .admin-main { padding: 0 !important; margin: 0 !important; width: 100% !important; }
             .admin-card, .card-body { box-shadow: none !important; border: none !important; border-radius: 0 !important; padding: 0 !important; }
 
             .admin-main::before {
                 content: "WittyMart — Activity Logs";
-                display: block;
-                font-size: 18pt;
-                font-weight: 700;
-                color: #05573c;
-                border-bottom: 3px solid #05573c;
-                padding-bottom: 8px;
-                margin-bottom: 16px;
+                display: block; font-size: 18pt; font-weight: 700; color: #05573c;
+                border-bottom: 3px solid #05573c; padding-bottom: 8px; margin-bottom: 16px;
             }
             .admin-main::after {
                 content: "Printed on <?php echo date('d M Y, H:i'); ?>";
-                display: block;
-                font-size: 9pt;
-                color: #666;
-                text-align: right;
-                margin-top: 12px;
+                display: block; font-size: 9pt; color: #666; text-align: right; margin-top: 12px;
             }
-
             table { width: 100% !important; border-collapse: collapse !important; font-size: 9pt; }
-            table th, table td {
-                border: 1px solid #999 !important;
-                padding: 6px 8px !important;
-                color: #000 !important;
-                background: #fff !important;
-            }
-            table thead th {
-                background: #f0f0f0 !important;
-                font-weight: 700 !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
+            table th, table td { border: 1px solid #999 !important; padding: 6px 8px !important; color: #000 !important; background: #fff !important; }
+            table thead th { background: #f0f0f0 !important; font-weight: 700 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             table tbody tr { page-break-inside: avoid; }
-
-            .badge {
-                background: transparent !important;
-                color: #000 !important;
-                border: 1px solid #666 !important;
-                padding: 2px 6px !important;
-                font-weight: 600 !important;
-            }
+            .badge { background: transparent !important; color: #000 !important; border: 1px solid #666 !important; padding: 2px 6px !important; font-weight: 600 !important; }
         }
     </style>
 </body>
