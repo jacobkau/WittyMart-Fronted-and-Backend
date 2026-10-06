@@ -806,6 +806,22 @@ $page_title = 'Orders';
                 alert.style.transition = 'opacity 0.5s ease';
                 setTimeout(function() {
                     alert.style.opacity = '0';
+                    // ============================================
+// AUTO-OPEN ORDER MODAL IF ?view=ID IN URL
+// (used by the M-Pesa Statements page's "View" button)
+// ============================================
+(function () {
+    const params = new URLSearchParams(window.location.search);
+    const viewId = parseInt(params.get('view') || '0', 10);
+    if (viewId > 0) {
+        // Wait for the DOM and functions to be ready
+        window.addEventListener('load', function () {
+            if (typeof viewOrder === 'function') {
+                viewOrder(viewId);
+            }
+        });
+    }
+})();
                     setTimeout(function() {
                         alert.style.display = 'none';
                     }, 500);
