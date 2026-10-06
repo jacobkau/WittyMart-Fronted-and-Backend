@@ -30,7 +30,7 @@ require_once 'includes/config.php';
                 <article>
                     <i class="fas fa-envelope"></i>
                     <h2>Email</h2>
-                    <p><a href="mailto:kaujacob4@gmail.com">support@wittymart.co.ke</a></p>
+                    <p><a href="mailto:wittyhighbrowtechnologies@gmail.com">wittyhighbrowtechnologies@gmail.com</a></p>
                 </article>
                 <article>
                     <i class="fas fa-phone"></i>
