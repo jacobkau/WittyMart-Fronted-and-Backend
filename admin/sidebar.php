@@ -41,7 +41,7 @@ function isActive($page) {
             <i class="fas fa-users"></i> Customers
         </a>
 
-    <a href="newsletter.php" class="<?php echo isAactive('newsletter.php)'; ?>">
+    <a href="newsletter.php" class="<?php echo isActive('newsletter.php'); ?>">
         <i class="fas fa-envelope-open-text"></i>
         <span>Subscribers</span>
     </a>
