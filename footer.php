@@ -1,4 +1,3 @@
-
     <!-- Footer -->
     <footer class="footer">
         <div class="footer-row">
@@ -6,10 +5,10 @@
                 <h2>WittyMart</h2>
                 <p>Smart Shopping for Witty Minds!</p>
                 <br>
-                <p>© 2025 WittyMart. All rights reserved.</p>
-                <?php if ($isLoggedIn): ?>
+                <p>© 2026 WittyMart. All rights reserved.</p>
+                <?php if (!empty($isLoggedIn)): ?>
                     <p style="margin-top: 10px; font-size: 12px; color: #888;">
-                        <i class="fas fa-user-check"></i> Logged in as <?php echo htmlspecialchars($userName); ?>
+                        <i class="fas fa-user-check"></i> Logged in as <?php echo htmlspecialchars($userName ?? 'User'); ?>
                     </p>
                 <?php endif; ?>
             </div>
@@ -37,7 +36,7 @@
                     <li><a href="cart.php">Cart</a></li>
                     <li><a href="about.php">About</a></li>
                     <li><a href="contact.php">Contact</a></li>
-                    <?php if (!$isLoggedIn): ?>
+                    <?php if (empty($isLoggedIn)): ?>
                         <li><a href="login-register.php">Login / Register</a></li>
                     <?php else: ?>
                         <li><a href="home.php">My Account</a></li>
@@ -60,37 +59,40 @@
                     <li><a href="terms.php#privacy">Privacy Policy</a></li>
                     <li><a href="terms.php#terms">Terms of Service</a></li>
                     <li><a href="terms.php#returns">Return Policy</a></li>
-                    <?php if ($isAdmin ?? false): ?>
+                    <?php if (!empty($isAdmin)): ?>
                         <li><a href="admin/dashboard.php"><i class="fas fa-crown"></i> Admin Panel</a></li>
                     <?php endif; ?>
                 </ul>
             </div>
         </div>
         <div id="footer-bottom">
-            <p>Built with 💖 by Witty Highbrow Technologies!</p>
+            <p>Built by Witty Highbrow Technologies!</p>
         </div>
     </footer>
 
     <script>
-        // Newsletter subscription
-        function subscribeNewsletter(event) {
+    // ============================================
+    // FOOTER SCRIPTS — ALL SCOPED TO AVOID COLLISIONS
+    // ============================================
+    (function () {
+        'use strict';
+
+        // ---------- NEWSLETTER SUBSCRIPTION ----------
+        window.subscribeNewsletter = function (event) {
             event.preventDefault();
-            
+
             const emailInput = document.getElementById('newsletter-email');
             const messageDiv = document.getElementById('newsletter-message');
             const email = emailInput.value;
-            
+
             if (!email) {
                 showNewsletterMessage('Please enter your email address.', 'error');
                 return;
             }
-            
-            // Send AJAX request
+
             fetch('subscribe.php', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email: email })
             })
             .then(response => response.json())
@@ -106,14 +108,15 @@
                 console.error('Error:', error);
                 showNewsletterMessage('An error occurred. Please try again.', 'error');
             });
-        }
-        
+        };
+
         function showNewsletterMessage(message, type) {
             const messageDiv = document.getElementById('newsletter-message');
+            if (!messageDiv) return;
             messageDiv.textContent = message;
             messageDiv.style.display = 'block';
             messageDiv.style.color = type === 'success' ? '#28a745' : '#dc3545';
-            
+
             setTimeout(() => {
                 messageDiv.style.opacity = '0';
                 setTimeout(() => {
@@ -122,22 +125,24 @@
                 }, 500);
             }, 5000);
         }
-        
-        // ===== DARK MODE TOGGLE =====
-        function toggleTheme() {
-            document.body.classList.toggle('dark-mode');
-            const isDark = document.body.classList.contains('dark-mode');
-            const icon = document.getElementById('theme-icon');
-            if (icon) {
-                icon.innerHTML = isDark ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
-                icon.title = isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode';
-            }
-            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+
+        // ---------- DARK MODE TOGGLE ----------
+        if (typeof window.toggleTheme !== 'function') {
+            window.toggleTheme = function () {
+                document.body.classList.toggle('dark-mode');
+                const isDark = document.body.classList.contains('dark-mode');
+                const icon = document.getElementById('theme-icon');
+                if (icon) {
+                    icon.innerHTML = isDark ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
+                    icon.title = isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+                }
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            };
         }
-        
-        // Load saved theme
-        const savedTheme = localStorage.getItem('theme');
-        if (savedTheme === 'dark') {
+
+        // Load saved theme — scoped variable to avoid collision with header.php
+        const savedThemeFooter = localStorage.getItem('theme');
+        if (savedThemeFooter === 'dark') {
             document.body.classList.add('dark-mode');
             const icon = document.getElementById('theme-icon');
             if (icon) {
@@ -145,31 +150,40 @@
                 icon.title = 'Switch to Light Mode';
             }
         }
-        
-        // ===== MOBILE MENU TOGGLE =====
-        function toggleMenu() {
-            const navLinks = document.getElementById('nav-links');
-            navLinks.classList.toggle('active');
+
+        // ---------- MOBILE MENU TOGGLE (fallback) ----------
+        if (typeof window.toggleMenu !== 'function') {
+            window.toggleMenu = function () {
+                const navLinks = document.getElementById('nav-links') || document.getElementById('navLinks');
+                if (navLinks) navLinks.classList.toggle('active');
+            };
         }
-        
-        // ===== SIDEBAR TOGGLE =====
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            const overlay = document.getElementById('sidebarOverlay');
-            sidebar.classList.toggle('active');
-            overlay.classList.toggle('active');
-            document.body.classList.toggle('sidebar-open');
+
+        // ---------- SIDEBAR TOGGLE (fallback) ----------
+        if (typeof window.toggleSidebar !== 'function') {
+            window.toggleSidebar = function () {
+                const sidebar = document.getElementById('sidebar');
+                const overlay = document.getElementById('sidebarOverlay');
+                if (sidebar && overlay) {
+                    sidebar.classList.toggle('active');
+                    overlay.classList.toggle('active');
+                    document.body.classList.toggle('sidebar-open');
+                }
+            };
         }
-        
-        // Close sidebar when clicking overlay
-        document.addEventListener('DOMContentLoaded', function() {
+
+        document.addEventListener('DOMContentLoaded', function () {
             const overlay = document.getElementById('sidebarOverlay');
-            if (overlay) {
-                overlay.addEventListener('click', function() {
-                    toggleSidebar();
+            if (overlay && !overlay.dataset.footerBound) {
+                overlay.dataset.footerBound = '1';
+                overlay.addEventListener('click', function () {
+                    if (typeof window.toggleSidebar === 'function') {
+                        window.toggleSidebar();
+                    }
                 });
             }
         });
+    })();
     </script>
 </body>
 </html>
