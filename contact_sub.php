@@ -1,6 +1,6 @@
 <?php
 // ============================================
-// CONTACT FORM ENDPOINT
+// CONTACT FORM ENDPOINT 
 // ============================================
 require_once 'includes/config.php';
 
@@ -12,7 +12,6 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// Accept JSON or form-encoded
 $raw   = file_get_contents('php://input');
 $input = json_decode($raw, true);
 if (!is_array($input)) {
@@ -38,16 +37,9 @@ if (strlen($message) < 5) {
     exit;
 }
 
-$ip = $_SERVER['REMOTE_ADDR'] ?? null;
-$ua = substr($_SERVER['HTTP_USER_AGENT'] ?? '', 0, 500);
-
-// ============================================
-// 1. SAVE TO DB
-// ============================================
+// ---- Save to DB (matches your exact schema) ----
 $savedId = null;
 try {
-    // Insert — adapt columns to whatever your table has.
-    // Common layout: name, email, message, status, created_at
     $stmt = $pdo->prepare("
         INSERT INTO contact_us (name, email, message, status, created_at)
         VALUES (?, ?, ?, 'unread', NOW())
@@ -56,22 +48,9 @@ try {
     $stmt->execute([$name, $email, $message]);
     $savedId = $stmt->fetchColumn();
 
-    // Optional extras if those columns exist 
-    foreach ([
-        'ip_address' => $ip,
-        'user_agent' => $ua,
-        'subject'    => $subject,
-    ] as $col => $val) {
-        try {
-            $pdo->prepare("UPDATE contact_us SET {$col} = ? WHERE id = ?")
-                ->execute([$val, $savedId]);
-        } catch (PDOException $e) {
-            // Column doesn't exist — silently skip
-        }
-    }
-
     if (function_exists('logActivity')) {
-        logActivity('contact_message', "Contact from {$email}", $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? '');
+        logActivity('contact_message', "Contact from {$email}",
+            $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? '');
     }
 } catch (PDOException $e) {
     error_log('Contact DB save error: ' . $e->getMessage());
@@ -79,22 +58,18 @@ try {
     exit;
 }
 
-// ============================================
-// 2. FORWARD TO FORMSPREE (best-effort)
-// ============================================
-// You can use the same FORMSPREE_FORM_ID as newsletter,
-// or set a separate CONTACT_FORMSPREE_ID for contact only.
+// ---- Forward to Formspree (best-effort) ----
 $formspreeId = getenv('CONTACT_FORMSPREE_ID') ?: (getenv('FORMSPREE_FORM_ID') ?: '');
 
 if ($formspreeId !== '') {
     try {
         $payload = [
-            'name'    => $name,
-            'email'   => $email,
-            'message' => $message,
+            'name'     => $name,
+            'email'    => $email,
+            'message'  => $message,
             '_subject' => $subject,
-            'source'  => 'contact_form',
-            'page'    => $input['page'] ?? '',
+            'source'   => 'contact_form',
+            'page'     => $input['page'] ?? '',
         ];
 
         $ch = curl_init('https://formspree.io/f/' . $formspreeId);
@@ -124,9 +99,7 @@ if ($formspreeId !== '') {
     }
 }
 
-// ============================================
-// 3. RESPOND
-// ============================================
+// ---- Respond ----
 echo json_encode([
     'success' => true,
     'message' => "Thank you, {$name}! Your message has been sent. We'll get back to you soon.",
