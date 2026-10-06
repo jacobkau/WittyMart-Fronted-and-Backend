@@ -8,7 +8,7 @@
 class EmailJsMailer
 {
     private $publicKey;
-    private $privateKey;   // optional but recommended for server-side calls
+    private $privateKey;
     private $serviceId;
     private $templateId;
 
@@ -20,6 +20,16 @@ class EmailJsMailer
         $this->templateId = getenv('EMAILJS_TEMPLATE_ID') ?: '';
     }
 
+    /**
+     * Send an email via EmailJS.
+     *
+     * IMPORTANT: For HTML to render (not appear as source code),
+     * your EmailJS TEMPLATE must use TRIPLE braces: {{{body}}}
+     * — not double braces {{body}}.
+     *
+     * @param array $templateParams
+     * @return bool
+     */
     public function send(array $templateParams): bool
     {
         if (!$this->publicKey || !$this->serviceId || !$this->templateId) {
@@ -36,7 +46,8 @@ class EmailJsMailer
             'template_params' => $templateParams,
         ];
 
-        // Optional: if you have the private key, include it (more secure)
+        // Optional: if you have the private key, include it (recommended
+        // for server-side calls so your public key isn't trivially abusable).
         if ($this->privateKey) {
             $payload['accessToken'] = $this->privateKey;
         }
