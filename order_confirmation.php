@@ -1,6 +1,6 @@
 <?php
 // ============================================
-// ORDER CONFIRMATION WITH DEFERRED STK PUSH + EMAILJS
+// ORDER CONFIRMATION WITH DEFERRED STK PUSH + SERVER-SIDE EMAILJS
 // ============================================
 require_once 'includes/config.php';
 
@@ -17,7 +17,7 @@ $user_id = $_SESSION['user_id'];
 $siteUrl = 'https://wittymart.onrender.com';
 
 // ============================================
-// EMAILJS CONFIG (read from environment)
+// ENV GET HELPER
 // ============================================
 function env_get($key, $default = '') {
     $v = getenv($key);
@@ -25,16 +25,6 @@ function env_get($key, $default = '') {
     if (!empty($_ENV[$key]))    return $_ENV[$key];
     if (!empty($_SERVER[$key])) return $_SERVER[$key];
     return $default;
-}
-
-$emailJsPublicKey  = env_get('EMAILJS_PUBLIC_KEY');
-$emailJsServiceId  = env_get('EMAILJS_SERVICE_ID');
-$emailJsTemplateId = env_get('EMAILJS_TEMPLATE_ID');
-
-if (!$emailJsPublicKey || !$emailJsServiceId || !$emailJsTemplateId) {
-    error_log('EmailJS env vars missing: public=' . var_export($emailJsPublicKey, true)
-        . ' service=' . var_export($emailJsServiceId, true)
-        . ' template=' . var_export($emailJsTemplateId, true));
 }
 
 // ============================================
@@ -298,6 +288,44 @@ $emailBodyFull = '<div style="font-family: system-ui, -apple-system, \'Segoe UI\
                .     $emailBody
                .   '</div>'
                . '</div>';
+
+// ============================================
+// SERVER-SIDE EMAIL SEND (idempotent per order)
+// ============================================
+$emailSendStatus = 'skipped'; // 'sent' | 'failed' | 'skipped' | 'already'
+
+if ($order && !empty($user['email'])) {
+    $emailSessionKey = 'email_sent_' . (int)$order['id'];
+
+    if (!empty($_SESSION[$emailSessionKey])) {
+        $emailSendStatus = 'already';
+    } else {
+        try {
+            require_once 'includes/emailjs.php';
+
+            $mailer = new EmailJsMailer();
+            $sent = $mailer->send([
+                'to_name'      => $user['name'] ?? 'Customer',
+                'to_email'     => $user['email'],
+                'order_number' => $order_number,
+                'subject'      => 'Your WittyMart Order #' . $order_number . ' is confirmed',
+                'body'         => $emailBodyFull,
+            ]);
+
+            if ($sent) {
+                $_SESSION[$emailSessionKey] = true;
+                $emailSendStatus = 'sent';
+                error_log("Confirmation email sent server-side for order #{$order_number}");
+            } else {
+                $emailSendStatus = 'failed';
+                error_log("Confirmation email FAILED server-side for order #{$order_number}");
+            }
+        } catch (Throwable $e) {
+            $emailSendStatus = 'failed';
+            error_log('Server-side EmailJS exception: ' . $e->getMessage());
+        }
+    }
+}
 
 $page_title = 'Order Confirmed';
 ?>
@@ -634,55 +662,29 @@ $page_title = 'Order Confirmed';
                 </a>
             </div>
 
-            <div class="email-status" id="emailStatus"></div>
+            <div class="email-status" id="emailStatus">
+                <?php if ($emailSendStatus === 'sent'): ?>
+                    <i class="fas fa-check-circle ok"></i> Confirmation email sent to <?php echo htmlspecialchars($user['email'] ?? ''); ?>
+                <?php elseif ($emailSendStatus === 'already'): ?>
+                    <i class="fas fa-check-circle ok"></i> Confirmation email already sent to <?php echo htmlspecialchars($user['email'] ?? ''); ?>
+                <?php elseif ($emailSendStatus === 'failed'): ?>
+                    <i class="fas fa-exclamation-triangle err"></i> Could not send email confirmation (order still saved).
+                <?php else: ?>
+                    <?php if (empty($user['email'])): ?>
+                        <i class="fas fa-info-circle"></i> No email on file — confirmation email skipped.
+                    <?php endif; ?>
+                <?php endif; ?>
+            </div>
         </div>
     </main>
     <?php include "footer.php"; ?>
 
     <!-- ============================================
-         EMAILJS + PAYMENT STATUS POLLING
+         PAYMENT STATUS POLLING (client-side only)
+         EmailJS is now sent server-side — no SDK needed.
          ============================================ -->
-    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <script>
-        (function() {
-            if (typeof emailjs !== 'undefined') {
-                emailjs.init(<?php echo json_encode($emailJsPublicKey); ?>);
-            }
-        })();
-
         document.addEventListener('DOMContentLoaded', function() {
-            const statusEl = document.getElementById('emailStatus');
-
-            // ============================================
-            // EMAIL CONFIRMATION
-            // ============================================
-            if (typeof emailjs !== 'undefined' && statusEl) {
-                const params = {
-                    to_name:      <?php echo json_encode($user['name'] ?? 'Customer'); ?>,
-                    to_email:     <?php echo json_encode($user['email'] ?? ''); ?>,
-                    order_number: <?php echo json_encode($order_number); ?>,
-                    subject:      <?php echo json_encode('Your WittyMart Order #' . $order_number . ' is confirmed'); ?>,
-                    body:         <?php echo json_encode($emailBodyFull); ?>
-                };
-
-                if (params.to_email) {
-                    statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending confirmation email…';
-
-                    emailjs.send(
-                        <?php echo json_encode($emailJsServiceId); ?>,
-                        <?php echo json_encode($emailJsTemplateId); ?>,
-                        params
-                    )
-                        .then(function() {
-                            statusEl.innerHTML = '<i class="fas fa-check-circle ok"></i> Confirmation email sent to ' + params.to_email;
-                        })
-                        .catch(function(err) {
-                            console.error('Email send failed:', err);
-                            statusEl.innerHTML = '<i class="fas fa-exclamation-triangle err"></i> Could not send email confirmation.';
-                        });
-                }
-            }
-
             // ============================================
             // POLL PAYMENT STATUS (for M-Pesa orders still pending)
             // ============================================
