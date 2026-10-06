@@ -17,6 +17,27 @@ $user_id = $_SESSION['user_id'];
 $siteUrl = 'https://wittymart.onrender.com';
 
 // ============================================
+// EMAILJS CONFIG (read from environment)
+// ============================================
+function env_get($key, $default = '') {
+    $v = getenv($key);
+    if ($v !== false && $v !== '') return $v;
+    if (!empty($_ENV[$key]))    return $_ENV[$key];
+    if (!empty($_SERVER[$key])) return $_SERVER[$key];
+    return $default;
+}
+
+$emailJsPublicKey  = env_get('EMAILJS_PUBLIC_KEY');
+$emailJsServiceId  = env_get('EMAILJS_SERVICE_ID');
+$emailJsTemplateId = env_get('EMAILJS_TEMPLATE_ID');
+
+if (!$emailJsPublicKey || !$emailJsServiceId || !$emailJsTemplateId) {
+    error_log('EmailJS env vars missing: public=' . var_export($emailJsPublicKey, true)
+        . ' service=' . var_export($emailJsServiceId, true)
+        . ' template=' . var_export($emailJsTemplateId, true));
+}
+
+// ============================================
 // RESOLVE ORDER NUMBER
 // ============================================
 $order_number = $_SESSION['order_number'] ?? '';
@@ -110,11 +131,10 @@ foreach ($items as $it) {
 }
 
 // ============================================
-// BUILD EMAIL — ITEMS HTML
+// BUILD EMAIL — ITEMS HTML (Cloudinary images)
 // ============================================
 $itemsHtml = '';
 foreach ($items as $it) {
-    // Resolve image URL (Cloudinary preferred, transformed)
     $img = '';
     if (!empty($it['image_url']) && preg_match('#^https?://#i', $it['image_url'])) {
         if (strpos($it['image_url'], '/upload/') !== false
@@ -216,7 +236,6 @@ $shopUrlHtml       = htmlspecialchars($shopUrl, ENT_QUOTES);
 
 $emailBody  = '';
 
-// Header (brand bar)
 $emailBody .= '<div style="border-top: 6px solid #05573c; padding: 16px;">'
           .     '<a style="text-decoration: none; outline: none; margin-right: 8px; vertical-align: middle;" href="' . $shopUrlHtml . '" target="_blank">'
           .       '<span style="display: inline-block; height: 32px; width: 32px; line-height: 32px; text-align: center; background: #05573c; color: #fff; border-radius: 8px; font-weight: 800; vertical-align: middle; font-size: 16px;">W</span>'
@@ -226,7 +245,6 @@ $emailBody .= '<div style="border-top: 6px solid #05573c; padding: 16px;">'
           .     '</span>'
           .   '</div>';
 
-// Body content
 $emailBody .= '<div style="padding: 0 16px;">'
           .     '<p style="margin: 8px 0 4px;">Hi ' . $toNameHtml . ',</p>'
           .     '<p style="margin: 0 0 16px; color: #555;">We\'ve received your order and are preparing it for delivery. We\'ll send you tracking information when it ships.</p>'
@@ -264,7 +282,6 @@ $emailBody .= '<div style="padding: 0 16px;">'
           .     '</div>'
           .   '</div>';
 
-// Footer
 $emailBody .= '<div style="border-top: 1px solid #e5e7eb; padding: 18px 16px; text-align: center; color: #999; font-size: 12px; line-height: 1.7;">'
           .     '<strong style="color: #05573c; display: block; font-size: 13px; margin-bottom: 6px;">Thank you for shopping with WittyMart!</strong>'
           .     'The email was sent to <strong style="color: #666;">' . $toEmailHtml . '</strong><br>'
@@ -276,7 +293,6 @@ $emailBody .= '<div style="border-top: 1px solid #e5e7eb; padding: 18px 16px; te
           .     '</span>'
           .   '</div>';
 
-// Wrap in outer container
 $emailBodyFull = '<div style="font-family: system-ui, -apple-system, \'Segoe UI\', Roboto, Arial, sans-serif; font-size: 14px; color: #333; padding: 14px 8px; background-color: #f5f5f5;">'
                .   '<div style="max-width: 600px; margin: auto; background-color: #ffffff;">'
                .     $emailBody
@@ -630,7 +646,7 @@ $page_title = 'Order Confirmed';
     <script>
         (function() {
             if (typeof emailjs !== 'undefined') {
-                emailjs.init("EMAILJS_PUBLIC_KEY"); // TODO: replace
+                emailjs.init(<?php echo json_encode($emailJsPublicKey); ?>);
             }
         })();
 
@@ -652,7 +668,11 @@ $page_title = 'Order Confirmed';
                 if (params.to_email) {
                     statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending confirmation email…';
 
-                    emailjs.send("EMAILJS_SERVICE_ID", "EMAILJS_TEMPLATE_ID", params)
+                    emailjs.send(
+                        <?php echo json_encode($emailJsServiceId); ?>,
+                        <?php echo json_encode($emailJsTemplateId); ?>,
+                        params
+                    )
                         .then(function() {
                             statusEl.innerHTML = '<i class="fas fa-check-circle ok"></i> Confirmation email sent to ' + params.to_email;
                         })
