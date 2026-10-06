@@ -70,13 +70,14 @@ try {
         WHERE order_number = ? AND user_id = ?
     ");
     $stmt->execute([$order_number, $user_id]);
-    $order = $stmt->fetch();
+    $order = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($order) {
         $stmt = $pdo->prepare("SELECT * FROM order_items WHERE order_id = ?");
         $stmt->execute([$order['id']]);
-        $items = $stmt->fetchAll();
+        $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+        // Fallback STK details from the order row if session was lost
         if (!$stk_order_id) {
             $stk_order_id  = (int)$order['id'];
             $stk_phone     = $order['mpesa_phone'] ?? '';
@@ -270,7 +271,6 @@ $page_title = 'Order Confirmed';
         }
         .pay-status .btn-orders:hover { background: rgba(0,0,0,0.15); }
 
-        /* Countdown timer */
         .pay-countdown {
             font-size: 12px;
             opacity: 0.8;
@@ -316,6 +316,31 @@ $page_title = 'Order Confirmed';
                                 We've received your payment of
                                 <strong>Ksh <?php echo number_format($order['total'], 0); ?></strong>.
                                 Your order is now being processed.
+                                <?php if (!empty($order['mpesa_receipt'])): ?>
+                                    <small>Receipt: <?php echo htmlspecialchars($order['mpesa_receipt']); ?></small>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php elseif ($order['payment_status'] === 'failed'): ?>
+                        <div class="oc-status-card failed" id="mpesaCard">
+                            <i class="fas fa-times-circle"></i>
+                            <div>
+                                <strong>Payment Not Completed</strong>
+                                Your M-Pesa payment was cancelled or failed.
+                                <?php if (!empty($order['payment_failure_reason'])): ?>
+                                    <small><?php echo htmlspecialchars($order['payment_failure_reason']); ?></small>
+                                <?php endif; ?>
+                                Your order is still saved — retry from
+                                <a href="orders.php" style="color:#721c24; font-weight:600; text-decoration:underline;">My Orders</a>.
+                            </div>
+                        </div>
+
+                        <div class="pay-status failed" id="payStatus">
+                            <i class="fas fa-times-circle"></i>
+                            <span>Payment was cancelled or timed out.</span>
+                            <div class="pay-actions">
+                                <a href="orders.php" class="btn-retry"><i class="fas fa-redo"></i> Retry Payment</a>
+                                <a href="orders.php" class="btn-orders">My Orders</a>
                             </div>
                         </div>
                     <?php else: ?>
@@ -417,23 +442,17 @@ $page_title = 'Order Confirmed';
             }
 
             // ============================================
-            // POLL PAYMENT STATUS (for M-Pesa orders)
+            // POLL PAYMENT STATUS (for M-Pesa orders still pending)
             // ============================================
-            <?php if ($order && in_array($order['payment_method'], ['mpesa','paybill']) && $order['payment_status'] !== 'paid'): ?>
-            const payStatusEl = document.getElementById('payStatus');
-            const payStatusText = document.getElementById('payStatusText');
-            const payCountdown = document.getElementById('payCountdown');
-            const orderId = <?php echo (int)$order['id']; ?>;
-            const orderNumberJs = <?php echo json_encode($order_number); ?>;
+            <?php if ($order && in_array($order['payment_method'], ['mpesa','paybill']) && $order['payment_status'] === 'awaiting_payment'): ?>
+            const payStatusEl   = document.getElementById('payStatus');
+            const payCountdown  = document.getElementById('payCountdown');
+            const orderId       = <?php echo (int)$order['id']; ?>;
 
             let pollCount = 0;
-            const maxPolls = 40;         // 40 × 5s = ~3.3 min
+            const maxPolls = 40;             // 40 × 5s = ~3.3 min
             const startTime = Date.now();
             const maxDurationMs = maxPolls * 5000;
-
-            function stopPolling() {
-                // No more polling — just leave whatever state is shown
-            }
 
             function setStatus(state, html) {
                 if (!payStatusEl) return;
@@ -465,7 +484,6 @@ $page_title = 'Order Confirmed';
                     '</div>'
                 );
 
-                // Swap the top card too
                 const mpesaCard = document.getElementById('mpesaCard');
                 if (mpesaCard) {
                     mpesaCard.className = 'oc-status-card failed';
@@ -505,43 +523,41 @@ $page_title = 'Order Confirmed';
             function pollPayment() {
                 pollCount++;
 
-                fetch('check_payment_status.php?order_id=' + orderId + '&_=' + Date.now())
-                    .then(r => r.json())
-                    .then(data => {
-                        if (!payStatusEl) return;
+                fetch('check_payment_status.php?order_id=' + orderId + '&_=' + Date.now(), {
+                    credentials: 'same-origin',
+                    cache: 'no-store'
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (!payStatusEl) return;
 
-                        if (data.status === 'paid') {
-                            showPaid(data.receipt || null);
-                            return; // STOP polling
-                        }
+                    if (data.status === 'paid') {
+                        showPaid(data.receipt || null);
+                        return;
+                    }
+                    if (data.status === 'failed') {
+                        showFailed();
+                        return;
+                    }
 
-                        if (data.status === 'failed') {
-                            showFailed();
-                            return; // STOP polling
-                        }
+                    showCountdown();
 
-                        // Still pending
-                        showCountdown();
-
-                        if (pollCount >= maxPolls) {
-                            showTimeout();
-                            return; // STOP polling after max
-                        }
-
-                        setTimeout(pollPayment, 5000);
-                    })
-                    .catch(() => {
-                        // Network hiccup — retry up to max
-                        showCountdown();
-                        if (pollCount >= maxPolls) {
-                            showTimeout();
-                            return;
-                        }
-                        setTimeout(pollPayment, 8000);
-                    });
+                    if (pollCount >= maxPolls) {
+                        showTimeout();
+                        return;
+                    }
+                    setTimeout(pollPayment, 5000);
+                })
+                .catch(() => {
+                    showCountdown();
+                    if (pollCount >= maxPolls) {
+                        showTimeout();
+                        return;
+                    }
+                    setTimeout(pollPayment, 8000);
+                });
             }
 
-            // Start polling after a short delay
             if (payStatusEl) {
                 showCountdown();
                 setTimeout(pollPayment, 3000);
@@ -562,42 +578,78 @@ if (function_exists('fastcgi_finish_request')) {
 } else {
     ignore_user_abort(true);
     if (ob_get_level() > 0) {
-        ob_end_flush();
+        ob_end_clean();
     }
     flush();
 }
 
 if ($stk_needed && $stk_phone && $stk_order_id) {
+    error_log("Deferred STK block START: order={$stk_order_id} phone={$stk_phone} amount={$stk_amount}");
+
     try {
         require_once 'includes/mpesa_service.php';
-        $mpesa = new MpesaService();
+
+        // Guard: make sure the class loaded
+        if (!class_exists('MpesaService')) {
+            error_log('Deferred STK: MpesaService class not found');
+            throw new Exception('MpesaService class missing');
+        }
+
+        $mpesa      = new MpesaService();
         $normalized = MpesaService::normalizePhone($stk_phone);
 
-        $push = $mpesa->stkPush($normalized, $stk_amount, $stk_reference, 'WittyMart Order');
+        if (!$normalized) {
+            error_log('Deferred STK: phone normalization failed for ' . $stk_phone);
+            throw new Exception('Invalid phone');
+        }
+
+        $push = $mpesa->stkPush(
+            $normalized,
+            (int) ceil($stk_amount),
+            'ORD' . $stk_order_id,   // AccountReference ≤ 12 chars
+            'WittyMart Order'
+        );
 
         if ($push && !empty($push['CheckoutRequestID'])) {
-            $stmt = $pdo->prepare("
-                UPDATE orders 
-                SET mpesa_checkout_id = ?, 
-                    payment_reference = ?,
-                    updated_at = NOW()
-                WHERE id = ?
-            ");
-            $stmt->execute([
-                $push['CheckoutRequestID'],
-                $push['CheckoutRequestID'],
-                $stk_order_id
-            ]);
-            error_log("STK Push sent: {$push['CheckoutRequestID']} for order #{$stk_order_id}");
+            try {
+                $upd = $pdo->prepare("
+                    UPDATE orders
+                    SET mpesa_checkout_id = ?,
+                        payment_reference = ?,
+                        updated_at        = NOW()
+                    WHERE id = ?
+                ");
+                $upd->execute([
+                    $push['CheckoutRequestID'],
+                    $push['CheckoutRequestID'],
+                    $stk_order_id
+                ]);
+
+                error_log("STK Push sent: {$push['CheckoutRequestID']} for order #{$stk_order_id} (rowsAffected={$upd->rowCount()})");
+            } catch (PDOException $e) {
+                error_log("Deferred STK: failed to save CheckoutRequestID for order #{$stk_order_id}: " . $e->getMessage());
+            }
         } else {
-            error_log("STK Push FAILED for order #{$stk_order_id}");
-            $pdo->prepare("
-                UPDATE orders 
-                SET payment_status = 'failed', updated_at = NOW() 
-                WHERE id = ?
-            ")->execute([$stk_order_id]);
+            error_log("STK Push FAILED for order #{$stk_order_id}. Response=" . json_encode($push));
+
+            try {
+                $pdo->prepare("
+                    UPDATE orders
+                    SET payment_status = 'failed',
+                        payment_failure_reason = 'STK push request failed',
+                        updated_at     = NOW()
+                    WHERE id = ?
+                ")->execute([$stk_order_id]);
+            } catch (PDOException $e) {
+                error_log("Deferred STK: failed to mark order #{$stk_order_id} as failed: " . $e->getMessage());
+            }
         }
-    } catch (Exception $e) {
-        error_log('Deferred STK Push error: ' . $e->getMessage());
+    } catch (Throwable $e) {
+        error_log('Deferred STK Push EXCEPTION: ' . $e->getMessage());
     }
+
+    error_log("Deferred STK block END: order={$stk_order_id}");
+} else {
+    error_log("Deferred STK block skipped: stk_needed=" . var_export($stk_needed, true)
+        . " phone={$stk_phone} order_id={$stk_order_id}");
 }
