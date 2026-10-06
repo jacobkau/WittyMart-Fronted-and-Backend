@@ -74,7 +74,7 @@ if (!function_exists('generateInvoicePDF')) {
     {
         $pdf = new WittyFPDF();
         $pdf->AddPage();
-        $pdf->SetAutoPageBreak(false);   // force single page
+        $pdf->SetAutoPageBreak(false);  
 
         // ============================================
         // COLORS
@@ -86,20 +86,38 @@ if (!function_exists('generateInvoicePDF')) {
         $darkText   = [34, 40, 49];
 
         // ============================================
-        // HEADER BAND (0 -> 30mm)
+        // HEADER BAND 
         // ============================================
         $pdf->SetFillColor($primary[0], $primary[1], $primary[2]);
         $pdf->Rect(0, 0, 210, 30, 'F');
 
+        // ============================================
+        // LOGO
+        // ============================================
+        $logoPath = __DIR__ . '/../images/wittymart-logo.png';
+        if (file_exists($logoPath)) {
+            // White circular backdrop behind the logo so it pops on the green band
+            $pdf->SetFillColor(255, 255, 255);
+            $pdf->Circle(23, 15, 10.5, 'F');
+            // Logo image on top of the backdrop
+            $pdf->Image($logoPath, 13.5, 5.5, 19, 19);
+        }
+
+        // ============================================
+        // BRAND NAME 
+        // ============================================
         $pdf->SetFont('Arial', 'B', 20);
         $pdf->SetTextColor(255, 255, 255);
-        $pdf->SetXY(15, 7);
-        $pdf->Cell(100, 8, 'WittyMart', 0, 0, 'L');
+        $pdf->SetXY(38, 7);
+        $pdf->Cell(90, 8, 'WittyMart', 0, 0, 'L');
 
         $pdf->SetFont('Arial', '', 8);
-        $pdf->SetXY(15, 16);
-        $pdf->Cell(100, 4, 'Smart Shopping for Witty Minds', 0, 0, 'L');
+        $pdf->SetXY(38, 16);
+        $pdf->Cell(90, 4, 'Smart Shopping for Witty Minds', 0, 0, 'L');
 
+        // ============================================
+        // "INVOICE" title on the right
+        // ============================================
         $pdf->SetFont('Arial', 'B', 16);
         $pdf->SetXY(120, 7);
         $pdf->Cell(75, 8, 'INVOICE', 0, 0, 'R');
@@ -109,7 +127,7 @@ if (!function_exists('generateInvoicePDF')) {
         $pdf->Cell(75, 4, 'Order #' . $order['order_number'], 0, 0, 'R');
 
         // ============================================
-        // FROM / BILL TO (Y=38)
+        // FROM / BILL TO
         // ============================================
         $pdf->SetFont('Arial', 'B', 8);
         $pdf->SetTextColor($greyText[0], $greyText[1], $greyText[2]);
@@ -156,7 +174,7 @@ if (!function_exists('generateInvoicePDF')) {
         }
 
         // ============================================
-        // META GRID (Y=64)
+        // META GRID 
         // ============================================
         $meta = [
             ['Invoice Date',   date('M d, Y', strtotime($order['created_at']))],
@@ -236,7 +254,7 @@ if (!function_exists('generateInvoicePDF')) {
         $pdf->SetTextColor($darkText[0], $darkText[1], $darkText[2]);
         $pdf->SetDrawColor($greyBorder[0], $greyBorder[1], $greyBorder[2]);
 
-        // Cap visible rows so totals + notice + footer always fit on one page
+      
         $maxRows = 10;
         $row = 0;
         foreach ($items as $it) {
