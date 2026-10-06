@@ -62,7 +62,7 @@ if (!class_exists('WittyFPDF')) {
 }
 
 /**
- * Generate a professionally-styled PDF invoice.
+ * Generate a single-page, professionally-styled PDF invoice.
  *
  * @param array $order  Order row from DB
  * @param array $items  Order items
@@ -74,94 +74,89 @@ if (!function_exists('generateInvoicePDF')) {
     {
         $pdf = new WittyFPDF();
         $pdf->AddPage();
+        $pdf->SetAutoPageBreak(false);   // force single page
 
         // ============================================
         // COLORS
         // ============================================
-        $primary     = [5, 87, 60];
-        $greyLight   = [245, 247, 250];
-        $greyBorder  = [225, 228, 232];
-        $greyText    = [110, 115, 125];
-        $darkText    = [34, 40, 49];
+        $primary    = [5, 87, 60];
+        $greyLight  = [245, 247, 250];
+        $greyBorder = [225, 228, 232];
+        $greyText   = [110, 115, 125];
+        $darkText   = [34, 40, 49];
 
         // ============================================
-        // HEADER BAND
+        // HEADER BAND (0 -> 30mm)
         // ============================================
         $pdf->SetFillColor($primary[0], $primary[1], $primary[2]);
-        $pdf->Rect(0, 0, 210, 32, 'F');
+        $pdf->Rect(0, 0, 210, 30, 'F');
 
-        $pdf->SetFont('Arial', 'B', 22);
+        $pdf->SetFont('Arial', 'B', 20);
         $pdf->SetTextColor(255, 255, 255);
-        $pdf->SetXY(15, 8);
-        $pdf->Cell(100, 10, 'WittyMart', 0, 0, 'L');
+        $pdf->SetXY(15, 7);
+        $pdf->Cell(100, 8, 'WittyMart', 0, 0, 'L');
 
-        $pdf->SetFont('Arial', '', 9);
-        $pdf->SetXY(15, 18);
-        $pdf->Cell(100, 5, 'Smart Shopping for Witty Minds', 0, 0, 'L');
+        $pdf->SetFont('Arial', '', 8);
+        $pdf->SetXY(15, 16);
+        $pdf->Cell(100, 4, 'Smart Shopping for Witty Minds', 0, 0, 'L');
 
-        $pdf->SetFont('Arial', 'B', 18);
-        $pdf->SetXY(120, 8);
-        $pdf->Cell(75, 10, 'INVOICE', 0, 0, 'R');
+        $pdf->SetFont('Arial', 'B', 16);
+        $pdf->SetXY(120, 7);
+        $pdf->Cell(75, 8, 'INVOICE', 0, 0, 'R');
 
-        $pdf->SetFont('Arial', '', 9);
-        $pdf->SetXY(120, 18);
-        $pdf->Cell(75, 5, 'Order #' . $order['order_number'], 0, 0, 'R');
+        $pdf->SetFont('Arial', '', 8);
+        $pdf->SetXY(120, 16);
+        $pdf->Cell(75, 4, 'Order #' . $order['order_number'], 0, 0, 'R');
 
         // ============================================
-        // FROM / BILL TO
+        // FROM / BILL TO (Y=38)
         // ============================================
-        $pdf->SetY(42);
-
-        // FROM
-        $pdf->SetFont('Arial', 'B', 9);
+        $pdf->SetFont('Arial', 'B', 8);
         $pdf->SetTextColor($greyText[0], $greyText[1], $greyText[2]);
-        $pdf->SetXY(15, 42);
-        $pdf->Cell(90, 5, 'FROM', 0, 1, 'L');
+        $pdf->SetXY(15, 38);
+        $pdf->Cell(90, 4, 'FROM', 0, 0, 'L');
 
         $pdf->SetTextColor($darkText[0], $darkText[1], $darkText[2]);
-        $pdf->SetFont('Arial', 'B', 10);
-        $pdf->SetX(15);
-        $pdf->Cell(90, 6, 'WittyMart', 0, 1, 'L');
+        $pdf->SetFont('Arial', 'B', 9);
+        $pdf->SetXY(15, 43);
+        $pdf->Cell(90, 5, 'WittyMart', 0, 0, 'L');
 
-        $pdf->SetFont('Arial', '', 9);
-        $pdf->SetX(15);
-        $pdf->Cell(90, 5, 'Nairobi, Kenya', 0, 1, 'L');
-        $pdf->SetX(15);
-        $pdf->Cell(90, 5, 'support@wittymart.com', 0, 1, 'L');
+        $pdf->SetFont('Arial', '', 8);
+        $pdf->SetXY(15, 49);
+        $pdf->Cell(90, 4, 'Nairobi, Kenya', 0, 0, 'L');
+        $pdf->SetXY(15, 54);
+        $pdf->Cell(90, 4, 'support@wittymart.com', 0, 0, 'L');
 
         // BILL TO
-        $pdf->SetFont('Arial', 'B', 9);
+        $pdf->SetFont('Arial', 'B', 8);
         $pdf->SetTextColor($greyText[0], $greyText[1], $greyText[2]);
-        $pdf->SetXY(120, 42);
-        $pdf->Cell(75, 5, 'BILL TO', 0, 1, 'L');
+        $pdf->SetXY(120, 38);
+        $pdf->Cell(75, 4, 'BILL TO', 0, 0, 'L');
 
         $pdf->SetTextColor($darkText[0], $darkText[1], $darkText[2]);
-        $pdf->SetFont('Arial', 'B', 10);
-        $pdf->SetXY(120, 47);
+        $pdf->SetFont('Arial', 'B', 9);
+        $pdf->SetXY(120, 43);
         $recipient = $order['delivery_recipient'] ?? ($user['name'] ?? 'Customer');
-        $pdf->Cell(75, 6, $recipient, 0, 1, 'L');
+        $pdf->Cell(75, 5, $recipient, 0, 0, 'L');
 
+        // Payment phone priority: mpesa_phone > delivery_phone > user.phone
         $paymentPhone = '';
-        if (!empty($order['mpesa_phone'])) {
-            $paymentPhone = $order['mpesa_phone'];
-        } elseif (!empty($order['delivery_phone'])) {
-            $paymentPhone = $order['delivery_phone'];
-        } elseif (!empty($user['phone'])) {
-            $paymentPhone = $user['phone'];
-        }
+        if (!empty($order['mpesa_phone']))        $paymentPhone = $order['mpesa_phone'];
+        elseif (!empty($order['delivery_phone'])) $paymentPhone = $order['delivery_phone'];
+        elseif (!empty($user['phone']))           $paymentPhone = $user['phone'];
 
-        $pdf->SetFont('Arial', '', 9);
+        $pdf->SetFont('Arial', '', 8);
         if ($paymentPhone) {
-            $pdf->SetXY(120, 53);
-            $pdf->Cell(75, 5, 'Phone: ' . $paymentPhone, 0, 1, 'L');
+            $pdf->SetXY(120, 49);
+            $pdf->Cell(75, 4, 'Phone: ' . $paymentPhone, 0, 0, 'L');
         }
         if (!empty($user['email'])) {
-            $pdf->SetXY(120, 58);
-            $pdf->Cell(75, 5, $user['email'], 0, 1, 'L');
+            $pdf->SetXY(120, 54);
+            $pdf->Cell(75, 4, $user['email'], 0, 0, 'L');
         }
 
         // ============================================
-        // META GRID
+        // META GRID (Y=64)
         // ============================================
         $meta = [
             ['Invoice Date',   date('M d, Y', strtotime($order['created_at']))],
@@ -171,85 +166,95 @@ if (!function_exists('generateInvoicePDF')) {
         ];
 
         $boxW = 43;
-        $boxH = 16;
-        $boxY = 78;
-        $startX = 15;
-        $gap = 2;
+        $boxH = 14;
+        $boxY = 64;
+        $gap  = 2;
 
         foreach ($meta as $i => $m) {
-            $x = $startX + ($i * ($boxW + $gap));
+            $x = 15 + ($i * ($boxW + $gap));
 
             $pdf->SetFillColor($greyLight[0], $greyLight[1], $greyLight[2]);
             $pdf->SetDrawColor($greyBorder[0], $greyBorder[1], $greyBorder[2]);
             $pdf->RoundedRect($x, $boxY, $boxW, $boxH, 2, 'DF');
 
-            $pdf->SetFont('Arial', 'B', 7);
+            $pdf->SetFont('Arial', 'B', 6.5);
             $pdf->SetTextColor($greyText[0], $greyText[1], $greyText[2]);
-            $pdf->SetXY($x + 3, $boxY + 3);
-            $pdf->Cell($boxW - 6, 4, strtoupper($m[0]), 0, 0, 'L');
+            $pdf->SetXY($x + 3, $boxY + 2);
+            $pdf->Cell($boxW - 6, 3.5, strtoupper($m[0]), 0, 0, 'L');
 
-            $pdf->SetFont('Arial', 'B', 10);
+            $pdf->SetFont('Arial', 'B', 9);
             $pdf->SetTextColor($darkText[0], $darkText[1], $darkText[2]);
-            $pdf->SetXY($x + 3, $boxY + 8);
-            $pdf->Cell($boxW - 6, 6, $m[1], 0, 0, 'L');
+            $pdf->SetXY($x + 3, $boxY + 7);
+            $pdf->Cell($boxW - 6, 5, $m[1], 0, 0, 'L');
         }
 
         // ============================================
-        // DELIVERY ADDRESS
+        // DELIVERY ADDRESS (Y=82)
         // ============================================
-        $pdf->SetY(100);
+        $y = 82;
 
         if (!empty($order['shipping_address']) || !empty($order['delivery_county'])) {
-            $pdf->SetFont('Arial', 'B', 8);
+            $pdf->SetFont('Arial', 'B', 7.5);
             $pdf->SetTextColor($greyText[0], $greyText[1], $greyText[2]);
-            $pdf->SetX(15);
-            $pdf->Cell(180, 4, 'DELIVERY ADDRESS', 0, 1, 'L');
+            $pdf->SetXY(15, $y);
+            $pdf->Cell(180, 4, 'DELIVERY ADDRESS', 0, 0, 'L');
 
-            $pdf->SetFont('Arial', '', 9);
+            $pdf->SetFont('Arial', '', 8.5);
             $pdf->SetTextColor($darkText[0], $darkText[1], $darkText[2]);
 
-            $addressLines = [];
-            if (!empty($order['shipping_address'])) $addressLines[] = $order['shipping_address'];
-            if (!empty($order['delivery_phone']))    $addressLines[] = 'Tel: ' . $order['delivery_phone'];
-
-            foreach ($addressLines as $line) {
-                $pdf->SetX(15);
-                $pdf->Cell(180, 5, $line, 0, 1, 'L');
+            $y += 5;
+            if (!empty($order['shipping_address'])) {
+                $pdf->SetXY(15, $y);
+                $pdf->Cell(180, 4.5, $order['shipping_address'], 0, 0, 'L');
+                $y += 4.5;
             }
-
-            $pdf->Ln(4);
+            if (!empty($order['delivery_phone'])) {
+                $pdf->SetXY(15, $y);
+                $pdf->Cell(180, 4.5, 'Tel: ' . $order['delivery_phone'], 0, 0, 'L');
+                $y += 4.5;
+            }
+            $y += 3;
         }
 
         // ============================================
         // ITEMS TABLE
         // ============================================
-        $pdf->SetY(max($pdf->GetY(), 118));
+        $pdf->SetY($y);
 
         $pdf->SetFillColor($primary[0], $primary[1], $primary[2]);
         $pdf->SetTextColor(255, 255, 255);
         $pdf->SetDrawColor($primary[0], $primary[1], $primary[2]);
-        $pdf->SetFont('Arial', 'B', 9);
+        $pdf->SetFont('Arial', 'B', 8.5);
 
         $pdf->SetX(15);
-        $pdf->Cell(95, 9, '  PRODUCT', 1, 0, 'L', true);
-        $pdf->Cell(18, 9, 'QTY', 1, 0, 'C', true);
-        $pdf->Cell(33, 9, 'UNIT PRICE', 1, 0, 'R', true);
-        $pdf->Cell(34, 9, 'TOTAL  ', 1, 1, 'R', true);
+        $pdf->Cell(95, 8, '  PRODUCT', 1, 0, 'L', true);
+        $pdf->Cell(18, 8, 'QTY', 1, 0, 'C', true);
+        $pdf->Cell(33, 8, 'UNIT PRICE', 1, 0, 'R', true);
+        $pdf->Cell(34, 8, 'TOTAL  ', 1, 1, 'R', true);
 
-        $pdf->SetFont('Arial', '', 9);
+        $pdf->SetFont('Arial', '', 8.5);
         $pdf->SetTextColor($darkText[0], $darkText[1], $darkText[2]);
         $pdf->SetDrawColor($greyBorder[0], $greyBorder[1], $greyBorder[2]);
 
+        // Cap visible rows so totals + notice + footer always fit on one page
+        $maxRows = 10;
         $row = 0;
         foreach ($items as $it) {
+            if ($row >= $maxRows) {
+                $pdf->SetX(15);
+                $pdf->SetFont('Arial', 'I', 8);
+                $pdf->Cell(180, 7, '  ... and ' . (count($items) - $maxRows) . ' more item(s)', 'LR', 1, 'L', false);
+                break;
+            }
+
             $fill = ($row % 2 === 1);
             $pdf->SetFillColor($greyLight[0], $greyLight[1], $greyLight[2]);
 
             $pdf->SetX(15);
-            $pdf->Cell(95, 8, '  ' . substr($it['product_name'], 0, 50), 1, 0, 'L', $fill);
-            $pdf->Cell(18, 8, $it['quantity'], 'LR', 0, 'C', $fill);
-            $pdf->Cell(33, 8, 'Ksh ' . number_format($it['price'], 0) . '  ', 'LR', 0, 'R', $fill);
-            $pdf->Cell(34, 8, 'Ksh ' . number_format($it['total'], 0) . '  ', 'LR', 1, 'R', $fill);
+            $pdf->Cell(95, 7, '  ' . substr($it['product_name'], 0, 50), 1, 0, 'L', $fill);
+            $pdf->Cell(18, 7, $it['quantity'], 'LR', 0, 'C', $fill);
+            $pdf->Cell(33, 7, 'Ksh ' . number_format($it['price'], 0) . '  ', 'LR', 0, 'R', $fill);
+            $pdf->Cell(34, 7, 'Ksh ' . number_format($it['total'], 0) . '  ', 'LR', 1, 'R', $fill);
 
             $row++;
         }
@@ -260,7 +265,7 @@ if (!function_exists('generateInvoicePDF')) {
         // ============================================
         // TOTALS BLOCK
         // ============================================
-        $pdf->Ln(6);
+        $pdf->Ln(3);
 
         $subtotal = $order['total'] - ($order['shipping_fee'] ?? 0);
         $shipping = $order['shipping_fee'] ?? 0;
@@ -270,74 +275,73 @@ if (!function_exists('generateInvoicePDF')) {
         }
 
         $totalsX = 120;
-        $totalsW = 75;
 
         // Subtotal
         $pdf->SetX($totalsX);
-        $pdf->SetFont('Arial', '', 9);
+        $pdf->SetFont('Arial', '', 8.5);
         $pdf->SetTextColor($darkText[0], $darkText[1], $darkText[2]);
         $pdf->SetFillColor($greyLight[0], $greyLight[1], $greyLight[2]);
         $pdf->SetDrawColor($greyBorder[0], $greyBorder[1], $greyBorder[2]);
-        $pdf->Cell(40, 7, '  Subtotal', 'LR', 0, 'L', false);
-        $pdf->Cell(35, 7, 'Ksh ' . number_format($subtotal, 0) . '  ', 'LR', 1, 'R', false);
+        $pdf->Cell(40, 6, '  Subtotal', 'LR', 0, 'L', false);
+        $pdf->Cell(35, 6, 'Ksh ' . number_format($subtotal, 0) . '  ', 'LR', 1, 'R', false);
 
         // Discount
         if ($discount > 0) {
             $pdf->SetTextColor(40, 167, 69);
             $pdf->SetX($totalsX);
-            $pdf->SetFont('Arial', '', 9);
+            $pdf->SetFont('Arial', '', 8.5);
             $pdf->SetFillColor($greyLight[0], $greyLight[1], $greyLight[2]);
             $pdf->SetDrawColor($greyBorder[0], $greyBorder[1], $greyBorder[2]);
-            $pdf->Cell(40, 7, '  Discount', 'LR', 0, 'L', false);
-            $pdf->Cell(35, 7, '-Ksh ' . number_format($discount, 0) . '  ', 'LR', 1, 'R', false);
+            $pdf->Cell(40, 6, '  Discount', 'LR', 0, 'L', false);
+            $pdf->Cell(35, 6, '-Ksh ' . number_format($discount, 0) . '  ', 'LR', 1, 'R', false);
         }
 
         // Shipping
         $pdf->SetTextColor($darkText[0], $darkText[1], $darkText[2]);
         $pdf->SetX($totalsX);
-        $pdf->SetFont('Arial', '', 9);
+        $pdf->SetFont('Arial', '', 8.5);
         $pdf->SetFillColor($greyLight[0], $greyLight[1], $greyLight[2]);
         $pdf->SetDrawColor($greyBorder[0], $greyBorder[1], $greyBorder[2]);
-        $pdf->Cell(40, 7, '  Shipping', 'LR', 0, 'L', false);
-        $pdf->Cell(35, 7, 'Ksh ' . number_format($shipping, 0) . '  ', 'LR', 1, 'R', false);
+        $pdf->Cell(40, 6, '  Shipping', 'LR', 0, 'L', false);
+        $pdf->Cell(35, 6, 'Ksh ' . number_format($shipping, 0) . '  ', 'LR', 1, 'R', false);
 
         // Grand Total
         $pdf->SetX($totalsX);
-        $pdf->SetFont('Arial', 'B', 11);
+        $pdf->SetFont('Arial', 'B', 10.5);
         $pdf->SetTextColor(255, 255, 255);
         $pdf->SetFillColor($primary[0], $primary[1], $primary[2]);
         $pdf->SetDrawColor($primary[0], $primary[1], $primary[2]);
-        $pdf->Cell(40, 10, '  TOTAL', 1, 0, 'L', true);
-        $pdf->Cell(35, 10, 'Ksh ' . number_format($order['total'], 0) . '  ', 1, 1, 'R', true);
+        $pdf->Cell(40, 9, '  TOTAL', 1, 0, 'L', true);
+        $pdf->Cell(35, 9, 'Ksh ' . number_format($order['total'], 0) . '  ', 1, 1, 'R', true);
 
         // ============================================
         // THANK YOU NOTICE
         // ============================================
-        $pdf->Ln(10);
+        $pdf->Ln(6);
 
         $noticeY = $pdf->GetY();
         $pdf->SetFillColor($greyLight[0], $greyLight[1], $greyLight[2]);
         $pdf->SetDrawColor($greyBorder[0], $greyBorder[1], $greyBorder[2]);
-        $pdf->RoundedRect(15, $noticeY, 180, 20, 2, 'DF');
+        $pdf->RoundedRect(15, $noticeY, 180, 16, 2, 'DF');
 
-        $pdf->SetFont('Arial', 'B', 9);
+        $pdf->SetFont('Arial', 'B', 8.5);
         $pdf->SetTextColor($primary[0], $primary[1], $primary[2]);
-        $pdf->SetXY(20, $noticeY + 4);
-        $pdf->Cell(170, 5, 'Thank you for shopping with WittyMart!', 0, 0, 'L');
+        $pdf->SetXY(20, $noticeY + 3);
+        $pdf->Cell(170, 4.5, 'Thank you for shopping with WittyMart!', 0, 0, 'L');
 
-        $pdf->SetFont('Arial', '', 8);
+        $pdf->SetFont('Arial', '', 7.5);
         $pdf->SetTextColor($greyText[0], $greyText[1], $greyText[2]);
-        $pdf->SetXY(20, $noticeY + 10);
-        $pdf->Cell(170, 5, 'For questions about this invoice, contact support@wittymart.com or call +254 768 374 497.', 0, 0, 'L');
+        $pdf->SetXY(20, $noticeY + 8.5);
+        $pdf->Cell(170, 4.5, 'For questions about this invoice, contact support@wittymart.com', 0, 0, 'L');
 
         // ============================================
         // FOOTER
         // ============================================
-        $pdf->SetY(-18);
+        $pdf->SetY(-15);
         $pdf->SetDrawColor($greyBorder[0], $greyBorder[1], $greyBorder[2]);
         $pdf->Line(15, $pdf->GetY(), 195, $pdf->GetY());
 
-        $pdf->SetY(-15);
+        $pdf->SetY(-12);
         $pdf->SetFont('Arial', '', 7);
         $pdf->SetTextColor($greyText[0], $greyText[1], $greyText[2]);
         $pdf->SetX(15);
