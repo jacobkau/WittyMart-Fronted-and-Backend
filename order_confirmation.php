@@ -12,6 +12,11 @@ if (!isset($_SESSION['user_id'])) {
 $user_id = $_SESSION['user_id'];
 
 // ============================================
+// SITE URL (needed for email image + link URLs)
+// ============================================
+$siteUrl = 'https://wittymart.onrender.com/'; // TODO: replace with your real domain
+
+// ============================================
 // RESOLVE ORDER NUMBER
 // ============================================
 $order_number = $_SESSION['order_number'] ?? '';
@@ -105,18 +110,41 @@ foreach ($items as $it) {
 }
 
 // ============================================
-// BUILD EMAIL VARIABLES
+// BUILD EMAIL — ITEMS HTML WITH CLOUDINARY IMAGES
 // ============================================
 $itemsHtml = '';
 foreach ($items as $it) {
-    $img = !empty($it['image_url'])
-        ? $it['image_url']
-        : (!empty($it['image']) ? 'uploads/products/' . $it['image'] : 'uploads/products/no-image.png');
+    // -------- Resolve image URL (Cloudinary preferred) --------
+    $img = '';
 
-    $itemsHtml .= '<table style="width: 100%; border-collapse: collapse; margin-top: 4px;">'
+    // 1) Cloudinary / absolute URL — optionally optimize
+    if (!empty($it['image_url']) && preg_match('#^https?://#i', $it['image_url'])) {
+        // Inject 128x128 transform right after /upload/ if not already present
+        if (strpos($it['image_url'], '/upload/') !== false
+            && strpos($it['image_url'], 'w_128') === false) {
+            $img = preg_replace(
+                '#/upload/#',
+                '/upload/w_128,h_128,c_fill,q_auto,f_auto/',
+                $it['image_url'],
+                1
+            );
+        } else {
+            $img = $it['image_url'];
+        }
+    }
+    // 2) Local file fallback (browser only — some clients block these)
+    elseif (!empty($it['image'])) {
+        $img = rtrim($siteUrl, '/') . '/uploads/products/' . ltrim($it['image'], '/');
+    }
+    // 3) Placeholder
+    else {
+        $img = rtrim($siteUrl, '/') . '/uploads/products/no-image.png';
+    }
+
+    $itemsHtml .= '<table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse; margin-top: 4px;">'
               .    '<tr style="vertical-align: top;">'
               .      '<td style="padding: 16px 8px 8px 4px; width: 76px;">'
-              .        '<img src="' . htmlspecialchars($img, ENT_QUOTES) . '" alt="item" style="height: 64px; width: 64px; object-fit: cover; border-radius: 8px; background: #f5f5f5; display: block;">'
+              .        '<img src="' . htmlspecialchars($img, ENT_QUOTES) . '" alt="' . htmlspecialchars($it['product_name'], ENT_QUOTES) . '" width="64" height="64" style="height: 64px; width: 64px; object-fit: cover; border-radius: 8px; background: #f5f5f5; display: block; border: 0; outline: none; text-decoration: none;">'
               .      '</td>'
               .      '<td style="padding: 16px 8px 8px 8px; width: 100%;">'
               .        '<div style="font-weight: 600; color: #222;">' . htmlspecialchars($it['product_name']) . '</div>'
@@ -170,7 +198,6 @@ if ($order) {
     }
 }
 
-$siteUrl  = 'https://wittymart.co.ke'; // change to your real domain
 $orderUrl = $siteUrl . '/order_confirmation.php?order=' . urlencode($order_number);
 $shopUrl  = $siteUrl . '/shop.php';
 
