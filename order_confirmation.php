@@ -548,7 +548,7 @@ $page_title = 'Order Confirmed';
     <script>
         (function() {
             if (typeof emailjs !== 'undefined') {
-                emailjs.init("YOUR_EMAILJS_PUBLIC_KEY"); // TODO: replace
+                emailjs.init("EMAILJS_PUBLIC_KEY"); 
             }
         })();
 
@@ -585,7 +585,7 @@ $page_title = 'Order Confirmed';
                 if (params.to_email) {
                     statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending confirmation email…';
 
-                    emailjs.send("YOUR_SERVICE_ID", "YOUR_TEMPLATE_ID", params)
+                    emailjs.send("EMAILJS_SERVICE_ID", "EMAILJS_TEMPLATE_ID", params)
                         .then(function() {
                             statusEl.innerHTML = '<i class="fas fa-check-circle ok"></i> Confirmation email sent to ' + params.to_email;
                         })
