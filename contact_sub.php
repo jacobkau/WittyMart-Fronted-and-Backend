@@ -102,7 +102,7 @@ if ($formspreeId !== '') {
 // ---- Respond ----
 echo json_encode([
     'success' => true,
-    'message' => "Thank you, {$name}! Your message has been sent. We'll get back to you soon.",
+    'message' => "{$name}! Your message has been sent. We'll get back to you soon.",
     'id'      => $savedId,
 ]);
 exit;
