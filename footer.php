@@ -1,4 +1,4 @@
-    <!-- Footer -->
+<!-- Footer -->
     <footer class="footer">
         <div class="footer-row">
             <div class="footer-card">
@@ -22,7 +22,7 @@
             </div>
             <div class="footer-card">
                 <h2>Contact Us</h2>
-                <p>Email: <a href="mailto:kaujacob4@gmail.com" style="color:#02c786;">kaujacob4@gmail.com</a></p>
+                <p>Email: <a href="mailto:wittyhighbrowtechnologies@gmail.com" style="color:#02c786;">wittyhighbrowtechnologies@gmail.com</a></p>
                 <p>Phone: +254 768 374 497</p>
                 <p>Location: Nairobi, Kenya</p>
             </div>
@@ -44,6 +44,8 @@
                     <?php endif; ?>
                 </ul>
             </div>
+
+            <!--
             <div class="footer-card">
                 <h2>Follow Us</h2>
                 <ul>
@@ -53,6 +55,8 @@
                     <li><a href="#"><i class="fab fa-youtube"></i> YouTube</a></li>
                 </ul>
             </div>
+            -->
+
             <div class="footer-card">
                 <h2>Legal</h2>
                 <ul>
