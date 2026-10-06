@@ -125,7 +125,7 @@ if (!function_exists('generateInvoicePDF')) {
         $pdf->SetXY(15, 49);
         $pdf->Cell(90, 4, 'Nairobi, Kenya', 0, 0, 'L');
         $pdf->SetXY(15, 54);
-        $pdf->Cell(90, 4, 'support@wittymart.com', 0, 0, 'L');
+        $pdf->Cell(90, 4, 'wittyhighbrowtechnologies@gmail.com', 0, 0, 'L');
 
         // BILL TO
         $pdf->SetFont('Arial', 'B', 8);
@@ -332,7 +332,7 @@ if (!function_exists('generateInvoicePDF')) {
         $pdf->SetFont('Arial', '', 7.5);
         $pdf->SetTextColor($greyText[0], $greyText[1], $greyText[2]);
         $pdf->SetXY(20, $noticeY + 8.5);
-        $pdf->Cell(170, 4.5, 'For questions about this invoice, contact support@wittymart.com', 0, 0, 'L');
+        $pdf->Cell(170, 4.5, 'For questions about this invoice, contact wittyhighbrowtechnologies@gmail.com', 0, 0, 'L');
 
         // ============================================
         // FOOTER
