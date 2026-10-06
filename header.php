@@ -1,4 +1,3 @@
-
 <?php
 // Include config to get cart count
 require_once 'includes/config.php';
@@ -43,12 +42,12 @@ if ($isLoggedIn) {
             box-shadow: 0 2px 10px rgba(0,0,0,0.08);
             transition: box-shadow 0.3s ease;
         }
-        
+
         body.dark-mode header {
             background: #1a1a2e;
             box-shadow: 0 2px 10px rgba(0,0,0,0.3);
         }
-        
+
         /* Top Row - Logo, Search, Actions */
         .header-top {
             display: flex;
@@ -61,11 +60,11 @@ if ($isLoggedIn) {
             flex-wrap: wrap;
             border-bottom: 1px solid rgba(0,0,0,0.05);
         }
-        
+
         body.dark-mode .header-top {
             border-bottom-color: rgba(255,255,255,0.05);
         }
-        
+
         /* Bottom Row - Navigation */
         .header-bottom {
             background: #f8f9fa;
@@ -77,11 +76,11 @@ if ($isLoggedIn) {
             align-items: center;
             position: relative;
         }
-        
+
         body.dark-mode .header-bottom {
             background: #15152a;
         }
-        
+
         .header-bottom .nav-links {
             display: flex;
             align-items: center;
@@ -92,7 +91,7 @@ if ($isLoggedIn) {
             flex-wrap: wrap;
             justify-content: center;
         }
-        
+
         .header-bottom .nav-links li a {
             display: flex;
             align-items: center;
@@ -105,31 +104,31 @@ if ($isLoggedIn) {
             font-size: 14px;
             transition: all 0.3s ease;
         }
-        
+
         .header-bottom .nav-links li a:hover {
             background: rgba(5, 87, 60, 0.08);
             color: #05573c;
         }
-        
+
         .header-bottom .nav-links li a.active {
             background: #05573c;
             color: #fff !important;
         }
-        
+
         body.dark-mode .header-bottom .nav-links li a {
             color: #eee;
         }
-        
+
         body.dark-mode .header-bottom .nav-links li a:hover {
             background: rgba(255,255,255,0.08);
             color: #0a7a54;
         }
-        
+
         body.dark-mode .header-bottom .nav-links li a.active {
             background: #0a7a54;
             color: #fff !important;
         }
-        
+
         /* Logo */
         .logo {
             display: flex;
@@ -137,12 +136,12 @@ if ($isLoggedIn) {
             gap: 10px;
             flex-shrink: 0;
         }
-        
+
         .logo img {
             height: 40px;
             width: auto;
         }
-        
+
         .logo h1 {
             font-size: 20px;
             font-weight: 700;
@@ -150,13 +149,13 @@ if ($isLoggedIn) {
             margin: 0;
             white-space: nowrap;
         }
-        
+
         body.dark-mode .logo h1 {
             color: #0a7a54;
         }
-        
+
         /* ============================================
-           SEARCH BAR - FIXED
+           SEARCH BAR
            ============================================ */
         .search-wrapper {
             flex: 1;
@@ -164,7 +163,7 @@ if ($isLoggedIn) {
             min-width: 200px;
             position: relative;
         }
-        
+
         .search-form {
             display: flex;
             align-items: center;
@@ -174,23 +173,23 @@ if ($isLoggedIn) {
             transition: all 0.3s ease;
             border: 2px solid transparent;
         }
-        
+
         .search-form:focus-within {
             background: #fff;
             border-color: #05573c;
             box-shadow: 0 0 0 3px rgba(5, 87, 60, 0.1);
         }
-        
+
         body.dark-mode .search-form {
             background: #2a2a3e;
         }
-        
+
         body.dark-mode .search-form:focus-within {
             background: #1a1a2e;
             border-color: #0a7a54;
             box-shadow: 0 0 0 3px rgba(10, 122, 84, 0.2);
         }
-        
+
         .search-form input {
             flex: 1;
             border: none;
@@ -201,19 +200,19 @@ if ($isLoggedIn) {
             color: #333;
             min-width: 100px;
         }
-        
+
         body.dark-mode .search-form input {
             color: #eee;
         }
-        
+
         .search-form input::placeholder {
             color: #999;
         }
-        
+
         body.dark-mode .search-form input::placeholder {
             color: #777;
         }
-        
+
         .search-form .search-btn {
             background: #05573c;
             color: #fff;
@@ -229,16 +228,16 @@ if ($isLoggedIn) {
             gap: 6px;
             font-size: 13px;
         }
-        
+
         .search-form .search-btn:hover {
             background: #03402c;
             transform: scale(1.02);
         }
-        
+
         .search-form .search-btn i {
             font-size: 14px;
         }
-        
+
         /* Search suggestions dropdown */
         .search-suggestions {
             position: absolute;
@@ -255,11 +254,11 @@ if ($isLoggedIn) {
             margin-top: 4px;
             border: 1px solid #e0e0e0;
         }
-        
+
         .search-suggestions.active {
             display: block;
         }
-        
+
         .search-suggestions .suggestion-item {
             padding: 10px 18px;
             cursor: pointer;
@@ -271,51 +270,51 @@ if ($isLoggedIn) {
             text-decoration: none;
             color: #333;
         }
-        
+
         .search-suggestions .suggestion-item:hover {
             background: #f8f9fa;
         }
-        
+
         .search-suggestions .suggestion-item i {
             color: #05573c;
             font-size: 14px;
         }
-        
+
         .search-suggestions .suggestion-item .product-name {
             flex: 1;
         }
-        
+
         .search-suggestions .suggestion-item .product-price {
             color: #05573c;
             font-weight: 600;
             font-size: 13px;
         }
-        
+
         .search-suggestions .suggestion-item .product-category {
             font-size: 11px;
             color: #888;
         }
-        
+
         .search-suggestions .suggestion-empty {
             padding: 20px;
             text-align: center;
             color: #888;
         }
-        
+
         body.dark-mode .search-suggestions {
             background: #1a1a2e;
             border-color: #2a2a3e;
         }
-        
+
         body.dark-mode .search-suggestions .suggestion-item {
             border-bottom-color: #2a2a3e;
             color: #eee;
         }
-        
+
         body.dark-mode .search-suggestions .suggestion-item:hover {
             background: #2a2a3e;
         }
-        
+
         /* ============================================
            HEADER ACTIONS
            ============================================ */
@@ -325,7 +324,7 @@ if ($isLoggedIn) {
             gap: 8px;
             flex-shrink: 0;
         }
-        
+
         .header-cart {
             position: relative;
             display: inline-flex;
@@ -337,15 +336,15 @@ if ($isLoggedIn) {
             border-radius: 6px;
             transition: all 0.3s ease;
         }
-        
+
         .header-cart:hover {
             background: rgba(5, 87, 60, 0.1);
         }
-        
+
         .header-cart .cart-icon {
             font-size: 20px;
         }
-        
+
         .header-cart .cart-badge-sm {
             position: absolute;
             top: -5px;
@@ -363,11 +362,11 @@ if ($isLoggedIn) {
             padding: 0 4px;
             box-shadow: 0 2px 5px rgba(220, 53, 69, 0.3);
         }
-        
+
         .header-cart .cart-badge-sm.empty {
             display: none;
         }
-        
+
         .logout-btn {
             background: none;
             border: none;
@@ -378,16 +377,16 @@ if ($isLoggedIn) {
             border-radius: 6px;
             transition: all 0.3s ease;
         }
-        
+
         .logout-btn:hover {
             background: rgba(231, 76, 60, 0.1);
             color: #c0392b;
         }
-        
+
         body.dark-mode .logout-btn {
             color: #e74c3c;
         }
-        
+
         .theme-toggle {
             background: none;
             border: none;
@@ -398,19 +397,19 @@ if ($isLoggedIn) {
             transition: all 0.3s ease;
             color: #555;
         }
-        
+
         .theme-toggle:hover {
             background: rgba(0,0,0,0.05);
         }
-        
+
         body.dark-mode .theme-toggle {
             color: #ddd;
         }
-        
+
         body.dark-mode .theme-toggle:hover {
             background: rgba(255,255,255,0.1);
         }
-        
+
         .categories-btn {
             display: flex;
             align-items: center;
@@ -425,24 +424,24 @@ if ($isLoggedIn) {
             transition: all 0.3s ease;
             font-size: 13px;
         }
-        
+
         .categories-btn:hover {
             background: rgba(5, 87, 60, 0.08);
             border-color: #05573c;
             color: #05573c;
         }
-        
+
         body.dark-mode .categories-btn {
             color: #eee;
             border-color: #3a3a5e;
         }
-        
+
         body.dark-mode .categories-btn:hover {
             background: rgba(255,255,255,0.08);
             border-color: #0a7a54;
             color: #0a7a54;
         }
-        
+
         .menu-toggle {
             display: none;
             background: none;
@@ -454,15 +453,15 @@ if ($isLoggedIn) {
             border-radius: 6px;
             transition: all 0.3s ease;
         }
-        
+
         .menu-toggle:hover {
             background: rgba(0,0,0,0.05);
         }
-        
+
         body.dark-mode .menu-toggle {
             color: #eee;
         }
-        
+
         body.dark-mode .menu-toggle:hover {
             background: rgba(255,255,255,0.1);
         }
@@ -474,7 +473,7 @@ if ($isLoggedIn) {
             position: relative;
             display: inline-block;
         }
-        
+
         .user-dropdown .dropdown-toggle {
             display: flex;
             align-items: center;
@@ -489,21 +488,21 @@ if ($isLoggedIn) {
             border-radius: 6px;
             transition: all 0.3s ease;
         }
-        
+
         .user-dropdown .dropdown-toggle:hover {
             background: rgba(5, 87, 60, 0.08);
             color: #05573c;
         }
-        
+
         body.dark-mode .user-dropdown .dropdown-toggle {
             color: #eee;
         }
-        
+
         body.dark-mode .user-dropdown .dropdown-toggle:hover {
             background: rgba(255,255,255,0.08);
             color: #0a7a54;
         }
-        
+
         .user-dropdown .dropdown-toggle .user-avatar {
             width: 32px;
             height: 32px;
@@ -516,7 +515,7 @@ if ($isLoggedIn) {
             font-size: 14px;
             font-weight: 600;
         }
-        
+
         .user-dropdown .dropdown-menu {
             display: none;
             position: absolute;
@@ -531,45 +530,45 @@ if ($isLoggedIn) {
             overflow: hidden;
             border: 1px solid #e0e0e0;
         }
-        
+
         .user-dropdown .dropdown-menu.active {
             display: block;
         }
-        
+
         body.dark-mode .user-dropdown .dropdown-menu {
             background: #1a1a2e;
             border-color: #2a2a3e;
         }
-        
+
         .user-dropdown .dropdown-menu .dropdown-header {
             padding: 15px 20px;
             border-bottom: 1px solid #f0f0f0;
             background: #f8f9fa;
         }
-        
+
         body.dark-mode .user-dropdown .dropdown-menu .dropdown-header {
             background: #15152a;
             border-bottom-color: #2a2a3e;
         }
-        
+
         .user-dropdown .dropdown-menu .dropdown-header .dropdown-user-name {
             font-weight: 600;
             color: #333;
         }
-        
+
         body.dark-mode .user-dropdown .dropdown-menu .dropdown-header .dropdown-user-name {
             color: #eee;
         }
-        
+
         .user-dropdown .dropdown-menu .dropdown-header .dropdown-user-email {
             font-size: 12px;
             color: #888;
         }
-        
+
         body.dark-mode .user-dropdown .dropdown-menu .dropdown-header .dropdown-user-email {
             color: #999;
         }
-        
+
         .user-dropdown .dropdown-menu .dropdown-item {
             display: flex;
             align-items: center;
@@ -581,59 +580,59 @@ if ($isLoggedIn) {
             font-size: 14px;
             border-bottom: 1px solid #f0f0f0;
         }
-        
+
         .user-dropdown .dropdown-menu .dropdown-item:hover {
             background: #f8f9fa;
             color: #05573c;
         }
-        
+
         body.dark-mode .user-dropdown .dropdown-menu .dropdown-item {
             color: #eee;
             border-bottom-color: #2a2a3e;
         }
-        
+
         body.dark-mode .user-dropdown .dropdown-menu .dropdown-item:hover {
             background: #2a2a3e;
             color: #0a7a54;
         }
-        
+
         .user-dropdown .dropdown-menu .dropdown-item:last-child {
             border-bottom: none;
         }
-        
+
         .user-dropdown .dropdown-menu .dropdown-item i {
             width: 20px;
             text-align: center;
             color: #05573c;
         }
-        
+
         body.dark-mode .user-dropdown .dropdown-menu .dropdown-item i {
             color: #0a7a54;
         }
-        
+
         .user-dropdown .dropdown-menu .dropdown-divider {
             height: 1px;
             background: #f0f0f0;
             margin: 5px 0;
         }
-        
+
         body.dark-mode .user-dropdown .dropdown-menu .dropdown-divider {
             background: #2a2a3e;
         }
-        
+
         .user-dropdown .dropdown-menu .dropdown-item.text-danger {
             color: #dc3545;
         }
-        
+
         .user-dropdown .dropdown-menu .dropdown-item.text-danger i {
             color: #dc3545;
         }
-        
+
         .user-dropdown .dropdown-menu .dropdown-item.text-danger:hover {
             background: #f8d7da;
             color: #c82333;
         }
-        
+
         body.dark-mode .user-dropdown .dropdown-menu .dropdown-item.text-danger:hover {
             background: rgba(220, 53, 69, 0.2);
             color: #dc3545;
@@ -648,20 +647,19 @@ if ($isLoggedIn) {
                 max-width: 100%;
                 order: 3;
             }
-            
+
             .header-top {
                 gap: 10px;
             }
-            
+
             .header-bottom .nav-links {
                 display: none;
             }
-            
+
             .menu-toggle {
                 display: block;
             }
-            
-            /* Mobile nav - appears when menu toggle is clicked */
+
             .header-bottom .nav-links.mobile-open {
                 display: flex;
                 flex-direction: column;
@@ -677,11 +675,11 @@ if ($isLoggedIn) {
                 width: 100%;
                 gap: 2px;
             }
-            
+
             .header-bottom .nav-links.mobile-open li {
                 width: 100%;
             }
-            
+
             .header-bottom .nav-links.mobile-open li a {
                 display: block;
                 padding: 12px 15px;
@@ -689,30 +687,30 @@ if ($isLoggedIn) {
                 width: 100%;
                 font-size: 16px;
             }
-            
+
             .header-bottom .nav-links.mobile-open li a i {
                 margin-right: 10px;
                 width: 20px;
                 text-align: center;
             }
-            
+
             body.dark-mode .header-bottom .nav-links.mobile-open {
                 background: #1a1a2e;
                 border-top: 1px solid #2a2a3e;
             }
-            
+
             .header-bottom {
                 position: relative;
                 padding: 5px 20px;
                 min-height: 48px;
                 justify-content: flex-end;
             }
-            
+
             .header-bottom .menu-toggle {
                 display: block;
                 margin-left: auto;
             }
-            
+
             .header-bottom .nav-links.mobile-open {
                 justify-content: flex-start;
             }
@@ -722,53 +720,53 @@ if ($isLoggedIn) {
             .logo h1 {
                 font-size: 16px;
             }
-            
+
             .logo img {
                 height: 32px;
             }
-            
+
             .search-form {
                 border-radius: 20px;
                 padding: 2px 5px 2px 14px;
             }
-            
+
             .search-form .search-btn span {
                 display: none;
             }
-            
+
             .search-form .search-btn {
                 padding: 8px 14px;
                 border-radius: 50%;
             }
-            
+
             .search-form input {
                 font-size: 13px;
                 padding: 6px 0;
             }
-            
+
             .categories-btn span {
                 display: none;
             }
-            
+
             .categories-btn {
                 padding: 6px 10px;
             }
-            
+
             .header-top {
                 padding: 8px 12px;
                 gap: 8px;
             }
-            
+
             .header-bottom {
                 padding: 5px 12px;
             }
-            
+
             .user-dropdown .dropdown-toggle .user-avatar {
                 width: 28px;
                 height: 28px;
                 font-size: 12px;
             }
-            
+
             .user-dropdown .dropdown-toggle span {
                 display: none;
             }
@@ -778,35 +776,35 @@ if ($isLoggedIn) {
             .logo h1 {
                 font-size: 14px;
             }
-            
+
             .logo img {
                 height: 28px;
             }
-            
+
             .header-actions {
                 gap: 4px;
             }
-            
+
             .header-cart .cart-icon {
                 font-size: 18px;
             }
-            
+
             .search-form {
                 padding: 2px 5px 2px 12px;
             }
-            
+
             .search-form input {
                 font-size: 12px;
                 padding: 5px 0;
                 min-width: 60px;
             }
-            
+
             .search-form .search-btn {
                 padding: 6px 12px;
                 font-size: 12px;
             }
         }
-        
+
         /* ============================================
            SIDEBAR STYLES
            ============================================ */
@@ -819,30 +817,30 @@ if ($isLoggedIn) {
             margin: 0 10px 10px 10px;
             border-radius: 8px;
         }
-        
+
         .sidebar-user-info .user-details {
             flex: 1;
         }
-        
+
         .sidebar-user-info .user-name {
             font-weight: 600;
             color: #333;
             margin: 0;
             font-size: 14px;
         }
-        
+
         .sidebar-user-info .user-email {
             color: #888;
             margin: 2px 0 0;
             font-size: 12px;
         }
-        
+
         .sidebar-footer {
             padding: 15px 20px;
             border-top: 1px solid #e0e0e0;
             margin-top: 10px;
         }
-        
+
         .sidebar-logout {
             display: flex;
             align-items: center;
@@ -854,24 +852,24 @@ if ($isLoggedIn) {
             border-radius: 6px;
             transition: all 0.3s ease;
         }
-        
+
         .sidebar-logout:hover {
             background: rgba(231, 76, 60, 0.1);
             color: #c0392b;
         }
-        
+
         body.dark-mode .sidebar-user-info {
             background: #2a2a3e;
         }
-        
+
         body.dark-mode .sidebar-user-info .user-name {
             color: #eee;
         }
-        
+
         body.dark-mode .sidebar-user-info .user-email {
             color: #999;
         }
-        
+
         body.dark-mode .sidebar-footer {
             border-top-color: #3a3a5e;
         }
@@ -886,7 +884,7 @@ if ($isLoggedIn) {
                 <img src="images/logo.png" alt="WittyMart Logo">
                 <h1>WittyMart Shop</h1>
             </div>
-            
+
             <!-- Search Bar -->
             <div class="search-wrapper">
                 <form class="search-form" action="search.php" method="GET" id="searchForm">
@@ -896,26 +894,23 @@ if ($isLoggedIn) {
                         <span>Search</span>
                     </button>
                 </form>
-                <!-- Search Suggestions -->
                 <div class="search-suggestions" id="searchSuggestions"></div>
             </div>
-            
+
             <!-- Header Actions -->
             <div class="header-actions">
-                <!-- Cart Icon -->
                 <a href="cart.php" class="header-cart" title="View Cart">
                     <i class="fas fa-shopping-cart cart-icon"></i>
                     <span class="cart-badge-sm <?php echo $cartCount > 0 ? '' : 'empty'; ?>" id="headerCartBadge">
                         <?php echo $cartCount > 0 ? $cartCount : ''; ?>
                     </span>
                 </a>
-                
+
                 <?php if ($isLoggedIn): ?>
-                    <!-- User Dropdown -->
                     <div class="user-dropdown" id="userDropdown">
                         <button class="dropdown-toggle" onclick="toggleDropdown()" title="My Account">
                             <span class="user-avatar">
-                                <?php 
+                                <?php
                                 $initials = '';
                                 $words = explode(' ', $userName);
                                 foreach ($words as $word) {
@@ -953,26 +948,23 @@ if ($isLoggedIn) {
                         </div>
                     </div>
                 <?php else: ?>
-                    <!-- Login/Register Button -->
                     <a href="home.php" class="login-btn" style="display:flex; align-items:center; gap:6px; padding:8px 16px; border-radius:6px; background:#05573c; color:#fff; text-decoration:none; font-weight:500; font-size:14px; transition: all 0.3s ease;">
                         <i class="fas fa-sign-in-alt"></i> Login
                     </a>
                 <?php endif; ?>
-                
+
                 <button class="categories-btn" onclick="toggleSidebar()" title="Categories">
                     <i class="fas fa-th-list"></i>
                     <span>Categories</span>
                 </button>
             </div>
         </div>
-        
-        <!-- BOTTOM ROW: Navigation (Centered) -->
+
+        <!-- BOTTOM ROW: Navigation -->
         <div class="header-bottom">
             <?php
-            // Get the current page filename
             $current_page = basename($_SERVER['PHP_SELF']);
-            
-            // Define navigation links
+
             $nav_links = [
                 'index.php' => ['label' => 'Home', 'icon' => 'fa-home'],
                 'shop.php' => ['label' => 'Shop', 'icon' => 'fa-store'],
@@ -981,20 +973,19 @@ if ($isLoggedIn) {
                 'terms.php' => ['label' => 'Terms', 'icon' => 'fa-file-contract']
             ];
             ?>
-            
+
             <ul class="nav-links" id="navLinks">
-                <?php foreach ($nav_links as $page => $data): 
+                <?php foreach ($nav_links as $page => $data):
                     $active_class = ($current_page == $page) ? 'active' : '';
                 ?>
                     <li><a href="<?php echo $page; ?>" class="<?php echo $active_class; ?>">
                         <i class="fas <?php echo $data['icon']; ?>"></i> <?php echo $data['label']; ?>
                     </a></li>
                 <?php endforeach; ?>
-                
-                <!-- Theme Toggle moved to bottom row -->
+
                 <li><button class="theme-toggle" onclick="toggleTheme()" id="theme-icon" title="Switch to Dark Mode"><i class="fas fa-sun"></i></button></li>
             </ul>
-            
+
             <button class="menu-toggle" onclick="toggleMenu()" aria-label="Toggle Menu" id="menuToggleBtn">
                 <i class="fas fa-bars" id="menuIcon"></i>
             </button>
@@ -1044,16 +1035,19 @@ if ($isLoggedIn) {
     </div>
 
     <script>
-        // ============================================
-        // USER DROPDOWN TOGGLE
-        // ============================================
-        function toggleDropdown() {
-            const dropdown = document.getElementById('dropdownMenu');
-            dropdown.classList.toggle('active');
-        }
+    // ============================================
+    // HEADER SCRIPTS — ALL SCOPED TO AVOID COLLISIONS
+    // ============================================
+    (function () {
+        'use strict';
 
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function(event) {
+        // ---------- USER DROPDOWN TOGGLE ----------
+        window.toggleDropdown = function () {
+            const dropdown = document.getElementById('dropdownMenu');
+            if (dropdown) dropdown.classList.toggle('active');
+        };
+
+        document.addEventListener('click', function (event) {
             const dropdown = document.getElementById('userDropdown');
             const menu = document.getElementById('dropdownMenu');
             if (dropdown && menu && menu.classList.contains('active')) {
@@ -1063,83 +1057,71 @@ if ($isLoggedIn) {
             }
         });
 
-        // ============================================
-        // MOBILE MENU TOGGLE
-        // ============================================
-        function toggleMenu() {
+        // ---------- MOBILE MENU TOGGLE ----------
+        window.toggleMenu = function () {
             const navLinks = document.getElementById('navLinks');
             const menuIcon = document.getElementById('menuIcon');
-            
-            if (!navLinks) {
-                console.error('navLinks element not found');
-                return;
-            }
-            
-            navLinks.classList.toggle('mobile-open');
-            
-            if (navLinks.classList.contains('mobile-open')) {
-                if (menuIcon) menuIcon.className = 'fas fa-times';
-            } else {
-                if (menuIcon) menuIcon.className = 'fas fa-bars';
-            }
-        }
 
-        // Close menu when clicking outside
-        document.addEventListener('click', function(event) {
+            if (!navLinks) return;
+
+            navLinks.classList.toggle('mobile-open');
+
+            if (menuIcon) {
+                menuIcon.className = navLinks.classList.contains('mobile-open')
+                    ? 'fas fa-times'
+                    : 'fas fa-bars';
+            }
+        };
+
+        document.addEventListener('click', function (event) {
             const navLinks = document.getElementById('navLinks');
             const menuToggle = document.getElementById('menuToggleBtn');
             const headerBottom = document.querySelector('.header-bottom');
-            
+
             if (navLinks && navLinks.classList.contains('mobile-open')) {
-                if (!headerBottom.contains(event.target) && !menuToggle.contains(event.target)) {
+                if (headerBottom && menuToggle &&
+                    !headerBottom.contains(event.target) &&
+                    !menuToggle.contains(event.target)) {
                     navLinks.classList.remove('mobile-open');
                     const menuIcon = document.getElementById('menuIcon');
-                    if (menuIcon) {
-                        menuIcon.className = 'fas fa-bars';
-                    }
+                    if (menuIcon) menuIcon.className = 'fas fa-bars';
                 }
             }
         });
 
-        // Close menu when a link is clicked
-        document.querySelectorAll('.nav-links a').forEach(function(link) {
-            link.addEventListener('click', function() {
+        document.querySelectorAll('.nav-links a').forEach(function (link) {
+            link.addEventListener('click', function () {
                 const navLinks = document.getElementById('navLinks');
                 if (navLinks && navLinks.classList.contains('mobile-open')) {
                     navLinks.classList.remove('mobile-open');
                     const menuIcon = document.getElementById('menuIcon');
-                    if (menuIcon) {
-                        menuIcon.className = 'fas fa-bars';
-                    }
+                    if (menuIcon) menuIcon.className = 'fas fa-bars';
                 }
             });
         });
 
-        // ============================================
-        // SEARCH SUGGESTIONS (Live Search) - FIXED
-        // ============================================
+        // ---------- SEARCH SUGGESTIONS ----------
         const searchInput = document.getElementById('searchInput');
         const suggestions = document.getElementById('searchSuggestions');
         let searchTimeout;
 
-        if (searchInput) {
-            // Close suggestions when clicking outside
-            document.addEventListener('click', function(e) {
+        if (searchInput && suggestions) {
+            document.addEventListener('click', function (e) {
                 if (!e.target.closest('.search-wrapper')) {
                     suggestions.classList.remove('active');
                 }
             });
 
-            searchInput.addEventListener('input', function() {
+            searchInput.addEventListener('input', function () {
                 clearTimeout(searchTimeout);
                 const query = this.value.trim();
-                
+
                 if (query.length < 2) {
                     suggestions.classList.remove('active');
                     return;
                 }
-                
-                searchTimeout = setTimeout(function() {
+
+                searchTimeout = setTimeout(function () {
                     fetch('includes/ajax.php?action=search_products&q=' + encodeURIComponent(query))
                         .then(response => response.json())
                         .then(data => {
@@ -1168,54 +1150,44 @@ if ($isLoggedIn) {
                 }, 300);
             });
 
-            // Handle suggestion item clicks directly
-            suggestions.addEventListener('click', function(e) {
+            suggestions.addEventListener('click', function (e) {
                 const item = e.target.closest('.suggestion-item');
                 if (item) {
                     e.preventDefault();
                     const href = item.getAttribute('href');
-                    if (href) {
-                        window.location.href = href;
-                    }
+                    if (href) window.location.href = href;
                 }
             });
 
-            // Close suggestions when pressing Escape
-            searchInput.addEventListener('keydown', function(e) {
+            searchInput.addEventListener('keydown', function (e) {
                 if (e.key === 'Escape') {
                     suggestions.classList.remove('active');
                     this.blur();
                 }
             });
 
-            // Prevent form submission if no query
-            document.getElementById('searchForm').addEventListener('submit', function(e) {
-                if (!searchInput.value.trim()) {
-                    e.preventDefault();
-                }
-            });
+            const searchForm = document.getElementById('searchForm');
+            if (searchForm) {
+                searchForm.addEventListener('submit', function (e) {
+                    if (!searchInput.value.trim()) e.preventDefault();
+                });
+            }
         }
 
-        // ============================================
-        // CART COUNT REFRESH FUNCTION
-        // ============================================
-        function refreshCartCount() {
+        // ---------- CART COUNT REFRESH ----------
+        window.refreshCartCount = function () {
             if (!<?php echo json_encode($isLoggedIn); ?>) return;
-            
+
             fetch('cart.php?action=get_cart_count')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
                         const count = data.count;
-                        
-                        // Update header cart badge
                         const headerBadge = document.getElementById('headerCartBadge');
                         if (headerBadge) {
                             if (count > 0) {
                                 headerBadge.textContent = count;
                                 headerBadge.classList.remove('empty');
-                                headerBadge.classList.add('pulse');
-                                setTimeout(() => headerBadge.classList.remove('pulse'), 500);
                             } else {
                                 headerBadge.textContent = '';
                                 headerBadge.classList.add('empty');
@@ -1224,32 +1196,17 @@ if ($isLoggedIn) {
                     }
                 })
                 .catch(error => console.error('Error refreshing cart count:', error));
-        }
+        };
 
-        // ============================================
-        // LOGOUT FUNCTION
-        // ============================================
-        function logoutUser() {
-            if (confirm('Are you sure you want to logout?')) {
-                window.location.href = 'logout.php';
-            }
-        }
+        // Auto-refresh every 3 seconds
+        setInterval(window.refreshCartCount, 3000);
 
-        // ============================================
-        // AUTO-REFRESH CART COUNT
-        // ============================================
-        setInterval(refreshCartCount, 30000);
-
-        document.addEventListener('visibilitychange', function() {
-            if (!document.hidden) {
-                refreshCartCount();
-            }
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) window.refreshCartCount();
         });
 
-        // ============================================
-        // THEME TOGGLE
-        // ============================================
-        function toggleTheme() {
+        // ---------- THEME TOGGLE ----------
+        window.toggleTheme = function () {
             document.body.classList.toggle('dark-mode');
             const isDark = document.body.classList.contains('dark-mode');
             const icon = document.getElementById('theme-icon');
@@ -1258,11 +1215,11 @@ if ($isLoggedIn) {
                 icon.title = isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode';
             }
             localStorage.setItem('theme', isDark ? 'dark' : 'light');
-        }
+        };
 
         // Load saved theme
-        const savedTheme = localStorage.getItem('theme');
-        if (savedTheme === 'dark') {
+        const savedThemeHeader = localStorage.getItem('theme');
+        if (savedThemeHeader === 'dark') {
             document.body.classList.add('dark-mode');
             const icon = document.getElementById('theme-icon');
             if (icon) {
@@ -1271,10 +1228,8 @@ if ($isLoggedIn) {
             }
         }
 
-        // ============================================
-        // SIDEBAR TOGGLE
-        // ============================================
-        function toggleSidebar() {
+        // ---------- SIDEBAR TOGGLE ----------
+        window.toggleSidebar = function () {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebarOverlay');
             if (sidebar && overlay) {
@@ -1282,16 +1237,17 @@ if ($isLoggedIn) {
                 overlay.classList.toggle('active');
                 document.body.classList.toggle('sidebar-open');
             }
-        }
+        };
 
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             const overlay = document.getElementById('sidebarOverlay');
             if (overlay) {
-                overlay.addEventListener('click', function() {
-                    toggleSidebar();
+                overlay.addEventListener('click', function () {
+                    window.toggleSidebar();
                 });
             }
         });
+    })();
     </script>
 </body>
 </html>
