@@ -55,7 +55,10 @@ function isActive($page) {
     <a href="suppliers.php" class="<?php echo isActive('customers.php'); ?>">
         <i class="fas fa-truck"></i> Suppliers
     </a>
-
+<a href="contact_messages.php" class="<?php echo isActive('contact_messages.php'); ?>">
+        <i class="fas fa-envelope"></i>
+        <span>Contact Messages</span>
+    </a>
         <a href="categories.php" class="<?php echo isActive('categories.php'); ?>">
             <i class="fas fa-tags"></i> Categories
         </a>
