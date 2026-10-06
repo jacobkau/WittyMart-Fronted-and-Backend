@@ -1,8 +1,6 @@
 <?php
 // ============================================
-// OUTPUT BUFFERING — MUST BE FIRST
-// Captures any accidental output (warnings, BOMs, whitespace)
-// so we can discard it before sending JSON.
+// OUTPUT BUFFERING 
 // ============================================
 ob_start();
 
@@ -115,7 +113,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
                 
                 if ($stmt->execute([$username, $name, $phone, $email, $hashedPassword])) {
                     $userId = $pdo->lastInsertId();
-                    
+
+                    // [PATCH:register_home] Log the registration
+                    if (function_exists('logActivity')) {
+                        logActivity('register', "New user registered: {$email} (username: {$username})", $userId, $name);
+                    }
+
                     // Log the user in immediately after registration
                     $_SESSION['user_id']    = $userId;
                     $_SESSION['user_name']  = $name;
@@ -163,6 +166,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
                         $_SESSION['user_phone'] = $user['phone'] ?? '';
                         $_SESSION['user_role']  = $user['role'] ?? 'user';
                         $_SESSION['is_admin']   = ($user['role'] === 'admin');
+
+                        // [PATCH:login_home] Log the successful login
+                        if (function_exists('logActivity')) {
+                            logActivity('login', 'User logged in successfully', $user['id'], $user['name']);
+                        }
                         
                         $response = [
                             'success'  => true,
@@ -170,9 +178,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
                             'redirect' => ($user['role'] === 'admin') ? 'admin/dashboard.php' : 'welcome.php'
                         ];
                     } else {
+                        // [PATCH:failed_login_home] Log the failed attempt
+                        if (function_exists('logActivity')) {
+                            logActivity('failed_login', "Failed login attempt for email: {$email}");
+                        }
                         $response = ['success' => false, 'message' => 'Invalid email or password'];
                     }
                 } else {
+                    // [PATCH:failed_login_home] Log the failed attempt (email not found)
+                    if (function_exists('logActivity')) {
+                        logActivity('failed_login', "Failed login attempt for email: {$email}");
+                    }
                     $response = ['success' => false, 'message' => 'Invalid email or password'];
                 }
                 break;
