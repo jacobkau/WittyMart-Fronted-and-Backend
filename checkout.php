@@ -61,20 +61,23 @@ try {
     error_log('Addresses load: ' . $e->getMessage());
 }
 
-$selectedAddressId = intval($_SESSION['selected_address_id'] ?? 0);
+$selectedAddressId = $_SESSION['selected_address_id'] ?? 0;
 $selectedAddress   = null;
+$isPickup          = ($selectedAddressId === 'pickup');
 
-foreach ($userAddresses as $a) {
-    if ((int)$a['id'] === $selectedAddressId) { $selectedAddress = $a; break; }
+if (!$isPickup && $selectedAddressId) {
+    foreach ($userAddresses as $a) {
+        if ((int)$a['id'] === (int)$selectedAddressId) { $selectedAddress = $a; break; }
+    }
 }
-if (!$selectedAddress && !empty($userAddresses)) {
+if (!$isPickup && !$selectedAddress && !empty($userAddresses)) {
     foreach ($userAddresses as $a) if ($a['is_default']) { $selectedAddress = $a; break; }
     if (!$selectedAddress) $selectedAddress = $userAddresses[0];
     $selectedAddressId = (int)$selectedAddress['id'];
     $_SESSION['selected_address_id'] = $selectedAddressId;
 }
 
-if (!$selectedAddress) {
+if (!$isPickup && !$selectedAddress) {
     $_SESSION['flash_error'] = 'Please add a delivery address before checkout.';
     header('Location: cart.php');
     exit();
@@ -95,6 +98,7 @@ $totalAfterDiscount = max(0, $total - $discount);
 // TRANSPORT FEE
 // ============================================
 function countyTransportFee($county) {
+    if ($county === '__PICKUP__') return 0; // Office pickup = free
     $nearby = ['Nairobi','Kiambu','Machakos','Kajiado',"Murang'a",'Nyeri','Kirinyaga','Embu','Nakuru'];
     $mid    = ['Mombasa','Kisumu','Uasin Gishu','Kakamega','Meru','Laikipia','Bungoma','Kisii','Nyamira','Kericho','Bomet','Narok'];
     if (in_array($county, $nearby, true)) return 100;
@@ -102,7 +106,7 @@ function countyTransportFee($county) {
     return 200;
 }
 
-$transportFee = countyTransportFee($selectedAddress['county']);
+$transportFee = $isPickup ? 0 : countyTransportFee($selectedAddress['county']);
 $grandTotal   = $totalAfterDiscount + $transportFee;
 
 // ============================================
@@ -111,13 +115,20 @@ $grandTotal   = $totalAfterDiscount + $transportFee;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
     try {
         $payment_method  = sanitize($_POST['payment_method'] ?? '');
-        $post_address_id = intval($_POST['address_id'] ?? 0);
+        $post_address_id = $_POST['address_id'] ?? '';
         $mpesa_phone     = sanitize($_POST['mpesa_phone'] ?? '');
 
+        $isPickupPost = ($post_address_id === 'pickup');
         $validAddress = null;
-        foreach ($userAddresses as $a) if ((int)$a['id'] === $post_address_id) { $validAddress = $a; break; }
 
-        if (!$validAddress) {
+        if (!$isPickupPost) {
+            $post_address_id_int = intval($post_address_id);
+            foreach ($userAddresses as $a) {
+                if ((int)$a['id'] === $post_address_id_int) { $validAddress = $a; break; }
+            }
+        }
+
+        if (!$isPickupPost && !$validAddress) {
             $order_error = 'Please select a valid delivery address.';
         } elseif (empty($payment_method)) {
             $order_error = 'Please select a payment method.';
@@ -146,9 +157,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
             if ($stock_error) {
                 $pdo->rollBack();
             } else {
-                $transportFee = countyTransportFee($validAddress['county']);
-                $shipping_fee = $transportFee;
-                $order_total  = $totalAfterDiscount + $transportFee;
+                // Determine shipping details
+                if ($isPickupPost) {
+                    $shipping_fee        = 0;
+                    $shipping_address    = 'WittyMart Headquarters, Nairobi CBD (Office Pickup)';
+                    $shipping_city       = 'Nairobi';
+                    $delivery_county     = '__PICKUP__';
+                    $delivery_phone      = $user['phone'] ?? '';
+                    $delivery_recipient  = $user_name ?: 'Customer';
+                    $address_id          = null;
+                    $delivery_instructions = 'Office Pickup — customer will collect at WittyMart HQ, Nairobi CBD.';
+                } else {
+                    $transportFee   = countyTransportFee($validAddress['county']);
+                    $shipping_fee   = $transportFee;
+                    $shipping_address = trim(
+                        $validAddress['address_line'] . ', ' .
+                        $validAddress['county'] .
+                        (!empty($validAddress['city']) ? ', ' . $validAddress['city'] : '')
+                    );
+                    $shipping_city   = $validAddress['city'] ?? '';
+                    $delivery_county = $validAddress['county'];
+                    $delivery_phone  = $validAddress['phone'];
+                    $delivery_recipient = $validAddress['recipient_name'];
+                    $address_id      = $validAddress['id'];
+                    $delivery_instructions = $validAddress['delivery_instructions'] ?? '';
+                }
+
+                $order_total = $totalAfterDiscount + $shipping_fee;
 
                 // Order number
                 $order_number = null;
@@ -159,12 +194,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
                     if (!$check->fetchColumn()) { $order_number = $candidate; break; }
                 }
                 if (!$order_number) throw new Exception('Order number generation failed.');
-
-                $shipping_address = trim(
-                    $validAddress['address_line'] . ', ' .
-                    $validAddress['county'] .
-                    (!empty($validAddress['city']) ? ', ' . $validAddress['city'] : '')
-                );
 
                 // Insert order
                 $stmt = $pdo->prepare("
@@ -178,10 +207,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
                 $stmt->execute([
                     $user_id, $order_number, $order_total, $shipping_fee,
                     $payment_method, $payment_status,
-                    $shipping_address, $validAddress['city'] ?? '',
-                    $validAddress['delivery_instructions'] ?? '',
-                    $validAddress['county'], $validAddress['phone'],
-                    $validAddress['recipient_name'], $validAddress['id'],
+                    $shipping_address, $shipping_city,
+                    $delivery_instructions,
+                    $delivery_county, $delivery_phone,
+                    $delivery_recipient, $address_id,
                     $mpesa_phone
                 ]);
                 $order_id = $pdo->lastInsertId();
@@ -212,7 +241,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
                         $pdo->prepare("UPDATE coupons SET uses = uses + 1 WHERE id = ?")
                             ->execute([$_SESSION['coupon']['id']]);
                     } catch (PDOException $e) {
-                        // Column might be named used_count — try fallback
                         try {
                             $pdo->prepare("UPDATE coupons SET used_count = used_count + 1 WHERE id = ?")
                                 ->execute([$_SESSION['coupon']['id']]);
@@ -229,7 +257,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
 
                 logActivity('order_placed', 'Order #' . $order_number, $user_id, $user_name);
 
-                // Stash STK details in session for the deferred trigger
                 $stk_needed = in_array($payment_method, ['mpesa', 'paybill']) && !empty($mpesa_phone);
 
                 $_SESSION['order_success']  = true;
@@ -276,12 +303,16 @@ $page_title = 'Checkout';
             border-radius: 10px; padding: 16px 18px;
             margin-bottom: 20px; position: relative;
         }
+        .checkout-address.pickup {
+            background: #d4edda; border-color: #28a745;
+        }
         .checkout-address .addr-label {
             display: inline-block; font-size: 11px; font-weight: 700;
             padding: 2px 8px; border-radius: 10px;
             background: #05573c; color: #fff;
             margin-bottom: 8px; text-transform: uppercase;
         }
+        .checkout-address.pickup .addr-label { background: #28a745; }
         .checkout-address .addr-recipient { font-weight: 700; color: #222; font-size: 15px; margin-bottom: 4px; }
         .checkout-address .addr-line { color: #444; font-size: 14px; line-height: 1.6; }
         .checkout-address .addr-phone { color: #666; font-size: 13px; margin-top: 4px; }
@@ -294,6 +325,7 @@ $page_title = 'Checkout';
             font-size: 13px; font-weight: 600;
             color: #05573c; text-decoration: none;
         }
+        .checkout-address.pickup .change-addr-link { color: #155724; }
 
         .payment-methods {
             display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -342,6 +374,7 @@ $page_title = 'Checkout';
         .order-totals { margin-top: 20px; padding-top: 15px; border-top: 2px solid #f0f0f0; }
         .order-totals .total-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 15px; color: #555; }
         .order-totals .total-row.discount { color: #28a745; font-weight: 600; }
+        .order-totals .total-row.pickup-row { color: #28a745; font-weight: 700; }
         .order-totals .total-row.grand-total {
             font-size: 20px; font-weight: 700; color: #05573c;
             border-top: 2px solid #05573c;
@@ -386,27 +419,42 @@ $page_title = 'Checkout';
 
             <div class="checkout-container">
                 <div class="checkout-form">
-                    <h2><i class="fas fa-map-marker-alt"></i> Delivery Details</h2>
+                    <h2><i class="fas fa-map-marker-alt"></i> <?php echo $isPickup ? 'Pickup Details' : 'Delivery Details'; ?></h2>
 
-                    <div class="checkout-address">
-                        <span class="addr-label"><?php echo htmlspecialchars($selectedAddress['label']); ?></span>
-                        <a href="cart.php" class="change-addr-link"><i class="fas fa-exchange-alt"></i> Change</a>
-                        <div class="addr-recipient"><?php echo htmlspecialchars($selectedAddress['recipient_name']); ?></div>
-                        <div class="addr-line">
-                            <?php echo htmlspecialchars($selectedAddress['address_line']); ?><br>
-                            <?php echo htmlspecialchars($selectedAddress['county']); ?>
-                            <?php if (!empty($selectedAddress['city'])): ?>, <?php echo htmlspecialchars($selectedAddress['city']); ?><?php endif; ?>
+                    <?php if ($isPickup): ?>
+                        <div class="checkout-address pickup">
+                            <span class="addr-label">Pickup</span>
+                            <a href="cart.php" class="change-addr-link"><i class="fas fa-exchange-alt"></i> Change</a>
+                            <div class="addr-recipient"><i class="fas fa-store"></i> WittyMart Office Pickup</div>
+                            <div class="addr-line">
+                                WittyMart Headquarters<br>
+                                Nairobi CBD, Kenya
+                            </div>
+                            <div class="addr-phone"><i class="fas fa-phone"></i> +254 700 000 000</div>
+                            <div class="addr-instructions">
+                                <i class="fas fa-info-circle"></i> Collect your order at our offices. Transport fee is FREE.
+                            </div>
                         </div>
-                        <div class="addr-phone"><i class="fas fa-phone"></i> <?php echo htmlspecialchars($selectedAddress['phone']); ?></div>
-                        <?php if (!empty($selectedAddress['delivery_instructions'])): ?>
-                            <div class="addr-instructions"><i class="fas fa-comment-dots"></i> <?php echo htmlspecialchars($selectedAddress['delivery_instructions']); ?></div>
-                        <?php endif; ?>
-                    </div>
+                    <?php else: ?>
+                        <div class="checkout-address">
+                            <span class="addr-label"><?php echo htmlspecialchars($selectedAddress['label']); ?></span>
+                            <a href="cart.php" class="change-addr-link"><i class="fas fa-exchange-alt"></i> Change</a>
+                            <div class="addr-recipient"><?php echo htmlspecialchars($selectedAddress['recipient_name']); ?></div>
+                            <div class="addr-line">
+                                <?php echo htmlspecialchars($selectedAddress['address_line']); ?><br>
+                                <?php echo htmlspecialchars($selectedAddress['county']); ?>
+                                <?php if (!empty($selectedAddress['city'])): ?>, <?php echo htmlspecialchars($selectedAddress['city']); ?><?php endif; ?>
+                            </div>
+                            <div class="addr-phone"><i class="fas fa-phone"></i> <?php echo htmlspecialchars($selectedAddress['phone']); ?></div>
+                            <?php if (!empty($selectedAddress['delivery_instructions'])): ?>
+                                <div class="addr-instructions"><i class="fas fa-comment-dots"></i> <?php echo htmlspecialchars($selectedAddress['delivery_instructions']); ?></div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
 
                     <form method="POST" id="checkoutForm">
-                        <!-- Hidden input ensures place_order is always POSTed -->
                         <input type="hidden" name="place_order" value="1">
-                        <input type="hidden" name="address_id" value="<?php echo (int)$selectedAddress['id']; ?>">
+                        <input type="hidden" name="address_id" value="<?php echo $isPickup ? 'pickup' : (int)$selectedAddress['id']; ?>">
 
                         <div class="form-group">
                             <label>Payment Method <span style="color:#dc3545;">*</span></label>
@@ -479,10 +527,19 @@ $page_title = 'Checkout';
                                 <span>-Ksh <?php echo number_format($discount, 0); ?></span>
                             </div>
                         <?php endif; ?>
-                        <div class="total-row">
-                            <span>Transport (<?php echo htmlspecialchars($selectedAddress['county']); ?>)</span>
-                            <span>Ksh <?php echo number_format($transportFee, 0); ?></span>
-                        </div>
+
+                        <?php if ($isPickup): ?>
+                            <div class="total-row pickup-row">
+                                <span><i class="fas fa-store"></i> Office Pickup (Nairobi CBD)</span>
+                                <span>FREE</span>
+                            </div>
+                        <?php else: ?>
+                            <div class="total-row">
+                                <span>Transport (<?php echo htmlspecialchars($selectedAddress['county']); ?>)</span>
+                                <span>Ksh <?php echo number_format($transportFee, 0); ?></span>
+                            </div>
+                        <?php endif; ?>
+
                         <div class="total-row grand-total">
                             <span>Total</span>
                             <span>Ksh <?php echo number_format($grandTotal, 0); ?></span>
@@ -520,8 +577,6 @@ $page_title = 'Checkout';
             }
         }
 
-        // Disable the button AFTER the browser has serialized the form.
-        // Otherwise place_order gets dropped from the POST body.
         document.getElementById('checkoutForm').addEventListener('submit', function(e) {
             const btn = document.getElementById('placeOrderBtn');
             const checked = document.querySelector('input[name="payment_method"]:checked');
