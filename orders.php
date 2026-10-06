@@ -19,6 +19,7 @@ if (isset($_GET['invoice'])) {
         $stmt = $pdo->prepare("SELECT * FROM order_items WHERE order_id = ?");
         $stmt->execute([$order_id]);
         $items = $stmt->fetchAll();
+        require_once 'includes/invoice_pdf.php';
 
         $pdf = generateInvoicePDF($order, $items, getCurrentUser());
         header('Content-Type: application/pdf');
