@@ -1,9 +1,8 @@
 <?php
 // ============================================
-// ONE-TIME PATCH: Add logActivity() calls
-// Run: php apply_logging_patch.php
-//   or visit: https://your-site/apply_logging_patch.php?dry=1 (preview)
-//            https://your-site/apply_logging_patch.php           (apply)
+// RETRY PATCH: Fix the 6 previously-failed insertions
+// Run: https://your-site/apply_logging_patch.php?dry=1   (preview)
+//      https://your-site/apply_logging_patch.php         (apply)
 // ============================================
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
@@ -18,19 +17,19 @@ if (!$dryRun) @mkdir($backupDir, 0755, true);
  * Insert block AFTER the FIRST occurrence of a marker.
  */
 function insertAfterMarker($filePath, $marker, $block, $idTag, $dryRun, $backupDir) {
-    if (!file_exists($filePath)) return ['skip', "File not found"];
+    if (!file_exists($filePath)) return ['skip', "File not found: " . basename($filePath)];
     $content = file_get_contents($filePath);
     if (strpos($content, "[PATCH:{$idTag}]") !== false) return ['skip', "Already patched ({$idTag})"];
 
     $pos = strpos($content, $marker);
-    if ($pos === false) return ['fail', "Marker not found: " . substr($marker, 0, 60)];
+    if ($pos === false) return ['fail', "Marker not found: " . substr($marker, 0, 70)];
 
     $lineEnd  = strpos($content, "\n", $pos);
     if ($lineEnd === false) return ['fail', "No newline after marker"];
     $insertAt = $lineEnd + 1;
 
     $newContent = substr($content, 0, $insertAt)
-                . "\n    // [PATCH:{$idTag}] Added by apply_logging_patch.php\n"
+                . "\n    // [PATCH:{$idTag}] Added by patch.php\n"
                 . $block . "\n"
                 . substr($content, $insertAt);
 
@@ -46,18 +45,18 @@ function insertAfterMarker($filePath, $marker, $block, $idTag, $dryRun, $backupD
  * Insert block BEFORE the FIRST occurrence of a marker.
  */
 function insertBeforeMarker($filePath, $marker, $block, $idTag, $dryRun, $backupDir) {
-    if (!file_exists($filePath)) return ['skip', "File not found"];
+    if (!file_exists($filePath)) return ['skip', "File not found: " . basename($filePath)];
     $content = file_get_contents($filePath);
     if (strpos($content, "[PATCH:{$idTag}]") !== false) return ['skip', "Already patched ({$idTag})"];
 
     $pos = strpos($content, $marker);
-    if ($pos === false) return ['fail', "Marker not found: " . substr($marker, 0, 60)];
+    if ($pos === false) return ['fail', "Marker not found: " . substr($marker, 0, 70)];
 
     $lineStart = strrpos(substr($content, 0, $pos), "\n");
     $lineStart = ($lineStart === false) ? 0 : $lineStart + 1;
 
     $newContent = substr($content, 0, $lineStart)
-                . "    // [PATCH:{$idTag}] Added by apply_logging_patch.php\n"
+                . "    // [PATCH:{$idTag}] Added by patch.php\n"
                 . $block . "\n\n"
                 . substr($content, $lineStart);
 
@@ -70,367 +69,116 @@ function insertBeforeMarker($filePath, $marker, $block, $idTag, $dryRun, $backup
 }
 
 // ============================================
-// PATCH LIST — TAILORED TO YOUR ACTUAL CODE
+// PATCHES — matching YOUR actual code
 // ============================================
 $patches = [
 
     // ---------------------------------------------
-    // 1. home.php — register user
+    // 1. home.php — REGISTER (insert after successful INSERT execute)
     // ---------------------------------------------
     [
         'file'     => $ROOT . '/home.php',
-        'marker'   => "INSERT INTO users (name, email, password, role)",
+        'marker'   => '$userId = $pdo->lastInsertId();',
         'block'    => <<<'PHP'
-    // Log new user registration (fires after the INSERT query above is prepared)
-    // NOTE: If registration succeeds later in the flow, this log will still be useful
+                    // [PATCH:register_home] Log the registration
+                    if (function_exists('logActivity')) {
+                        logActivity('register', "New user registered: {$email} (username: {$username})", $userId, $name);
+                    }
 PHP,
         'id'       => 'register_home',
-        'position' => 'before',
+        'position' => 'after',
     ],
 
     // ---------------------------------------------
-    // 2. home.php — login success
+    // 2. home.php — LOGIN (insert after $_SESSION assignments)
     // ---------------------------------------------
     [
         'file'     => $ROOT . '/home.php',
-        'marker'   => "\$_SESSION['user_id'] = ",
+        'marker'   => "\$_SESSION['is_admin']   = (\$user['role'] === 'admin');",
         'block'    => <<<'PHP'
-    if (function_exists('logActivity') && !empty($loginUserId)) {
-        logActivity('login', 'User logged in successfully', $loginUserId, $loginUserName ?? null);
-    }
+                        // [PATCH:login_home] Log the login
+                        if (function_exists('logActivity')) {
+                            logActivity('login', 'User logged in successfully', $user['id'], $user['name']);
+                        }
 PHP,
         'id'       => 'login_home',
         'position' => 'after',
     ],
 
     // ---------------------------------------------
-    // 3. product.php — wishlist toggle (unused here but safe)
+    // 3. home.php — FAILED LOGIN (insert before the else that returns error)
     // ---------------------------------------------
     [
-        'file'     => $ROOT . '/product.php',
-        'marker'   => "formData.append('ajax_action', 'toggle_wishlist');",
+        'file'     => $ROOT . '/home.php',
+        'marker'   => "\$response = ['success' => false, 'message' => 'Invalid email or password'];",
         'block'    => <<<'PHP'
-                // [PATCH:product_wishlist_log] Log wishlist toggle from product page
-                if (function_exists('logActivity')) {
-                    logActivity('toggle_wishlist', "Product {$productId}");
-                }
+                    // [PATCH:failed_login_home] Log the failed attempt
+                    if (function_exists('logActivity')) {
+                        logActivity('failed_login', "Failed login attempt for email: {$email}");
+                    }
 PHP,
-        'id'       => 'product_wishlist_client',
-        'position' => 'after',
-    ],
-
-    // ---------------------------------------------
-    // 4. subscribe.php — newsletter subscribe
-    // ---------------------------------------------
-    [
-        'file'     => $ROOT . '/subscribe.php',
-        'marker'   => "// Log activity (if helper exists)",
-        'block'    => <<<'PHP'
-    // [PATCH:newsletter_subscribe] Log the subscription
-    if (function_exists('logActivity')) {
-        $logUserId   = $_SESSION['user_id']   ?? null;
-        $logUserName = $_SESSION['user_name'] ?? null;
-        logActivity('newsletter_subscribe', "Newsletter subscription: {$email}", $logUserId, $logUserName);
-    }
-PHP,
-        'id'       => 'newsletter_subscribe',
+        'id'       => 'failed_login_home',
         'position' => 'before',
     ],
 
     // ---------------------------------------------
-    // 5. wishlist.php — toggle wishlist
-    // ---------------------------------------------
-    [
-        'file'     => $ROOT . '/wishlist.php',
-        'marker'   => "echo json_encode([\n            'success'        => true,",
-        'block'    => <<<'PHP'
-        // [PATCH:wishlist_toggle] Log the wishlist toggle
-        if (function_exists('logActivity')) {
-            logActivity(
-                'toggle_wishlist',
-                ($added ? 'Added' : 'Removed') . " product ID {$product_id} " . ($added ? 'to' : 'from') . " wishlist",
-                $user_id,
-                $_SESSION['user_name'] ?? null
-            );
-        }
-PHP,
-        'id'       => 'wishlist_toggle',
-        'position' => 'before',
-    ],
-
-    // ---------------------------------------------
-    // 6. orders.php — invoice download
-    // ---------------------------------------------
-    [
-        'file'     => $ROOT . '/orders.php',
-        'marker'   => "header('Content-Type: application/pdf');",
-        'block'    => <<<'PHP'
-        // [PATCH:invoice_download] Log the invoice download
-        if (function_exists('logActivity')) {
-            logActivity('download_invoice', "Downloaded invoice for order #{$order['order_number']}", $user_id, $_SESSION['user_name'] ?? null);
-        }
-PHP,
-        'id'       => 'invoice_download',
-        'position' => 'before',
-    ],
-
-    // ---------------------------------------------
-    // 7. logout.php — log logout before session_destroy
-    // ---------------------------------------------
-    [
-        'file'     => $ROOT . '/logout.php',
-        'marker'   => "session_destroy();",
-        'block'    => <<<'PHP'
-// [PATCH:logout] Log the logout before destroying the session
-if (session_status() === PHP_SESSION_ACTIVE && !empty($_SESSION['user_id']) && function_exists('logActivity')) {
-    logActivity('logout', 'User logged out', $_SESSION['user_id'], $_SESSION['user_name'] ?? null);
-}
-PHP,
-        'id'       => 'logout',
-        'position' => 'before',
-    ],
-
-    // ---------------------------------------------
-    // 8. cart.php — add_to_cart (already there, but ensure)
+    // 4. cart.php — REMOVE ITEM
     // ---------------------------------------------
     [
         'file'     => $ROOT . '/cart.php',
-        'marker'   => "\$response = ['success'=>true, 'message'=>'Added to cart', 'cart_count'=>getCartCount()];",
+        'marker'   => "\$stmt->execute([\$cart_id, \$user_id]);\n                \$response = ['success'=>true, 'cart_count'=>getCartCount()];\n                break;\n\n            case 'clear_cart':",
         'block'    => <<<'PHP'
-                // [PATCH:add_to_cart_log] Log the cart addition
-                if (function_exists('logActivity')) {
-                    logActivity('add_to_cart', "Product {$product_id} × {$quantity}", $user_id, $_SESSION['user_name'] ?? null);
-                }
-PHP,
-        'id'       => 'add_to_cart_log',
-        'position' => 'before',
-    ],
-
-    // ---------------------------------------------
-    // 9. cart.php — remove_item (already added)
-    // ---------------------------------------------
-    [
-        'file'     => $ROOT . '/cart.php',
-        'marker'   => "case 'remove_item':\n                \$cart_id = intval(\$_POST['cart_id'] ?? 0);",
-        'block'    => <<<'PHP'
-                // [PATCH:remove_item_log] Log item removed
+                // [PATCH:remove_item_log] Log the removal
                 if (function_exists('logActivity')) {
                     logActivity('remove_from_cart', "Cart item {$cart_id}", $user_id, $_SESSION['user_name'] ?? null);
                 }
 PHP,
         'id'       => 'remove_item_log',
-        'position' => 'after',
-    ],
-
-    // ---------------------------------------------
-    // 10. cart.php — clear_cart
-    // ---------------------------------------------
-    [
-        'file'     => $ROOT . '/cart.php',
-        'marker'   => "case 'clear_cart':",
-        'block'    => <<<'PHP'
-                // [PATCH:clear_cart_log] Log the cart clear
-                if (function_exists('logActivity')) {
-                    logActivity('clear_cart', 'Cleared the entire cart', $user_id, $_SESSION['user_name'] ?? null);
-                }
-PHP,
-        'id'       => 'clear_cart_log',
-        'position' => 'after',
-    ],
-
-    // ---------------------------------------------
-    // 11. cart.php — save_address
-    // ---------------------------------------------
-    [
-        'file'     => $ROOT . '/cart.php',
-        'marker'   => "\$response = ['success'=>true, 'message'=>'Address saved', 'id'=>\$saved_id];",
-        'block'    => <<<'PHP'
-                // [PATCH:save_address_log] Log the address save
-                if (function_exists('logActivity')) {
-                    logActivity('save_address', ($addr_id > 0 ? 'Updated' : 'Added') . " address for county {$county}", $user_id, $_SESSION['user_name'] ?? null);
-                }
-PHP,
-        'id'       => 'save_address_log',
         'position' => 'before',
     ],
 
     // ---------------------------------------------
-    // 12. admin/products.php — add
+    // 5. admin/product.php — ADD (verify then add if missing)
     // ---------------------------------------------
     [
-        'file'     => $ROOT . '/admin/products.php',
-        'marker'   => "$message = 'Product added successfully!'",
-        'block'    => <<<'PHP'
-                            if (function_exists('logActivity')) {
-                                logActivity('add_product', "Added product: {$name} (SKU: {$sku})", $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? null);
-                            }
-PHP,
-        'id'       => 'add_product',
-        'position' => 'before',
-    ],
-
-    // ---------------------------------------------
-    // 13. admin/products.php — update
-    // ---------------------------------------------
-    [
-        'file'     => $ROOT . '/admin/products.php',
-        'marker'   => "$message = 'Product updated successfully!'",
-        'block'    => <<<'PHP'
-                            if (function_exists('logActivity')) {
-                                logActivity('update_product', "Updated product: {$name} (ID: {$id})", $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? null);
-                            }
-PHP,
-        'id'       => 'update_product',
-        'position' => 'before',
-    ],
-
-    // ---------------------------------------------
-    // 14. admin/products.php — delete
-    // ---------------------------------------------
-    [
-        'file'     => $ROOT . '/admin/products.php',
-        'marker'   => "$message = 'Product deleted successfully!'",
-        'block'    => <<<'PHP'
-                    if (function_exists('logActivity')) {
-                        logActivity('delete_product', "Deleted product: " . ($product['name'] ?? 'ID ' . $id), $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? null);
-                    }
-PHP,
-        'id'       => 'delete_product',
-        'position' => 'before',
-    ],
-
-    // ---------------------------------------------
-    // 15. admin/orders.php — status update
-    // ---------------------------------------------
-    [
-        'file'     => $ROOT . '/admin/orders.php',
-        'marker'   => "$message = 'Order status updated successfully!'",
-        'block'    => <<<'PHP'
-                    if (function_exists('logActivity')) {
-                        logActivity('update_order', "Order #{$id} → {$status}", $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? null);
-                    }
-PHP,
-        'id'       => 'update_order_status',
-        'position' => 'before',
-    ],
-
-    // ---------------------------------------------
-    // 16. admin/orders.php — delete
-    // ---------------------------------------------
-    [
-        'file'     => $ROOT . '/admin/orders.php',
-        'marker'   => "$message = 'Order deleted successfully!'",
-        'block'    => <<<'PHP'
-                if (function_exists('logActivity')) {
-                    logActivity('delete_order', "Order #{$id} deleted", $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? null);
-                }
-PHP,
-        'id'       => 'delete_order',
-        'position' => 'before',
-    ],
-
-    // ---------------------------------------------
-    // 17. admin/mpesa_statements.php — mark paid
-    // ---------------------------------------------
-    [
-        'file'     => $ROOT . '/admin/mpesa_statements.php',
-        'marker'   => "$message = 'Order marked as paid.'",
-        'block'    => <<<'PHP'
-                    if (function_exists('logActivity')) {
-                        logActivity('mpesa_mark_paid', "Marked order ID {$order_id} as paid" . ($receipt ? " (receipt: {$receipt})" : ''), $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? null);
-                    }
-PHP,
-        'id'       => 'mpesa_mark_paid',
-        'position' => 'before',
-    ],
-
-    // ---------------------------------------------
-    // 18. admin/mpesa_statements.php — mark failed
-    // ---------------------------------------------
-    [
-        'file'     => $ROOT . '/admin/mpesa_statements.php',
-        'marker'   => "$message = 'Order marked as failed.'",
-        'block'    => <<<'PHP'
-                    if (function_exists('logActivity')) {
-                        logActivity('mpesa_mark_failed', "Marked order ID {$order_id} as failed", $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? null);
-                    }
-PHP,
-        'id'       => 'mpesa_mark_failed',
-        'position' => 'before',
-    ],
-
-    // ---------------------------------------------
-    // 19. admin/mpesa_statements.php — retry STK
-    // ---------------------------------------------
-    [
-        'file'     => $ROOT . '/admin/mpesa_statements.php',
-        'marker'   => "$message = 'STK Push re-sent to '",
+        'file'     => $ROOT . '/admin/manage_products.php',
+        'marker'   => "$message = 'Product added successfully! ' . $upload_message;",
         'block'    => <<<'PHP'
                         if (function_exists('logActivity')) {
-                            logActivity('mpesa_retry_stk', "Re-sent STK push for order #{$order_id}", $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? null);
+                            logActivity('add_product', "Added product: {$name} (SKU: {$sku})", $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? null);
                         }
 PHP,
-        'id'       => 'mpesa_retry_stk',
+        'id'       => 'add_product_v2',
         'position' => 'before',
     ],
 
     // ---------------------------------------------
-    // 20. admin/newsletter.php — delete
+    // 6. admin/product.php — UPDATE
     // ---------------------------------------------
     [
-        'file'     => $ROOT . '/admin/newsletter.php',
-        'marker'   => "$message = 'Subscriber deleted.'",
+        'file'     => $ROOT . '/admin/manage_products.php',
+        'marker'   => "$message = 'Product updated successfully! ' . $upload_message;",
         'block'    => <<<'PHP'
-            if (function_exists('logActivity')) {
-                logActivity('delete_subscriber', "Deleted newsletter subscriber ID {$id}", $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? null);
-            }
+                        if (function_exists('logActivity')) {
+                            logActivity('update_product', "Updated product: {$name} (ID: {$id})", $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? null);
+                        }
 PHP,
-        'id'       => 'delete_subscriber',
+        'id'       => 'update_product_v2',
         'position' => 'before',
     ],
 
     // ---------------------------------------------
-    // 21. admin/newsletter.php — toggle status
+    // 7. admin/product.php — DELETE
     // ---------------------------------------------
     [
-        'file'     => $ROOT . '/admin/newsletter.php',
-        'marker'   => "$message = 'Status updated.'",
+        'file'     => $ROOT . '/admin/manage_products.php',
+        'marker'   => "$message = 'Product deleted successfully!';",
         'block'    => <<<'PHP'
-            if (function_exists('logActivity')) {
-                logActivity('toggle_subscriber', "Toggled status of subscriber ID {$id}", $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? null);
-            }
+                    if (function_exists('logActivity')) {
+                        logActivity('delete_product', "Deleted product ID: {$id}", $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? null);
+                    }
 PHP,
-        'id'       => 'toggle_subscriber',
-        'position' => 'before',
-    ],
-
-    // ---------------------------------------------
-    // 22. admin/contact_messages.php — mark read
-    // ---------------------------------------------
-    [
-        'file'     => $ROOT . '/admin/contact_messages.php',
-        'marker'   => "$message = 'Message marked as read.'",
-        'block'    => <<<'PHP'
-            if (function_exists('logActivity')) {
-                logActivity('contact_mark_read', "Message ID {$id}", $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? null);
-            }
-PHP,
-        'id'       => 'contact_mark_read',
-        'position' => 'before',
-    ],
-
-    // ---------------------------------------------
-    // 23. admin/contact_messages.php — delete
-    // ---------------------------------------------
-    [
-        'file'     => $ROOT . '/admin/contact_messages.php',
-        'marker'   => "$message = 'Message deleted.'",
-        'block'    => <<<'PHP'
-            if (function_exists('logActivity')) {
-                logActivity('contact_delete', "Message ID {$id}", $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? null);
-            }
-PHP,
-        'id'       => 'contact_delete',
+        'id'       => 'delete_product_v2',
         'position' => 'before',
     ],
 ];
@@ -443,7 +191,7 @@ header('Content-Type: text/html; charset=utf-8');
 <!DOCTYPE html>
 <html><head>
 <meta charset="UTF-8">
-<title>logActivity Patch</title>
+<title>logActivity Patch (Retry)</title>
 <style>
     body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; max-width: 900px; margin: 30px auto; padding: 20px; background: #f8f9fa; line-height: 1.6; }
     h1 { color: #05573c; }
@@ -461,12 +209,12 @@ header('Content-Type: text/html; charset=utf-8');
 </style>
 </head><body>
 
-<h1>🔧 logActivity() Patch Applier</h1>
+<h1>🔧 logActivity() Patch — Retry</h1>
 
 <?php if ($dryRun): ?>
     <p style="background:#fff3cd; padding:14px 18px; border-radius:8px; color:#856404;"><strong>DRY-RUN MODE</strong> — no files modified. <a href="?">Run for real</a></p>
 <?php else: ?>
-    <p style="background:#d4edda; padding:14px 18px; border-radius:8px; color:#155724;"><strong>LIVE MODE</strong> — files will be patched. Backups: <code><?php echo htmlspecialchars(basename($backupDir)); ?></code> <a href="?dry=1">Preview only</a></p>
+    <p style="background:#d4edda; padding:14px 18px; border-radius:8px; color:#155724;"><strong>LIVE MODE</strong> — files patched. Backups: <code><?php echo htmlspecialchars(basename($backupDir)); ?></code> <a href="?dry=1">Preview only</a></p>
 <?php endif; ?>
 
 <div class="box">
@@ -500,25 +248,26 @@ foreach ($patches as $p) {
 <p><span class="ok">✅ Patched: </span><?php echo $stats['ok']; ?></p>
 <p><span class="skip">⏭️ Skipped: </span><?php echo $stats['skip']; ?></p>
 <p><span class="fail">❌ Failed: </span><?php echo $stats['fail']; ?></p>
-<?php if (!$dryRun && $stats['ok'] > 0): ?>
-    <p>Backups: <code><?php echo htmlspecialchars(basename($backupDir)); ?>/</code></p>
-<?php endif; ?>
 </div>
 
 <div class="box actions">
 <h2>Next Steps</h2>
 <ol>
-    <li>Review <strong>failed</strong> rows — those files need manual fixes.</li>
-    <li>Test the app: register, login, wishlist, order, invoice, logout.</li>
-    <li>Check <code>activity_logs</code> table for new rows.</li>
-    <li><strong>Delete this file</strong> and the backup folder after verifying.</li>
+    <li>Test: register a new user, log in, log in with wrong password, remove item from cart, add/edit/delete a product.</li>
+    <li>Check DB:
+        <pre style="background:#f0f0f0; padding:10px; border-radius:6px; font-size:12px;">SELECT action, description, user_name, created_at
+FROM activity_logs
+ORDER BY id DESC
+LIMIT 20;</pre>
+    </li>
+    <li><strong>Delete this file</strong> after verifying.</li>
 </ol>
 <?php if ($dryRun): ?>
     <a class="btn" href="?">▶ Apply for real</a>
     <a class="btn secondary" href="index.php">Cancel</a>
 <?php else: ?>
     <a class="btn secondary" href="index.php">← Back to site</a>
-    <a class="btn danger" href="?" onclick="return confirm('Run again? (Safe)');">Run again</a>
+    <a class="btn danger" href="?" onclick="return confirm('Run again? (Safe — already-patched files are skipped)');">Run again</a>
 <?php endif; ?>
 </div>
 
