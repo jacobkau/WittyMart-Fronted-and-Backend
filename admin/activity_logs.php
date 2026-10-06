@@ -80,7 +80,7 @@ $filterAction = trim($_GET['filter_action'] ?? '');
 $filterUser   = trim($_GET['filter_user']   ?? '');
 $filterFrom   = trim($_GET['filter_from']   ?? '');
 $filterTo     = trim($_GET['filter_to']     ?? '');
-$filterSource = trim($_GET['filter_source'] ?? ''); // 'activity_log', 'activity_logs', or ''
+$filterSource = trim($_GET['filter_source'] ?? '');
 
 $page    = isset($_GET['page']) ? max(1, intval($_GET['page'])) : 1;
 $perPage = 20;
@@ -213,9 +213,12 @@ if ($unionSql) {
 
 // ============================================
 // CLEAR OLD LOGS — clears from BOTH tables
+// Reports per-table counts and never fails silently
 // ============================================
 $message = '';
 $messageType = '';
+$clearDetails = [];
+
 if (isset($_GET['clear']) && $_GET['clear'] === 'true') {
     $days = isset($_GET['days']) ? intval($_GET['days']) : 30;
 
@@ -223,37 +226,82 @@ if (isset($_GET['clear']) && $_GET['clear'] === 'true') {
         $message = 'Please enter a valid number of days (0 or greater).';
         $messageType = 'error';
     } else {
-        try {
-            $totalDeleted = 0;
+        // Helper: safely check if a table exists (in `public` schema)
+        $tableExists = function ($pdo, $tbl) {
+            try {
+                $stmt = $pdo->prepare("
+                    SELECT 1
+                    FROM information_schema.tables
+                    WHERE table_schema = 'public' AND table_name = ?
+                    LIMIT 1
+                ");
+                $stmt->execute([$tbl]);
+                return (bool)$stmt->fetchColumn();
+            } catch (PDOException $e) {
+                error_log("tableExists({$tbl}) error: " . $e->getMessage());
+                return false;
+            }
+        };
 
-            foreach (['activity_logs', 'activity_log'] as $tbl) {
-                if (!$pdo->query("SELECT to_regclass('public.$tbl')")->fetchColumn()) {
+        $totalDeleted = 0;
+        $tablesToClear = ['activity_logs', 'activity_log']; // plural first, singular second
+
+        foreach ($tablesToClear as $tbl) {
+            // Skip tables that don't exist
+            if (!$tableExists($pdo, $tbl)) {
+                $clearDetails[] = "⚠ Table `{$tbl}` does not exist — skipped.";
+                continue;
+            }
+
+            try {
+                // 1. Count how many rows will be deleted
+                $countStmt = $pdo->prepare("
+                    SELECT COUNT(*) FROM {$tbl}
+                    WHERE created_at < NOW() - make_interval(days => ?)
+                ");
+                $countStmt->execute([$days]);
+                $toDelete = (int)$countStmt->fetchColumn();
+
+                // 2. Also count TOTAL rows in the table (for context)
+                $totalInTable = (int)$pdo->query("SELECT COUNT(*) FROM {$tbl}")->fetchColumn();
+
+                if ($toDelete === 0) {
+                    $clearDetails[] = "ℹ `{$tbl}`: 0 row(s) older than {$days} day(s) (table has {$totalInTable} total).";
                     continue;
                 }
+
+                // 3. Actually delete
                 $delStmt = $pdo->prepare("
                     DELETE FROM {$tbl}
                     WHERE created_at < NOW() - make_interval(days => ?)
                 ");
                 $delStmt->execute([$days]);
-                $totalDeleted += $delStmt->rowCount();
-            }
+                $deleted = $delStmt->rowCount();
+                $totalDeleted += $deleted;
 
-            if ($totalDeleted === 0) {
-                $message = "Nothing to delete — no logs older than {$days} day(s).";
-                $messageType = 'error';
-            } else {
-                $dayLabel = $days === 1 ? '1 day' : "{$days} days";
-                $message = "✓ Cleared {$totalDeleted} log(s) older than {$dayLabel}.";
-                $messageType = 'success';
-
-                if (function_exists('logActivity')) {
-                    logActivity('clear_logs', "Cleared {$totalDeleted} log(s) older than {$dayLabel}",
-                        $_SESSION['user_id'] ?? null, $_SESSION['user_name'] ?? 'Admin');
-                }
+                $remaining = $totalInTable - $deleted;
+                $clearDetails[] = "✓ `{$tbl}`: deleted {$deleted} row(s), {$remaining} remaining.";
+            } catch (PDOException $e) {
+                error_log("Clear {$tbl} error: " . $e->getMessage());
+                $clearDetails[] = "✗ `{$tbl}`: FAILED — " . htmlspecialchars($e->getMessage());
             }
-        } catch (PDOException $e) {
-            error_log('Clear logs error: ' . $e->getMessage());
-            $message = 'Failed to clear logs: ' . $e->getMessage();
+        }
+
+        if ($totalDeleted > 0) {
+            $dayLabel = $days === 1 ? '1 day' : "{$days} days";
+            $message = "Cleared {$totalDeleted} log(s) older than {$dayLabel}.";
+            $messageType = 'success';
+
+            if (function_exists('logActivity')) {
+                logActivity(
+                    'clear_logs',
+                    "Cleared {$totalDeleted} log(s) across both tables (older than {$dayLabel})",
+                    $_SESSION['user_id'] ?? null,
+                    $_SESSION['user_name'] ?? 'Admin'
+                );
+            }
+        } else {
+            $message = "Nothing to delete — no logs older than {$days} day(s) in either table.";
             $messageType = 'error';
         }
     }
@@ -336,11 +384,23 @@ $page_title = 'Activity Logs';
                 <div class="alert alert-<?php echo $messageType; ?>">
                     <i class="fas fa-<?php echo $messageType === 'success' ? 'check-circle' : 'exclamation-circle'; ?>"></i>
                     <?php echo htmlspecialchars($message); ?>
+
+                    <?php if (!empty($clearDetails)): ?>
+                        <ul style="margin:10px 0 0 20px; font-size:13px;">
+                            <?php foreach ($clearDetails as $line): ?>
+                                <li><?php echo $line; /* already escaped where needed */ ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
 
             <div class="admin-card">
                 <div class="card-body">
+
+                    <!-- ============================================
+                         FILTER TOOLBAR
+                         ============================================ -->
                     <form method="GET" class="logs-filter" style="padding:14px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; border-bottom:1px solid #eee;">
                         <div class="search-box" style="flex:1; min-width:220px;">
                             <i class="fas fa-search"></i>
@@ -386,6 +446,7 @@ $page_title = 'Activity Logs';
                         <?php endif; ?>
                     </form>
 
+                    <!-- Local text filter on rendered rows -->
                     <div class="table-toolbar" style="padding:14px;">
                         <div class="search-box">
                             <i class="fas fa-search"></i>
@@ -438,6 +499,7 @@ $page_title = 'Activity Logs';
                             </tbody>
                         </table>
 
+                        <!-- Pagination (keeps filters) -->
                         <?php if ($totalPages > 1): ?>
                             <div class="pagination no-print">
                                 <?php if ($page > 1): ?>
@@ -472,6 +534,9 @@ $page_title = 'Activity Logs';
                         <p class="text-muted text-center" style="padding: 40px 0;">
                             <i class="fas fa-inbox" style="font-size: 48px; display: block; margin-bottom: 10px; opacity: 0.5;"></i>
                             No activity logs found
+                            <?php if ($filterAction || $filterUser || $filterFrom || $filterTo || $filterSource): ?>
+                                <br><small style="color:#999;">(Filters are applied — try clearing them)</small>
+                            <?php endif; ?>
                         </p>
                     <?php endif; ?>
                 </div>
@@ -479,6 +544,9 @@ $page_title = 'Activity Logs';
         </main>
     </div>
 
+    <!-- ============================================
+         HIDDEN PRINT TABLE (all filtered rows)
+         ============================================ -->
     <div class="print-only-table">
         <div class="print-header">
             <h1>WittyMart — Activity Logs</h1>
