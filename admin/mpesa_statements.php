@@ -56,7 +56,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
 }
 
 // ============================================
-// HANDLE MANUAL ACTIONS
+// HANDLE MANUAL ACTIONS (reconcile / mark failed)
 // ============================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -110,7 +110,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             case 'retry_stk':
                 $order_id = intval($_POST['id'] ?? 0);
                 if ($order_id) {
-                    // Fetch order
                     $stmt = $pdo->prepare("SELECT * FROM orders WHERE id = ?");
                     $stmt->execute([$order_id]);
                     $order = $stmt->fetch();
@@ -224,12 +223,11 @@ foreach ($orders as $o) {
     }
 }
 
-// Status counts for filter chips
 $status_counts = [
-    'all'        => $total_orders,
-    'paid'       => $paid_orders,
-    'awaiting'   => $awaiting_orders,
-    'failed'     => $failed_orders,
+    'all'      => $total_orders,
+    'paid'     => $paid_orders,
+    'awaiting' => $awaiting_orders,
+    'failed'   => $failed_orders,
 ];
 
 $page_title = 'M-Pesa Statements';
@@ -254,10 +252,10 @@ $page_title = 'M-Pesa Statements';
             display: inline-block;
             text-transform: capitalize;
         }
-        .status-paid      { background-color: #28a745; }
-        .status-awaiting  { background-color: #17a2b8; }
-        .status-pending   { background-color: #6c757d; }
-        .status-failed    { background-color: #dc3545; }
+        .status-paid       { background-color: #28a745; }
+        .status-awaiting   { background-color: #17a2b8; }
+        .status-pending    { background-color: #6c757d; }
+        .status-failed     { background-color: #dc3545; }
         .status-processing { background-color: #0d6efd; }
 
         /* ===== RECEIPT CODE ===== */
@@ -353,7 +351,7 @@ $page_title = 'M-Pesa Statements';
             box-shadow: 0 0 0 3px rgba(5, 87, 60, 0.1);
         }
 
-        /* ===== CATEGORY CHIPS (status chips) ===== */
+        /* ===== STATUS CHIPS ===== */
         .category-chips {
             display: flex;
             flex-wrap: wrap;
@@ -452,6 +450,15 @@ $page_title = 'M-Pesa Statements';
         .amount-cell { font-weight: 700; color: #05573c; white-space: nowrap; }
         .phone-cell { font-family: 'SF Mono', 'Courier New', monospace; font-size: 12px; }
         .date-cell { font-size: 12px; color: #666; white-space: nowrap; }
+
+        .order-link {
+            color: #05573c;
+            font-weight: 600;
+            text-decoration: none;
+        }
+        .order-link:hover {
+            text-decoration: underline;
+        }
 
         .action-buttons {
             display: flex;
@@ -664,9 +671,11 @@ $page_title = 'M-Pesa Statements';
                                             data-date="<?php echo htmlspecialchars(substr($dateForFilter, 0, 10)); ?>"
                                             data-search="<?php echo htmlspecialchars($searchText); ?>">
                                             <td>
-                                                <a href="../order_confirmation.php?order=<?php echo urlencode($o['order_number']); ?>"
+                                                <!-- ===== ORDER NUMBER → ADMIN ORDER DETAILS ===== -->
+                                                <a href="orders.php?view=<?php echo (int)$o['id']; ?>"
                                                    target="_blank"
-                                                   style="color:#05573c; font-weight:600; text-decoration:none;">
+                                                   rel="noopener"
+                                                   class="order-link">
                                                     <?php echo htmlspecialchars($o['order_number']); ?>
                                                 </a>
                                             </td>
@@ -708,7 +717,10 @@ $page_title = 'M-Pesa Statements';
                                             <td>
                                                 <div class="action-buttons">
                                                     <?php if ($ps === 'paid'): ?>
-                                                        <button class="btn-sm info" title="View order" onclick="window.open('../order_confirmation.php?order=<?php echo urlencode($o['order_number']); ?>','_blank')">
+                                                        <!-- ===== VIEW → ADMIN ORDER DETAILS ===== -->
+                                                        <button class="btn-sm info"
+                                                                title="View order in admin"
+                                                                onclick="window.open('orders.php?view=<?php echo (int)$o['id']; ?>','_blank')">
                                                             <i class="fas fa-eye"></i>
                                                         </button>
                                                     <?php elseif ($ps === 'failed'): ?>
@@ -828,21 +840,17 @@ $page_title = 'M-Pesa Statements';
 
                 var show = true;
 
-                // Chip filter
                 if (activeStatus && rowStatus !== activeStatus.toLowerCase()) {
                     show = false;
                 }
 
-                // Dropdown status filter
                 if (show && statusVal && rowStatus !== statusVal.toLowerCase()) {
                     show = false;
                 }
 
-                // Date range
                 if (show && dateFrom && rowDate && rowDate < dateFrom) show = false;
                 if (show && dateTo   && rowDate && rowDate > dateTo)   show = false;
 
-                // Search
                 if (show && searchVal && rowSearch.indexOf(searchVal) === -1) {
                     show = false;
                 }
