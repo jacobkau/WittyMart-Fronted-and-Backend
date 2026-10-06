@@ -16,7 +16,7 @@
                 <h2>Subscribe to Our Newsletter</h2>
                 <form id="newsletter-form" onsubmit="subscribeNewsletter(event)">
                     <input type="email" id="newsletter-email" placeholder="Enter your email" required>
-                    <button type="submit">Subscribe</button>
+                    <button type="submit" id="newsletter-btn">Subscribe</button>
                 </form>
                 <div id="newsletter-message" style="margin-top: 8px; font-size: 13px; display: none;"></div>
             </div>
@@ -76,41 +76,96 @@
 
     <script>
     // ============================================
-    // FOOTER SCRIPTS — ALL SCOPED TO AVOID COLLISIONS
+    // FOOTER SCRIPTS
     // ============================================
     (function () {
         'use strict';
 
-        // ---------- NEWSLETTER SUBSCRIPTION ----------
+        // ============================================
+        // FORMSPREE ENDPOINT 
+        // ============================================
+        const FORMSPREE_FORM_ID = <?php echo json_encode(getenv('FORMSPREE_FORM_ID') ?: ''); ?>;
+        const FORMSPREE_ENDPOINT = FORMSPREE_FORM_ID
+            ? 'https://formspree.io/f/' + FORMSPREE_FORM_ID
+            : '';
+
+        // ============================================
+        // NEWSLETTER SUBSCRIPTION 
+        // ============================================
         window.subscribeNewsletter = function (event) {
             event.preventDefault();
 
             const emailInput = document.getElementById('newsletter-email');
-            const messageDiv = document.getElementById('newsletter-message');
-            const email = emailInput.value;
+            const btn        = document.getElementById('newsletter-btn');
+            const email      = (emailInput?.value || '').trim();
 
             if (!email) {
                 showNewsletterMessage('Please enter your email address.', 'error');
                 return;
             }
 
-            fetch('subscribe.php', {
+            // Basic email sanity check
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                showNewsletterMessage('Please enter a valid email address.', 'error');
+                return;
+            }
+
+            if (!FORMSPREE_ENDPOINT) {
+                console.error('Formspree form ID is not configured (FORMSPREE_FORM_ID env var missing).');
+                showNewsletterMessage('Subscription service is not configured. Please try again later.', 'error');
+                return;
+            }
+
+            // Disable button while submitting
+            const originalBtnHTML = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Subscribing…';
+            }
+
+            showNewsletterMessage('Subscribing…', 'info');
+
+            fetch(FORMSPREE_ENDPOINT, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: email })
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    email: email,
+                    source: 'footer_newsletter',
+                    page: window.location.pathname,
+                    _subject: 'New WittyMart newsletter subscriber'
+                })
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
+            .then(async (response) => {
+                const data = await response.json().catch(() => ({}));
+                if (response.ok) {
+                    return { ok: true, data: data };
+                }
+                // Formspree returns errors in `errors` array
+                const msg = (data.errors && data.errors.length)
+                    ? data.errors.map(e => e.message).join(', ')
+                    : (data.error || 'Subscription failed. Please try again.');
+                return { ok: false, message: msg };
+            })
+            .then((result) => {
+                if (result.ok) {
                     showNewsletterMessage('Thank you for subscribing!', 'success');
-                    emailInput.value = '';
+                    if (emailInput) emailInput.value = '';
                 } else {
-                    showNewsletterMessage(data.message || 'Subscription failed. Please try again.', 'error');
+                    showNewsletterMessage(result.message, 'error');
                 }
             })
-            .catch(error => {
-                console.error('Error:', error);
-                showNewsletterMessage('An error occurred. Please try again.', 'error');
+            .catch((error) => {
+                console.error('Newsletter subscription error:', error);
+                showNewsletterMessage('Network error. Please try again.', 'error');
+            })
+            .finally(() => {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalBtnHTML || 'Subscribe';
+                }
             });
         };
 
@@ -119,15 +174,27 @@
             if (!messageDiv) return;
             messageDiv.textContent = message;
             messageDiv.style.display = 'block';
-            messageDiv.style.color = type === 'success' ? '#28a745' : '#dc3545';
 
-            setTimeout(() => {
-                messageDiv.style.opacity = '0';
-                setTimeout(() => {
-                    messageDiv.style.display = 'none';
-                    messageDiv.style.opacity = '1';
-                }, 500);
-            }, 5000);
+            if (type === 'success') {
+                messageDiv.style.color = '#28a745';
+            } else if (type === 'info') {
+                messageDiv.style.color = '#0c5460';
+            } else {
+                messageDiv.style.color = '#dc3545';
+            }
+
+            // Auto-hide only for success/error (keep 'info' visible during submit)
+            if (type !== 'info') {
+                clearTimeout(messageDiv._hideTimer);
+                messageDiv._hideTimer = setTimeout(() => {
+                    messageDiv.style.transition = 'opacity 0.4s ease';
+                    messageDiv.style.opacity = '0';
+                    setTimeout(() => {
+                        messageDiv.style.display = 'none';
+                        messageDiv.style.opacity = '1';
+                    }, 400);
+                }, 5000);
+            }
         }
 
         // ---------- DARK MODE TOGGLE ----------
