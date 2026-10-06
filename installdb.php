@@ -27,11 +27,13 @@ try {
         .badge-new { background: #28a745; }
         .badge-exists { background: #fd7e14; }
         .badge-err { background: #dc3545; }
+        .badge-critical { background: #dc3545; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.6;} }
     </style>";
     echo "</head><body>";
 
     echo "<h1>🛠️ WittyMart – Database Installer</h1>";
-    echo "<p style='color:#666;'>Sets up the product image gallery and supporting tables/columns.</p>";
+    echo "<p style='color:#666;'>Sets up the product image gallery, M-Pesa payment columns, and supporting tables/columns.</p>";
 
     $summary = [
         'created'  => [],
@@ -321,55 +323,94 @@ try {
     echo "</div>";
 
     // ============================================
-// 6. ORDERS TABLE – M-PESA COLUMNS
-// ============================================
-echo "<div class='box'>";
-echo "<h2>6. Orders Table – M-Pesa Columns <span class='badge badge-new'>REQUIRED</span></h2>";
+    // 6. ORDERS TABLE – M-PESA PAYMENT COLUMNS
+    // ============================================
+    echo "<div class='box'>";
+    echo "<h2>6. Orders Table – M-Pesa Payment Columns <span class='badge badge-critical'>REQUIRED</span></h2>";
+    echo "<p>These columns are required for STK Push and payment callback handling.</p>";
 
-$order_columns = [
-    'mpesa_checkout_id' => "ALTER TABLE orders ADD COLUMN mpesa_checkout_id VARCHAR(64);",
-    'mpesa_receipt'     => "ALTER TABLE orders ADD COLUMN mpesa_receipt VARCHAR(64);",
-    'paid_at'           => "ALTER TABLE orders ADD COLUMN paid_at TIMESTAMP;",
-];
-
-foreach ($order_columns as $col => $sql) {
-    echo "<h3>• Column: <code>orders.$col</code></h3>";
-    if (columnExists($pdo, 'orders', $col)) {
-        echo "<p class='warn'>⚠ Already exists – skipped</p>";
-        $summary['skipped'][] = "orders.$col";
+    if (!tableExists($pdo, 'orders')) {
+        echo "<p class='err'>✗ orders table missing – cannot add columns</p>";
+        $summary['errors'][] = 'orders table missing';
     } else {
-        try {
-            $pdo->exec($sql);
-            echo "<p class='ok'>✓ Created</p>";
-            $summary['created'][] = "orders.$col";
-        } catch (PDOException $e) {
-            echo "<p class='err'>✗ " . htmlspecialchars($e->getMessage()) . "</p>";
-            $summary['errors'][] = "orders.$col: " . $e->getMessage();
-        }
-    }
-}
+        $order_columns = [
+            'mpesa_checkout_id' => [
+                'sql'    => "ALTER TABLE orders ADD COLUMN mpesa_checkout_id VARCHAR(64);",
+                'reason' => 'Stores the CheckoutRequestID returned by Safaricom STK Push so the callback can find the order.',
+            ],
+            'mpesa_receipt' => [
+                'sql'    => "ALTER TABLE orders ADD COLUMN mpesa_receipt VARCHAR(64);",
+                'reason' => 'Stores the M-Pesa receipt number (e.g. SLK7X8Y9Z) on successful payment.',
+            ],
+            'paid_at' => [
+                'sql'    => "ALTER TABLE orders ADD COLUMN paid_at TIMESTAMP;",
+                'reason' => 'Timestamp when payment was confirmed by Safaricom.',
+            ],
+            'payment_failure_reason' => [
+                'sql'    => "ALTER TABLE orders ADD COLUMN payment_failure_reason VARCHAR(255);",
+                'reason' => 'Stores the ResultDesc when a payment fails (for debugging).',
+            ],
+        ];
 
-// Index for callback lookups
-$order_indexes = [
-    'idx_orders_mpesa_checkout_id' => "CREATE INDEX idx_orders_mpesa_checkout_id ON orders(mpesa_checkout_id);",
-];
-foreach ($order_indexes as $name => $sql) {
-    echo "<h3>• Index: <code>$name</code></h3>";
-    if (indexExists($pdo, $name)) {
-        echo "<p class='warn'>⚠ Already exists – skipped</p>";
-        $summary['skipped'][] = $name;
-    } else {
-        try {
-            $pdo->exec($sql);
-            echo "<p class='ok'>✓ Created</p>";
-            $summary['created'][] = $name;
-        } catch (PDOException $e) {
-            echo "<p class='err'>✗ " . htmlspecialchars($e->getMessage()) . "</p>";
-            $summary['errors'][] = "$name: " . $e->getMessage();
+        foreach ($order_columns as $col => $info) {
+            echo "<h3>• Column: <code>orders.$col</code></h3>";
+            echo "<p style='color:#888; font-size:13px; margin:4px 0 8px;'>" . htmlspecialchars($info['reason']) . "</p>";
+            if (columnExists($pdo, 'orders', $col)) {
+                echo "<p class='warn'>⚠ Already exists – skipped</p>";
+                $summary['skipped'][] = "orders.$col";
+            } else {
+                try {
+                    $pdo->exec($info['sql']);
+                    echo "<p class='ok'>✓ Created</p>";
+                    $summary['created'][] = "orders.$col";
+                } catch (PDOException $e) {
+                    echo "<p class='err'>✗ " . htmlspecialchars($e->getMessage()) . "</p>";
+                    $summary['errors'][] = "orders.$col: " . $e->getMessage();
+                }
+            }
         }
+
+        // Index for fast callback lookups
+        $order_indexes = [
+            'idx_orders_mpesa_checkout_id' => [
+                'sql'    => "CREATE INDEX idx_orders_mpesa_checkout_id ON orders(mpesa_checkout_id);",
+                'reason' => 'Speeds up the callback lookup: WHERE mpesa_checkout_id = ?',
+            ],
+            'idx_orders_payment_status' => [
+                'sql'    => "CREATE INDEX idx_orders_payment_status ON orders(payment_status);",
+                'reason' => 'Speeds up admin dashboard and order lists filtered by payment status.',
+            ],
+        ];
+
+        foreach ($order_indexes as $name => $info) {
+            echo "<h3>• Index: <code>$name</code></h3>";
+            echo "<p style='color:#888; font-size:13px; margin:4px 0 8px;'>" . htmlspecialchars($info['reason']) . "</p>";
+            if (indexExists($pdo, $name)) {
+                echo "<p class='warn'>⚠ Already exists – skipped</p>";
+                $summary['skipped'][] = $name;
+            } else {
+                try {
+                    $pdo->exec($info['sql']);
+                    echo "<p class='ok'>✓ Created</p>";
+                    $summary['created'][] = $name;
+                } catch (PDOException $e) {
+                    echo "<p class='err'>✗ " . htmlspecialchars($e->getMessage()) . "</p>";
+                    $summary['errors'][] = "$name: " . $e->getMessage();
+                }
+            }
+        }
+
+        // Verify
+        echo "<h3>• Verification</h3>";
+        echo "<ul>";
+        foreach (array_keys($order_columns) as $col) {
+            $exists = columnExists($pdo, 'orders', $col);
+            $icon = $exists ? '✅' : '❌';
+            echo "<li>$icon <code>orders.$col</code></li>";
+        }
+        echo "</ul>";
     }
-}
-echo "</div>";
+    echo "</div>";
 
     // ============================================
     // SUMMARY
@@ -403,10 +444,19 @@ echo "</div>";
         echo "<p class='ok'>No errors. All good!</p>";
     }
 
+    // Special callout if M-Pesa fix succeeded
+    if (in_array('orders.mpesa_checkout_id', $summary['created'])) {
+        echo "<div style='background:#d4edda; color:#155724; padding:14px 18px; border-radius:8px; margin-top:16px; border-left:4px solid #28a745;'>";
+        echo "<strong>🎉 M-Pesa fix applied!</strong><br>";
+        echo "Your <code>orders.mpesa_checkout_id</code> column has been added. Future STK Push callbacks will now correctly match orders and flip <code>payment_status</code> to <code>paid</code>.";
+        echo "</div>";
+    }
+
     echo "</div>";
 
     echo "<p style='margin-top:30px; text-align:center;'>";
     echo "<a href='admin/products.php' class='btn'>← Go to Admin Products</a> &nbsp; ";
+    echo "<a href='orders.php' class='btn' style='background:#6c8d7b;'>My Orders</a> &nbsp; ";
     echo "<a href='index.php' class='btn' style='background:#6c757d;'>← Back to Home</a>";
     echo "</p>";
 
