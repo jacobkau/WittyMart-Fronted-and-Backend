@@ -1,44 +1,10 @@
 <?php
-session_start();
-
-// ===== INCLUDE CONFIG TO GET DATABASE CONNECTION =====
-require_once 'includes/config.php';  // This defines $pdo
-
-/**
- * Log an activity
- */
-function logActivity($action, $description = '', $user_id = null, $user_name = null) {
-    global $pdo;
-    
-    // Check if PDO is available
-    if (!$pdo) {
-        error_log('PDO connection not available for logging');
-        return false;
-    }
-    
-    // Get current user if not provided
-    if ($user_id === null && isset($_SESSION['user_id'])) {
-        $user_id = $_SESSION['user_id'];
-        $user_name = $_SESSION['user_name'] ?? null;
-    }
-    
-    // Get IP address
-    $ip_address = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
-    
-    // Get user agent
-    $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-    
-    try {
-        $stmt = $pdo->prepare("
-            INSERT INTO activity_logs (user_id, user_name, action, description, ip_address, user_agent) 
-            VALUES (?, ?, ?, ?, ?, ?)
-        ");
-        return $stmt->execute([$user_id, $user_name, $action, $description, $ip_address, $user_agent]);
-    } catch (PDOException $e) {
-        error_log('Log activity error: ' . $e->getMessage());
-        return false;
-    }
-}
+// ============================================
+// ADMIN LOGOUT
+// ============================================
+// config.php already starts the session AND
+// defines logActivity(), so we don't redeclare them here.
+require_once 'includes/config.php';
 
 // ===== LOG LOGOUT =====
 if (isset($_SESSION['user_id'])) {
@@ -51,6 +17,22 @@ if (isset($_SESSION['user_id'])) {
 }
 
 // ===== DESTROY SESSION =====
+$_SESSION = [];
+
+// Destroy the session cookie too (clean logout)
+if (ini_get("session.use_cookies")) {
+    $params = session_get_cookie_params();
+    setcookie(
+        session_name(),
+        '',
+        time() - 42000,
+        $params["path"],
+        $params["domain"],
+        $params["secure"],
+        $params["httponly"]
+    );
+}
+
 session_destroy();
 ?>
 <!DOCTYPE html>
