@@ -1,6 +1,6 @@
 <?php
 // ============================================
-// WITTYMART RECEIPT (printable / downloadable)
+// WITTYMART RECEIPT 
 // ============================================
 require_once 'includes/config.php';
 
@@ -47,9 +47,16 @@ if (!$order) {
 $isPaid = ($order['payment_status'] === 'paid');
 
 $siteName    = 'WittyMart';
-$siteEmail   = 'support@wittymart.co.ke';
-$sitePhone   = '+254 700 000 000';
+$siteEmail   = 'wittyhighbrowtechnologies@gmail.com';
+$sitePhone   = '+254 768 374 497';
 $siteAddress = 'WittyMart HQ, Nairobi CBD, Kenya';
+
+// ============================================
+// LOGO    
+// ============================================
+$siteUrl  = 'https://wittymart.onrender.com';
+$logoPath = 'images/wittymart-logo.png'; 
+$logoUrl  = rtrim($siteUrl, '/') . '/' . ltrim($logoPath, '/');
 
 // Compute totals
 $subtotal = 0;
@@ -156,17 +163,30 @@ $paidAt        = $order['paid_at'] ?? $order['updated_at'] ?? $order['created_at
         align-items: center;
         gap: 14px;
     }
+
+    /* ============================================
+       LOGO — wittymart-logo.png
+       ============================================ */
     .r-header .brand .logo {
-        width: 52px;
-        height: 52px;
+        width: 56px;
+        height: 56px;
         border-radius: 12px;
-        background: rgba(255,255,255,0.15);
+        background: #ffffff;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 24px;
-        border: 1.5px solid rgba(255,255,255,0.3);
+        border: 1.5px solid rgba(255,255,255,0.35);
+        overflow: hidden;
+        padding: 6px;
+        flex-shrink: 0;
     }
+    .r-header .brand .logo img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+    }
+
     .r-header .brand h1 {
         font-size: 22px;
         font-weight: 800;
@@ -369,6 +389,10 @@ $paidAt        = $order['paid_at'] ?? $order['updated_at'] ?? $order['created_at
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
         }
+        .r-header .brand .logo {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
         .r-items tbody tr { page-break-inside: avoid; }
     }
 
@@ -378,7 +402,7 @@ $paidAt        = $order['paid_at'] ?? $order['updated_at'] ?? $order['created_at
     @media (max-width: 640px) {
         .r-header { padding: 22px; }
         .r-header .brand h1 { font-size: 18px; }
-        .r-header .brand .logo { width: 44px; height: 44px; font-size: 20px; }
+        .r-header .brand .logo { width: 46px; height: 46px; padding: 5px; }
         .r-meta,
         .r-details { grid-template-columns: 1fr; gap: 16px; padding: 20px 22px; }
         .r-items { padding: 8px 22px 0; }
@@ -394,7 +418,7 @@ $paidAt        = $order['paid_at'] ?? $order['updated_at'] ?? $order['created_at
 
     <div class="actions">
         <button class="btn-primary" onclick="window.print()">
-            <i class="fas fa-download"></i> Save / Download PDF
+            <i class="fas fa-download"></i> Download PDF
         </button>
         <a class="btn-outline" href="order_confirmation.php?order=<?php echo urlencode($order['order_number']); ?>">
             <i class="fas fa-arrow-left"></i> Back to Order
@@ -406,7 +430,16 @@ $paidAt        = $order['paid_at'] ?? $order['updated_at'] ?? $order['created_at
         <!-- Header -->
         <div class="r-header">
             <div class="brand">
-                <div class="logo"><i class="fas fa-shopping-bag"></i></div>
+
+                <!-- ============================================
+                     LOGO — wittymart-logo.png 
+                     ============================================ -->
+                <div class="logo">
+                    <img src="<?php echo htmlspecialchars($logoUrl, ENT_QUOTES); ?>"
+                         alt="<?php echo htmlspecialchars($siteName); ?> logo"
+                         onerror="this.onerror=null; this.parentNode.innerHTML='<span style=&quot;font-weight:800;font-size:20px;color:#05573c;&quot;>W</span>';">
+                </div>
+
                 <div>
                     <h1><?php echo htmlspecialchars($siteName); ?></h1>
                     <small>Payment Receipt</small>
