@@ -6,11 +6,12 @@
 require_once __DIR__ . '/../vendor/autoload.php';
 
 /**
- * Extend FPDF with RoundedRect for modern styling.
+ * Extend FPDF with RoundedRect + Circle helpers.
  */
 if (!class_exists('WittyFPDF')) {
     class WittyFPDF extends FPDF
     {
+        // ---------- Rounded rectangle ----------
         public function RoundedRect($x, $y, $w, $h, $r, $style = '')
         {
             $k = $this->k;
@@ -58,32 +59,71 @@ if (!class_exists('WittyFPDF')) {
                 ($h - $y3) * $this->k
             ));
         }
+
+        // ---------- Circle ----------
+        public function Circle($x, $y, $r, $style = 'D')
+        {
+            $this->Ellipse($x, $y, $r, $r, $style);
+        }
+
+        public function Ellipse($x, $y, $rx, $ry, $style = 'D')
+        {
+            if ($style == 'F') $op = 'f';
+            elseif ($style == 'FD' || $style == 'DF') $op = 'B';
+            else $op = 'S';
+
+            $lx = 4 / 3 * (sqrt(2) - 1);
+            $k = $this->k;
+            $h = $this->h;
+
+            $this->_out(sprintf('%.2F %.2F m', ($x + $rx) * $k, ($h - $y) * $k));
+
+            $this->_out(sprintf('%.2F %.2F %.2F %.2F %.2F %.2F c',
+                ($x + $rx) * $k, ($h - ($y - $ry * $lx)) * $k,
+                ($x + $rx * $lx) * $k, ($h - ($y - $ry)) * $k,
+                $x * $k, ($h - ($y - $ry)) * $k));
+
+            $this->_out(sprintf('%.2F %.2F %.2F %.2F %.2F %.2F c',
+                ($x - $rx * $lx) * $k, ($h - ($y - $ry)) * $k,
+                ($x - $rx) * $k, ($h - ($y - $ry * $lx)) * $k,
+                ($x - $rx) * $k, ($h - $y) * $k));
+
+            $this->_out(sprintf('%.2F %.2F %.2F %.2F %.2F %.2F c',
+                ($x - $rx) * $k, ($h - ($y + $ry * $lx)) * $k,
+                ($x - $rx * $lx) * $k, ($h - ($y + $ry)) * $k,
+                $x * $k, ($h - ($y + $ry)) * $k));
+
+            $this->_out(sprintf('%.2F %.2F %.2F %.2F %.2F %.2F c',
+                ($x + $rx * $lx) * $k, ($h - ($y + $ry)) * $k,
+                ($x + $rx) * $k, ($h - ($y + $ry * $lx)) * $k,
+                ($x + $rx) * $k, ($h - $y) * $k));
+
+            $this->_out($op);
+        }
     }
 }
 
 /**
  * Generate a single-page, professionally-styled PDF invoice.
- *
- * @param array $order  Order row from DB
- * @param array $items  Order items
- * @param array $user   User row (name, email, phone)
- * @return string       Raw PDF bytes
  */
 if (!function_exists('generateInvoicePDF')) {
     function generateInvoicePDF($order, $items, $user)
     {
         $pdf = new WittyFPDF();
         $pdf->AddPage();
-        $pdf->SetAutoPageBreak(false);  
+        $pdf->SetAutoPageBreak(false);   
 
         // ============================================
-        // COLORS
+        // BRAND COLORS (matched to the logo seal #0a5c3f)
         // ============================================
-        $primary    = [5, 87, 60];
-        $greyLight  = [245, 247, 250];
-        $greyBorder = [225, 228, 232];
-        $greyText   = [110, 115, 125];
-        $darkText   = [34, 40, 49];
+        $primary    = [10, 92, 63];     
+        $primaryRgb = '#0a5c3f';       
+        $greyLight  = [245, 247, 250];  
+        $greyBorder = [225, 228, 232];  
+        $greyText   = [110, 115, 125]; 
+        $darkText   = [34, 40, 49];   
+        $success    = [40, 167, 69];    
+        $white      = [255, 255, 255];
 
         // ============================================
         // HEADER BAND 
@@ -92,22 +132,22 @@ if (!function_exists('generateInvoicePDF')) {
         $pdf->Rect(0, 0, 210, 30, 'F');
 
         // ============================================
-        // LOGO
+        // LOGO 
         // ============================================
         $logoPath = __DIR__ . '/../images/wittymart-logo.png';
         if (file_exists($logoPath)) {
             // White circular backdrop behind the logo so it pops on the green band
-            $pdf->SetFillColor(255, 255, 255);
+            $pdf->SetFillColor($white[0], $white[1], $white[2]);
             $pdf->Circle(23, 15, 10.5, 'F');
-            // Logo image on top of the backdrop
+            // Logo image on top
             $pdf->Image($logoPath, 13.5, 5.5, 19, 19);
         }
 
         // ============================================
-        // BRAND NAME 
+        // BRAND NAME
         // ============================================
         $pdf->SetFont('Arial', 'B', 20);
-        $pdf->SetTextColor(255, 255, 255);
+        $pdf->SetTextColor($white[0], $white[1], $white[2]);
         $pdf->SetXY(38, 7);
         $pdf->Cell(90, 8, 'WittyMart', 0, 0, 'L');
 
@@ -116,7 +156,7 @@ if (!function_exists('generateInvoicePDF')) {
         $pdf->Cell(90, 4, 'Smart Shopping for Witty Minds', 0, 0, 'L');
 
         // ============================================
-        // "INVOICE" title on the right
+        // "INVOICE" title
         // ============================================
         $pdf->SetFont('Arial', 'B', 16);
         $pdf->SetXY(120, 7);
@@ -127,7 +167,7 @@ if (!function_exists('generateInvoicePDF')) {
         $pdf->Cell(75, 4, 'Order #' . $order['order_number'], 0, 0, 'R');
 
         // ============================================
-        // FROM / BILL TO
+        // FROM / BILL TO (Y=38)
         // ============================================
         $pdf->SetFont('Arial', 'B', 8);
         $pdf->SetTextColor($greyText[0], $greyText[1], $greyText[2]);
@@ -174,7 +214,7 @@ if (!function_exists('generateInvoicePDF')) {
         }
 
         // ============================================
-        // META GRID 
+        // META GRID (Y=64)
         // ============================================
         $meta = [
             ['Invoice Date',   date('M d, Y', strtotime($order['created_at']))],
@@ -240,7 +280,7 @@ if (!function_exists('generateInvoicePDF')) {
         $pdf->SetY($y);
 
         $pdf->SetFillColor($primary[0], $primary[1], $primary[2]);
-        $pdf->SetTextColor(255, 255, 255);
+        $pdf->SetTextColor($white[0], $white[1], $white[2]);
         $pdf->SetDrawColor($primary[0], $primary[1], $primary[2]);
         $pdf->SetFont('Arial', 'B', 8.5);
 
@@ -254,7 +294,7 @@ if (!function_exists('generateInvoicePDF')) {
         $pdf->SetTextColor($darkText[0], $darkText[1], $darkText[2]);
         $pdf->SetDrawColor($greyBorder[0], $greyBorder[1], $greyBorder[2]);
 
-      
+        // Cap visible rows so totals + notice + footer always fit on one page
         $maxRows = 10;
         $row = 0;
         foreach ($items as $it) {
@@ -305,7 +345,7 @@ if (!function_exists('generateInvoicePDF')) {
 
         // Discount
         if ($discount > 0) {
-            $pdf->SetTextColor(40, 167, 69);
+            $pdf->SetTextColor($success[0], $success[1], $success[2]);
             $pdf->SetX($totalsX);
             $pdf->SetFont('Arial', '', 8.5);
             $pdf->SetFillColor($greyLight[0], $greyLight[1], $greyLight[2]);
@@ -323,10 +363,10 @@ if (!function_exists('generateInvoicePDF')) {
         $pdf->Cell(40, 6, '  Shipping', 'LR', 0, 'L', false);
         $pdf->Cell(35, 6, 'Ksh ' . number_format($shipping, 0) . '  ', 'LR', 1, 'R', false);
 
-        // Grand Total
+        // Grand Total — highlighted with the brand green
         $pdf->SetX($totalsX);
         $pdf->SetFont('Arial', 'B', 10.5);
-        $pdf->SetTextColor(255, 255, 255);
+        $pdf->SetTextColor($white[0], $white[1], $white[2]);
         $pdf->SetFillColor($primary[0], $primary[1], $primary[2]);
         $pdf->SetDrawColor($primary[0], $primary[1], $primary[2]);
         $pdf->Cell(40, 9, '  TOTAL', 1, 0, 'L', true);
