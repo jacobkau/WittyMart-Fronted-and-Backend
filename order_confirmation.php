@@ -12,9 +12,9 @@ if (!isset($_SESSION['user_id'])) {
 $user_id = $_SESSION['user_id'];
 
 // ============================================
-// SITE URL (needed for email image + link URLs)
+// SITE URL
 // ============================================
-$siteUrl = 'https://wittymart.onrender.com/'; // TODO: replace with your real domain
+$siteUrl = 'https://wittymart.onrender.com';
 
 // ============================================
 // RESOLVE ORDER NUMBER
@@ -110,16 +110,13 @@ foreach ($items as $it) {
 }
 
 // ============================================
-// BUILD EMAIL — ITEMS HTML WITH CLOUDINARY IMAGES
+// BUILD EMAIL — ITEMS HTML
 // ============================================
 $itemsHtml = '';
 foreach ($items as $it) {
-    // -------- Resolve image URL (Cloudinary preferred) --------
+    // Resolve image URL (Cloudinary preferred, transformed)
     $img = '';
-
-    // 1) Cloudinary / absolute URL — optionally optimize
     if (!empty($it['image_url']) && preg_match('#^https?://#i', $it['image_url'])) {
-        // Inject 128x128 transform right after /upload/ if not already present
         if (strpos($it['image_url'], '/upload/') !== false
             && strpos($it['image_url'], 'w_128') === false) {
             $img = preg_replace(
@@ -131,20 +128,16 @@ foreach ($items as $it) {
         } else {
             $img = $it['image_url'];
         }
-    }
-    // 2) Local file fallback (browser only — some clients block these)
-    elseif (!empty($it['image'])) {
+    } elseif (!empty($it['image'])) {
         $img = rtrim($siteUrl, '/') . '/uploads/products/' . ltrim($it['image'], '/');
-    }
-    // 3) Placeholder
-    else {
+    } else {
         $img = rtrim($siteUrl, '/') . '/uploads/products/no-image.png';
     }
 
     $itemsHtml .= '<table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse; margin-top: 4px;">'
               .    '<tr style="vertical-align: top;">'
               .      '<td style="padding: 16px 8px 8px 4px; width: 76px;">'
-              .        '<img src="' . htmlspecialchars($img, ENT_QUOTES) . '" alt="' . htmlspecialchars($it['product_name'], ENT_QUOTES) . '" width="64" height="64" style="height: 64px; width: 64px; object-fit: cover; border-radius: 8px; background: #f5f5f5; display: block; border: 0; outline: none; text-decoration: none;">'
+              .        '<img src="' . htmlspecialchars($img, ENT_QUOTES) . '" alt="' . htmlspecialchars($it['product_name'], ENT_QUOTES) . '" width="64" height="64" style="height: 64px; width: 64px; object-fit: cover; border-radius: 8px; background: #f5f5f5; display: block; border: 0;">'
               .      '</td>'
               .      '<td style="padding: 16px 8px 8px 8px; width: 100%;">'
               .        '<div style="font-weight: 600; color: #222;">' . htmlspecialchars($it['product_name']) . '</div>'
@@ -158,6 +151,10 @@ foreach ($items as $it) {
               .  '<div style="border-bottom: 1px solid #f0f0f0;"></div>';
 }
 
+// Totals
+$subtotal = 0;
+foreach ($items as $it) $subtotal += (float)$it['total'];
+
 $discount  = (float)($order['coupon_discount'] ?? 0);
 $couponRow = '';
 if ($discount > 0) {
@@ -169,12 +166,9 @@ if ($discount > 0) {
                . '</tr>';
 }
 
-$subtotal = 0;
-foreach ($items as $it) $subtotal += (float)$it['total'];
-
 $orderDate = $order ? date('d M Y, H:i', strtotime($order['created_at'])) : '';
 
-$paymentTitle = 'Order Confirmed';
+$paymentTitle   = 'Order Confirmed';
 $paymentMessage = 'Your order has been received and is being processed.';
 if ($order) {
     $pm = $order['payment_method'] ?? '';
@@ -200,6 +194,94 @@ if ($order) {
 
 $orderUrl = $siteUrl . '/order_confirmation.php?order=' . urlencode($order_number);
 $shopUrl  = $siteUrl . '/shop.php';
+
+// ============================================
+// BUILD FULL EMAIL BODY (single variable for EmailJS)
+// ============================================
+$shippingFeeFmt = number_format((float)($order['shipping_fee'] ?? 0), 0);
+$subtotalFmt    = number_format($subtotal, 0);
+$orderTotalFmt  = $order ? number_format($order['total'], 0) : '0';
+
+$deliveryRecipient = htmlspecialchars($order['delivery_recipient'] ?? ($user['name'] ?? ''), ENT_QUOTES);
+$deliveryAddress   = htmlspecialchars($order['shipping_address'] ?? '', ENT_QUOTES);
+$deliveryPhone     = htmlspecialchars($order['delivery_phone'] ?? '', ENT_QUOTES);
+$toNameHtml        = htmlspecialchars($user['name'] ?? 'Customer', ENT_QUOTES);
+$toEmailHtml       = htmlspecialchars($user['email'] ?? '', ENT_QUOTES);
+$orderNumberHtml   = htmlspecialchars($order_number, ENT_QUOTES);
+$orderDateHtml     = htmlspecialchars($orderDate, ENT_QUOTES);
+$paymentTitleHtml  = htmlspecialchars($paymentTitle, ENT_QUOTES);
+$paymentMsgHtml    = htmlspecialchars($paymentMessage, ENT_QUOTES);
+$orderUrlHtml      = htmlspecialchars($orderUrl, ENT_QUOTES);
+$shopUrlHtml       = htmlspecialchars($shopUrl, ENT_QUOTES);
+
+$emailBody  = '';
+
+// Header (brand bar)
+$emailBody .= '<div style="border-top: 6px solid #05573c; padding: 16px;">'
+          .     '<a style="text-decoration: none; outline: none; margin-right: 8px; vertical-align: middle;" href="' . $shopUrlHtml . '" target="_blank">'
+          .       '<span style="display: inline-block; height: 32px; width: 32px; line-height: 32px; text-align: center; background: #05573c; color: #fff; border-radius: 8px; font-weight: 800; vertical-align: middle; font-size: 16px;">W</span>'
+          .     '</a>'
+          .     '<span style="font-size: 16px; vertical-align: middle; border-left: 1px solid #333; padding-left: 8px;">'
+          .       '<strong>Thank You for Your Order</strong>'
+          .     '</span>'
+          .   '</div>';
+
+// Body content
+$emailBody .= '<div style="padding: 0 16px;">'
+          .     '<p style="margin: 8px 0 4px;">Hi ' . $toNameHtml . ',</p>'
+          .     '<p style="margin: 0 0 16px; color: #555;">We\'ve received your order and are preparing it for delivery. We\'ll send you tracking information when it ships.</p>'
+          .     '<div style="text-align: left; font-size: 14px; padding: 12px 14px; background: #f0faf5; border-left: 4px solid #05573c; border-radius: 6px; margin-bottom: 20px;">'
+          .       '<strong>Order #&nbsp;' . $orderNumberHtml . '</strong><br>'
+          .       '<span style="color: #666; font-size: 13px;">Placed on ' . $orderDateHtml . '</span>'
+          .     '</div>'
+          .     $itemsHtml
+          .     '<div style="padding: 16px 0;"><div style="border-top: 2px solid #333;"></div></div>'
+          .     '<table style="border-collapse: collapse; width: 100%; text-align: right; font-size: 14px;">'
+          .       '<tr><td style="width: 60%;"></td><td style="color: #555;">Subtotal</td><td style="padding: 8px; white-space: nowrap;">Ksh ' . $subtotalFmt . '</td></tr>'
+          .       $couponRow
+          .       '<tr><td style="width: 60%;"></td><td style="color: #555;">Transport</td><td style="padding: 8px; white-space: nowrap;">Ksh ' . $shippingFeeFmt . '</td></tr>'
+          .       '<tr>'
+          .         '<td style="width: 60%;"></td>'
+          .         '<td style="border-top: 2px solid #333; padding-top: 12px;"><strong style="white-space: nowrap; color: #05573c;">Order Total</strong></td>'
+          .         '<td style="padding: 16px 8px 8px 8px; border-top: 2px solid #333; white-space: nowrap;"><strong style="color: #05573c; font-size: 16px;">Ksh ' . $orderTotalFmt . '</strong></td>'
+          .       '</tr>'
+          .     '</table>'
+          .     '<div style="margin-top: 24px; padding: 16px 18px; background: #f8f9fa; border-radius: 10px; text-align: left;">'
+          .       '<div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #888; font-weight: 700; margin-bottom: 10px;">Delivery Details</div>'
+          .       '<div style="font-size: 14px; line-height: 1.6; color: #333;">'
+          .         '<strong>' . $deliveryRecipient . '</strong><br>'
+          .         '<span style="color: #666;">' . $deliveryAddress . '</span><br>'
+          .         '<span style="color: #666;">' . $deliveryPhone . '</span>'
+          .       '</div>'
+          .     '</div>'
+          .     '<div style="margin-top: 16px; padding: 14px 16px; background: #d4edda; border-left: 4px solid #28a745; border-radius: 8px; text-align: left; color: #155724;">'
+          .       '<strong style="display: block; margin-bottom: 4px;">' . $paymentTitleHtml . '</strong>'
+          .       '<span style="font-size: 13px;">' . $paymentMsgHtml . '</span>'
+          .     '</div>'
+          .     '<div style="text-align: center; margin: 28px 0 20px;">'
+          .       '<a href="' . $orderUrlHtml . '" target="_blank" style="display: inline-block; padding: 12px 28px; background: #05573c; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; margin: 0 4px 8px 4px;">View Your Order</a>'
+          .       '<a href="' . $shopUrlHtml . '" target="_blank" style="display: inline-block; padding: 12px 28px; background: #ffffff; color: #05573c; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 14px; border: 2px solid #05573c; margin: 0 4px 8px 4px;">Continue Shopping</a>'
+          .     '</div>'
+          .   '</div>';
+
+// Footer
+$emailBody .= '<div style="border-top: 1px solid #e5e7eb; padding: 18px 16px; text-align: center; color: #999; font-size: 12px; line-height: 1.7;">'
+          .     '<strong style="color: #05573c; display: block; font-size: 13px; margin-bottom: 6px;">Thank you for shopping with WittyMart!</strong>'
+          .     'The email was sent to <strong style="color: #666;">' . $toEmailHtml . '</strong><br>'
+          .     'You received this email because you placed an order with us.<br>'
+          .     '<span style="display: inline-block; margin-top: 8px;">'
+          .       '<a href="mailto:wittyhighbrowtechnologies@gmail.com" style="color: #05573c; text-decoration: none;">wittyhighbrowtechnologies@gmail.com</a>'
+          .       ' &nbsp;·&nbsp; '
+          .       '<a href="' . $shopUrlHtml . '" style="color: #05573c; text-decoration: none;">wittymart.onrender.com</a>'
+          .     '</span>'
+          .   '</div>';
+
+// Wrap in outer container
+$emailBodyFull = '<div style="font-family: system-ui, -apple-system, \'Segoe UI\', Roboto, Arial, sans-serif; font-size: 14px; color: #333; padding: 14px 8px; background-color: #f5f5f5;">'
+               .   '<div style="max-width: 600px; margin: auto; background-color: #ffffff;">'
+               .     $emailBody
+               .   '</div>'
+               . '</div>';
 
 $page_title = 'Order Confirmed';
 ?>
@@ -548,7 +630,7 @@ $page_title = 'Order Confirmed';
     <script>
         (function() {
             if (typeof emailjs !== 'undefined') {
-                emailjs.init("EMAILJS_PUBLIC_KEY"); 
+                emailjs.init("EMAILJS_PUBLIC_KEY"); // TODO: replace
             }
         })();
 
@@ -563,23 +645,8 @@ $page_title = 'Order Confirmed';
                     to_name:      <?php echo json_encode($user['name'] ?? 'Customer'); ?>,
                     to_email:     <?php echo json_encode($user['email'] ?? ''); ?>,
                     order_number: <?php echo json_encode($order_number); ?>,
-                    order_date:   <?php echo json_encode($orderDate); ?>,
-
-                    items_html:   <?php echo json_encode($itemsHtml); ?>,
-                    subtotal:     <?php echo json_encode(number_format($subtotal, 0)); ?>,
-                    coupon_row:   <?php echo json_encode($couponRow); ?>,
-                    shipping_fee: <?php echo json_encode(number_format((float)($order['shipping_fee'] ?? 0), 0)); ?>,
-                    order_total:  <?php echo json_encode($order ? number_format($order['total'], 0) : ''); ?>,
-
-                    delivery_recipient: <?php echo json_encode($order['delivery_recipient'] ?? ($user['name'] ?? '')); ?>,
-                    delivery_address:   <?php echo json_encode($order['shipping_address'] ?? ''); ?>,
-                    delivery_phone:     <?php echo json_encode($order['delivery_phone'] ?? ''); ?>,
-
-                    payment_title:   <?php echo json_encode($paymentTitle); ?>,
-                    payment_message: <?php echo json_encode($paymentMessage); ?>,
-
-                    order_url: <?php echo json_encode($orderUrl); ?>,
-                    shop_url:  <?php echo json_encode($shopUrl); ?>
+                    subject:      <?php echo json_encode('Your WittyMart Order #' . $order_number . ' is confirmed'); ?>,
+                    body:         <?php echo json_encode($emailBodyFull); ?>
                 };
 
                 if (params.to_email) {
