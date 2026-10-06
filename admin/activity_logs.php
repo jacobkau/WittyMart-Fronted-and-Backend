@@ -5,9 +5,6 @@ requireAdmin();
 
 // ============================================
 // DETECT AVAILABLE SOURCE TABLES
-// Both tables have DIFFERENT schemas:
-//   activity_log  (singular): uses `details`
-//   activity_logs (plural):   uses `description`
 // ============================================
 $hasLogSingular = false;
 $hasLogPlural   = false;
@@ -212,8 +209,7 @@ if ($unionSql) {
 }
 
 // ============================================
-// CLEAR OLD LOGS — clears from BOTH tables
-// Reports per-table counts and never fails silently
+// CLEAR OLD LOGS 
 // ============================================
 $message = '';
 $messageType = '';
@@ -226,7 +222,6 @@ if (isset($_GET['clear']) && $_GET['clear'] === 'true') {
         $message = 'Please enter a valid number of days (0 or greater).';
         $messageType = 'error';
     } else {
-        // Helper: safely check if a table exists (in `public` schema)
         $tableExists = function ($pdo, $tbl) {
             try {
                 $stmt = $pdo->prepare("
@@ -244,7 +239,7 @@ if (isset($_GET['clear']) && $_GET['clear'] === 'true') {
         };
 
         $totalDeleted = 0;
-        $tablesToClear = ['activity_logs', 'activity_log']; // plural first, singular second
+        $tablesToClear = ['activity_logs', 'activity_log']; 
 
         foreach ($tablesToClear as $tbl) {
             // Skip tables that don't exist
@@ -308,7 +303,7 @@ if (isset($_GET['clear']) && $_GET['clear'] === 'true') {
 }
 
 // ============================================
-// DISTINCT ACTIONS (across both tables)
+// DISTINCT ACTIONS 
 // ============================================
 $actionsList = [];
 if ($unionSql) {
@@ -363,7 +358,7 @@ $page_title = 'Activity Logs';
                         <span style="color:#888;">(filtered)</span>
                     <?php endif; ?>
                     <?php if ($hasLogSingular && $hasLogPlural): ?>
-                        <span style="color:#888;"> · merged from 2 tables</span>
+                        <span style="color:#888;"> · system recorded</span>
                     <?php endif; ?>
                 </span>
                 <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -388,7 +383,7 @@ $page_title = 'Activity Logs';
                     <?php if (!empty($clearDetails)): ?>
                         <ul style="margin:10px 0 0 20px; font-size:13px;">
                             <?php foreach ($clearDetails as $line): ?>
-                                <li><?php echo $line; /* already escaped where needed */ ?></li>
+                                <li><?php echo $line; ?></li>
                             <?php endforeach; ?>
                         </ul>
                     <?php endif; ?>
@@ -545,7 +540,7 @@ $page_title = 'Activity Logs';
     </div>
 
     <!-- ============================================
-         HIDDEN PRINT TABLE (all filtered rows)
+         HIDDEN PRINT TABLE 
          ============================================ -->
     <div class="print-only-table">
         <div class="print-header">
