@@ -1,159 +1,9 @@
 // ============================================
-// THEME TOGGLE
+// WITTYMART — PAGE-SPECIFIC SCRIPTS
 // ============================================
-// Enhanced Theme Toggle with Sun/Moon Icons
-function toggleTheme() {
-    const body = document.body;
-    const icon = document.getElementById('theme-icon');
-    
-    body.classList.toggle('dark-mode');
-    
-    // Animated icon transition
-    if (icon) {
-        icon.style.transition = 'transform 0.3s ease';
-        icon.style.transform = 'rotate(180deg)';
-        
-        setTimeout(() => {
-            if (body.classList.contains('dark-mode')) {
-                icon.innerHTML = '<i class="fas fa-moon"></i>';
-                icon.title = 'Switch to Light Mode';
-                localStorage.setItem('theme', 'dark');
-            } else {
-                icon.innerHTML = '<i class="fas fa-sun"></i>';
-                icon.title = 'Switch to Dark Mode';
-                localStorage.setItem('theme', 'light');
-            }
-            icon.style.transform = 'rotate(0deg)';
-        }, 150);
-    }
-}
-
-// Detect system preference
-function getSystemTheme() {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-}
-
-// Load theme with system preference fallback
-document.addEventListener('DOMContentLoaded', function() {
-    const savedTheme = localStorage.getItem('theme');
-    const systemTheme = getSystemTheme();
-    const theme = savedTheme || systemTheme;
-    const icon = document.getElementById('theme-icon');
-    
-    if (theme === 'dark') {
-        document.body.classList.add('dark-mode');
-        if (icon) {
-            icon.innerHTML = '<i class="fas fa-moon"></i>';
-            icon.title = 'Switch to Light Mode';
-        }
-    } else {
-        document.body.classList.remove('dark-mode');
-        if (icon) {
-            icon.innerHTML = '<i class="fas fa-sun"></i>';
-            icon.title = 'Switch to Dark Mode';
-        }
-    }
-    
-    // Listen for system theme changes
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-        if (!localStorage.getItem('theme')) {
-            const newTheme = e.matches ? 'dark' : 'light';
-            const icon = document.getElementById('theme-icon');
-            if (newTheme === 'dark') {
-                document.body.classList.add('dark-mode');
-                if (icon) {
-                    icon.innerHTML = '<i class="fas fa-moon"></i>';
-                }
-            } else {
-                document.body.classList.remove('dark-mode');
-                if (icon) {
-                    icon.innerHTML = '<i class="fas fa-sun"></i>';
-                }
-            }
-        }
-    });
-});
 
 // ============================================
-// MOBILE MENU TOGGLE
-// ============================================
-function toggleMenu() {
-    const nav = document.getElementById('main-nav');
-    const menuIcon = document.getElementById('menuIcon');
-    
-    if (nav) {
-        nav.classList.toggle('show');
-        
-        // Toggle menu icon
-        if (menuIcon) {
-            if (nav.classList.contains('show')) {
-                menuIcon.className = 'fas fa-times';
-            } else {
-                menuIcon.className = 'fas fa-bars';
-            }
-        }
-    }
-}
-
-// Close menu when clicking outside
-document.addEventListener('click', function(event) {
-    const nav = document.getElementById('main-nav');
-    const menuToggle = document.getElementById('menuToggleBtn');
-    const navLinks = document.getElementById('nav-links');
-    
-    if (nav && nav.classList.contains('show')) {
-        if (!nav.contains(event.target) && menuToggle && !menuToggle.contains(event.target)) {
-            nav.classList.remove('show');
-            const menuIcon = document.getElementById('menuIcon');
-            if (menuIcon) {
-                menuIcon.className = 'fas fa-bars';
-            }
-        }
-    }
-});
-
-// Close menu when a link is clicked
-document.querySelectorAll('.nav-links a').forEach(function(link) {
-    link.addEventListener('click', function() {
-        const nav = document.getElementById('main-nav');
-        if (nav && nav.classList.contains('show')) {
-            nav.classList.remove('show');
-            const menuIcon = document.getElementById('menuIcon');
-            if (menuIcon) {
-                menuIcon.className = 'fas fa-bars';
-            }
-        }
-    });
-});
-
-// ============================================
-// SIDEBAR TOGGLE
-// ============================================
-function toggleSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('sidebarOverlay');
-    
-    if (sidebar) {
-        sidebar.classList.toggle('active');
-        if (overlay) {
-            overlay.classList.toggle('active');
-        }
-        document.body.classList.toggle('sidebar-open');
-        
-        // Close mobile menu when sidebar opens
-        const nav = document.getElementById('main-nav');
-        if (nav && nav.classList.contains('show')) {
-            nav.classList.remove('show');
-            const menuIcon = document.getElementById('menuIcon');
-            if (menuIcon) {
-                menuIcon.className = 'fas fa-bars';
-            }
-        }
-    }
-}
-
-// ============================================
-// HERO SLIDER
+// HERO SLIDER 
 // ============================================
 let currentSlide = 0;
 const slides = document.querySelectorAll('#heroSlides .slide');
@@ -178,13 +28,12 @@ function prevSlide() {
     showSlide(currentSlide - 1);
 }
 
-// Auto slide - only if slides exist
 if (totalSlides > 0) {
     setInterval(nextSlide, 5000);
 }
 
 // ============================================
-// TESTIMONIAL SLIDER
+// TESTIMONIAL SLIDER 
 // ============================================
 let currentTestimonial = 0;
 const testimonials = document.querySelectorAll('#testimonialTrack .slide1');
@@ -209,17 +58,16 @@ function prevTestimonial() {
     showTestimonial(currentTestimonial - 1);
 }
 
-// Auto testimonial slide - only if testimonials exist
 if (totalTestimonials > 0) {
     setInterval(nextTestimonial, 6000);
 }
 
 // ============================================
-// NEWSLETTER FORM
+// NEWSLETTER FORM 
 // ============================================
 const newsletterForm = document.getElementById('newsletter-form');
 if (newsletterForm) {
-    newsletterForm.addEventListener('submit', function(e) {
+    newsletterForm.addEventListener('submit', function (e) {
         e.preventDefault();
         const email = this.querySelector('input[type="email"]');
         if (email && email.value) {
@@ -230,75 +78,57 @@ if (newsletterForm) {
 }
 
 // ============================================
-// SHOW PAGE FUNCTION (for terms page)
+// SHOW PAGE FUNCTION 
 // ============================================
 function showPage(pageId) {
-    // Hide all subpages
     var pages = document.querySelectorAll('.subpage');
-    pages.forEach(function(page) {
+    pages.forEach(function (page) {
         page.classList.remove('active');
     });
 
-    // Remove active class from all nav links
     var links = document.querySelectorAll('.subnav a');
-    links.forEach(function(link) {
+    links.forEach(function (link) {
         link.classList.remove('active-link');
     });
 
-    // Show the clicked subpage
     var selectedPage = document.getElementById(pageId);
     if (selectedPage) {
         selectedPage.classList.add('active');
     }
 
-    // Add active class to clicked nav link
     var activeLink = document.getElementById(pageId + 'Link');
     if (activeLink) {
         activeLink.classList.add('active-link');
     }
 }
 
-// Default: Show Privacy Policy page on initial load (only if on terms page)
+// Show Privacy Policy tab by default on the terms page
 if (document.querySelector('.subpage')) {
     showPage('privacy');
 }
 
 // ============================================
-// CLOSE SIDEBAR ON ESCAPE KEY
+// CLOSE SIDEBAR ON ESCAPE
 // ============================================
-document.addEventListener('keydown', function(e) {
+document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebarOverlay');
         if (sidebar && sidebar.classList.contains('active')) {
-            sidebar.classList.remove('active');
-            if (overlay) {
-                overlay.classList.remove('active');
+            // Use header.php's toggleSidebar if available
+            if (typeof window.toggleSidebar === 'function') {
+                window.toggleSidebar();
+            } else {
+                sidebar.classList.remove('active');
+                if (overlay) overlay.classList.remove('active');
             }
         }
     }
 });
 
 // ============================================
-// CLOSE MOBILE MENU ON WINDOW RESIZE
+// CART FUNCTIONS 
 // ============================================
-window.addEventListener('resize', function() {
-    if (window.innerWidth > 768) {
-        const nav = document.getElementById('main-nav');
-        if (nav) {
-            nav.classList.remove('show');
-            const menuIcon = document.getElementById('menuIcon');
-            if (menuIcon) {
-                menuIcon.className = 'fas fa-bars';
-            }
-        }
-    }
-});
-
-// ============================================
-// CART FUNCTIONS (for cart page)
-// ============================================
-// Update Quantity
 function updateQuantity(button, change) {
     const item = button.closest('.cart-item');
     if (item) {
@@ -312,7 +142,6 @@ function updateQuantity(button, change) {
     }
 }
 
-// Remove Item
 function removeItem(button) {
     if (confirm('Remove this item from cart?')) {
         const item = button.closest('.cart-item');
@@ -324,7 +153,6 @@ function removeItem(button) {
     }
 }
 
-// Update Total
 function updateTotal() {
     const items = document.querySelectorAll('.cart-item');
     let total = 0;
@@ -343,7 +171,6 @@ function updateTotal() {
     }
 }
 
-// Check Empty Cart
 function checkEmptyCart() {
     const items = document.querySelectorAll('.cart-item');
     const cartSection = document.querySelector('.cart');
@@ -359,7 +186,6 @@ function checkEmptyCart() {
     }
 }
 
-// Checkout
 function checkout() {
     const total = document.getElementById('cart-total');
     if (total) {
@@ -395,12 +221,12 @@ function handleContactForm(event) {
 }
 
 // ============================================
-// FAQ TOGGLE (for about page)
+// FAQ TOGGLE 
 // ============================================
 function toggleFAQ(button) {
     const answer = button.nextElementSibling;
     const isOpen = answer ? answer.classList.contains('open') : false;
-    
+
     // Close all FAQ answers
     document.querySelectorAll('.faq-answer').forEach(item => {
         item.classList.remove('open');
@@ -408,7 +234,7 @@ function toggleFAQ(button) {
     document.querySelectorAll('.faq-question').forEach(item => {
         item.classList.remove('active');
     });
-    
+
     // Toggle the clicked one
     if (!isOpen && answer) {
         answer.classList.add('open');
@@ -417,11 +243,15 @@ function toggleFAQ(button) {
 }
 
 // ============================================
-// SHOP - ADD TO CART (for shop page)
+// SHOP - LEGACY ADD TO CART FALLBACK
 // ============================================
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.add-to-cart').forEach(button => {
-        button.addEventListener('click', function() {
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.add-to-cart[data-product]').forEach(button => {
+        button.addEventListener('click', function (e) {
+            // Skip if the button also has data-product-id
+            // (that means shop.php's AJAX handler owns it)
+            if (this.hasAttribute('data-product-id')) return;
+
             const product = this.getAttribute('data-product');
             if (product) {
                 alert(product + ' added to cart!');
