@@ -61,7 +61,7 @@ require_once 'includes/config.php';
                 </li>
                 <li>
                     <strong>Your Rights:</strong> You have the right to access, correct, update, and delete your personal data at any time. If you wish to review, modify, or delete your information, or if you have any concerns about how we handle your data, please contact us at
-                    <a href="mailto:kaujacob4@gmail.com">kaujacob4@gmail.com</a>. You also have the right to opt-out of receiving marketing communications from us by clicking the unsubscribe link in our emails.
+                    <a href="wittyhighbrowtechnologies@gmail.com">wittyhighbrowtechnologies@gmail.com</a>. You also have the right to opt-out of receiving marketing communications from us by clicking the unsubscribe link in our emails.
                 </li>
                 <li>
                     <strong>Changes to This Privacy Policy:</strong>
@@ -117,7 +117,7 @@ require_once 'includes/config.php';
                 </li>
                 <li>
                     <strong>Return Process:</strong> To initiate a return, contact our customer service team at
-                    <a href="mailto:kaujacob4@gmail.com">kaujacob4@gmail.com</a> with your order number, the reason for the return, and the item(s) you wish to return. Our team will provide you with return instructions and a return authorization number.
+                    <a href="wittyhighbrowtechnologies@gmail.com">wittyhighbrowtechnologies@gmail.com</a> with your order number, the reason for the return, and the item(s) you wish to return. Our team will provide you with return instructions and a return authorization number.
                 </li>
                 <li>
                     <strong>Refunds:</strong>
