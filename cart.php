@@ -85,10 +85,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
                 $response = ['success'=>true, 'cart_count'=>getCartCount()];
                 break;
 
-            case 'remove_item':
+             case 'remove_item':
                 $cart_id = intval($_POST['cart_id'] ?? 0);
                 $stmt = $pdo->prepare("DELETE FROM cart WHERE id = ? AND user_id = ?");
                 $stmt->execute([$cart_id, $user_id]);
+                // [PATCH:remove_item_log] Log the removal
+                if (function_exists('logActivity')) {
+                    logActivity('remove_from_cart', "Cart item {$cart_id}", $user_id, $_SESSION['user_name'] ?? null);
+                }
                 $response = ['success'=>true, 'cart_count'=>getCartCount()];
                 break;
 
