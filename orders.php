@@ -1,5 +1,6 @@
 <?php
 require_once 'includes/config.php';
+require_once 'includes/invoice_pdf.php';
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: home.php');
@@ -19,15 +20,20 @@ if (isset($_GET['invoice'])) {
         $stmt = $pdo->prepare("SELECT * FROM order_items WHERE order_id = ?");
         $stmt->execute([$order_id]);
         $items = $stmt->fetchAll();
-        require_once 'includes/invoice_pdf.php';
 
         $pdf = generateInvoicePDF($order, $items, getCurrentUser());
+
         header('Content-Type: application/pdf');
         header('Content-Disposition: attachment; filename="invoice-' . $order['order_number'] . '.pdf"');
+        header('Content-Length: ' . strlen($pdf));
         echo $pdf;
+        exit();
+    } else {
+        header('Location: orders.php');
         exit();
     }
 }
+
 
 // List orders
 $orders = [];
