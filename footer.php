@@ -76,15 +76,13 @@
 
     <script>
     // ============================================
-    // FOOTER SCRIPTS — ALL SCOPED TO AVOID COLLISIONS
+    // FOOTER SCRIPTS
     // ============================================
     (function () {
         'use strict';
 
         // ============================================
         // NEWSLETTER SUBSCRIPTION
-        // Posts to subscribe.php which saves to DB
-        // AND forwards to Formspree (server-side).
         // ============================================
         window.subscribeNewsletter = function (event) {
             event.preventDefault();
@@ -182,7 +180,7 @@
             };
         }
 
-        // Load saved theme — scoped variable to avoid collision with header.php
+        // Load saved theme 
         const savedThemeFooter = localStorage.getItem('theme');
         if (savedThemeFooter === 'dark') {
             document.body.classList.add('dark-mode');
@@ -193,7 +191,7 @@
             }
         }
 
-        // ---------- MOBILE MENU TOGGLE (fallback) ----------
+        // ---------- MOBILE MENU TOGGLE  ----------
         if (typeof window.toggleMenu !== 'function') {
             window.toggleMenu = function () {
                 const navLinks = document.getElementById('nav-links') || document.getElementById('navLinks');
@@ -201,7 +199,7 @@
             };
         }
 
-        // ---------- SIDEBAR TOGGLE (fallback) ----------
+        // ---------- SIDEBAR TOGGLE ----------
         if (typeof window.toggleSidebar !== 'function') {
             window.toggleSidebar = function () {
                 const sidebar = document.getElementById('sidebar');
