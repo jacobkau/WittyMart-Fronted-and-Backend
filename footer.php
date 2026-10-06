@@ -76,21 +76,15 @@
 
     <script>
     // ============================================
-    // FOOTER SCRIPTS
+    // FOOTER SCRIPTS — ALL SCOPED TO AVOID COLLISIONS
     // ============================================
     (function () {
         'use strict';
 
         // ============================================
-        // FORMSPREE ENDPOINT 
-        // ============================================
-        const FORMSPREE_FORM_ID = <?php echo json_encode(getenv('FORMSPREE_FORM_ID') ?: ''); ?>;
-        const FORMSPREE_ENDPOINT = FORMSPREE_FORM_ID
-            ? 'https://formspree.io/f/' + FORMSPREE_FORM_ID
-            : '';
-
-        // ============================================
-        // NEWSLETTER SUBSCRIPTION 
+        // NEWSLETTER SUBSCRIPTION
+        // Posts to subscribe.php which saves to DB
+        // AND forwards to Formspree (server-side).
         // ============================================
         window.subscribeNewsletter = function (event) {
             event.preventDefault();
@@ -103,29 +97,19 @@
                 showNewsletterMessage('Please enter your email address.', 'error');
                 return;
             }
-
-            // Basic email sanity check
             if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
                 showNewsletterMessage('Please enter a valid email address.', 'error');
                 return;
             }
 
-            if (!FORMSPREE_ENDPOINT) {
-                console.error('Formspree form ID is not configured (FORMSPREE_FORM_ID env var missing).');
-                showNewsletterMessage('Subscription service is not configured. Please try again later.', 'error');
-                return;
-            }
-
-            // Disable button while submitting
             const originalBtnHTML = btn ? btn.innerHTML : '';
             if (btn) {
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Subscribing…';
             }
-
             showNewsletterMessage('Subscribing…', 'info');
 
-            fetch(FORMSPREE_ENDPOINT, {
+            fetch('subscribe.php', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -134,27 +118,19 @@
                 body: JSON.stringify({
                     email: email,
                     source: 'footer_newsletter',
-                    page: window.location.pathname,
-                    _subject: 'New WittyMart newsletter subscriber'
+                    page: window.location.pathname
                 })
             })
             .then(async (response) => {
                 const data = await response.json().catch(() => ({}));
-                if (response.ok) {
-                    return { ok: true, data: data };
-                }
-                // Formspree returns errors in `errors` array
-                const msg = (data.errors && data.errors.length)
-                    ? data.errors.map(e => e.message).join(', ')
-                    : (data.error || 'Subscription failed. Please try again.');
-                return { ok: false, message: msg };
+                return { ok: response.ok, data: data };
             })
-            .then((result) => {
-                if (result.ok) {
-                    showNewsletterMessage('Thank you for subscribing!', 'success');
+            .then(({ ok, data }) => {
+                if (ok && data.success) {
+                    showNewsletterMessage(data.message || 'Thank you for subscribing!', 'success');
                     if (emailInput) emailInput.value = '';
                 } else {
-                    showNewsletterMessage(result.message, 'error');
+                    showNewsletterMessage(data.message || 'Subscription failed. Please try again.', 'error');
                 }
             })
             .catch((error) => {
@@ -175,15 +151,10 @@
             messageDiv.textContent = message;
             messageDiv.style.display = 'block';
 
-            if (type === 'success') {
-                messageDiv.style.color = '#28a745';
-            } else if (type === 'info') {
-                messageDiv.style.color = '#0c5460';
-            } else {
-                messageDiv.style.color = '#dc3545';
-            }
+            if (type === 'success')      messageDiv.style.color = '#28a745';
+            else if (type === 'info')    messageDiv.style.color = '#0c5460';
+            else                          messageDiv.style.color = '#dc3545';
 
-            // Auto-hide only for success/error (keep 'info' visible during submit)
             if (type !== 'info') {
                 clearTimeout(messageDiv._hideTimer);
                 messageDiv._hideTimer = setTimeout(() => {
