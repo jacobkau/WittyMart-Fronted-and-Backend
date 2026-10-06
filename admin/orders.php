@@ -192,6 +192,84 @@ $page_title = 'Orders';
             border-top: 1px solid #dee2e6;
         }
         
+        /* M-Pesa receipt code styling */
+        .mpesa-code {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: #e8f5e9;
+            color: #1b5e20;
+            border: 1px solid #a5d6a7;
+            padding: 3px 10px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .mpesa-code:hover {
+            background: #c8e6c9;
+        }
+        
+        .mpesa-code i {
+            font-size: 10px;
+            opacity: 0.7;
+        }
+        
+        .payment-pill {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        
+        .payment-pill.mpesa { background: #d1f2eb; color: #0e6251; }
+        .payment-pill.paybill { background: #d6eaf8; color: #1a5276; }
+        .payment-pill.cash { background: #fef9e7; color: #7d6608; }
+        .payment-pill.pay_on_delivery { background: #fef9e7; color: #7d6608; }
+        .payment-pill.card { background: #ebdef0; color: #4a235a; }
+        
+        .payment-status-pill {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-left: 4px;
+        }
+        
+        .payment-status-pill.paid { background: #d4edda; color: #155724; }
+        .payment-status-pill.awaiting { background: #fff3cd; color: #856404; }
+        .payment-status-pill.pending { background: #f8d7da; color: #721c24; }
+        .payment-status-pill.failed { background: #f8d7da; color: #721c24; }
+        
+        .copy-toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: #333;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 13px;
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 10000;
+        }
+        
+        .copy-toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+        
         .alert {
             padding: 12px 20px;
             border-radius: 4px;
@@ -365,7 +443,7 @@ $page_title = 'Orders';
                     <div class="table-toolbar">
                         <div class="search-box">
                             <i class="fas fa-search"></i>
-                            <input type="text" id="searchOrders" placeholder="Search orders..." onkeyup="filterTable('searchOrders', 'ordersTable')">
+                            <input type="text" id="searchOrders" placeholder="Search by order #, customer, or M-Pesa code..." onkeyup="filterTable('searchOrders', 'ordersTable')">
                         </div>
                         <div class="filter-box">
                             <select id="statusFilter" onchange="filterOrders()">
@@ -388,12 +466,22 @@ $page_title = 'Orders';
                                     <th>Total</th>
                                     <th>Status</th>
                                     <th>Payment</th>
+                                    <th>M-Pesa Code</th>
                                     <th>Date</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php foreach ($orders as $order): ?>
+                                    <?php
+                                    $payMethod = $order['payment_method'] ?? '';
+                                    $payStatus = $order['payment_status'] ?? '';
+                                    $receipt   = $order['payment_reference'] ?? '';
+                                    // Only treat as a real M-Pesa receipt if the payment method was mpesa/paybill
+                                    // and the payment_status is 'paid'
+                                    $isMpesaOrder = in_array($payMethod, ['mpesa', 'paybill'], true);
+                                    $hasReceipt   = $isMpesaOrder && $payStatus === 'paid' && !empty($receipt);
+                                    ?>
                                     <tr>
                                         <td><strong>#<?php echo htmlspecialchars($order['id']); ?></strong></td>
                                         <td><?php echo htmlspecialchars($order['customer_name'] ?? 'Guest'); ?></td>
@@ -414,7 +502,34 @@ $page_title = 'Orders';
                                                 </select>
                                             </form>
                                         </td>
-                                        <td><?php echo htmlspecialchars($order['payment_method'] ?? 'N/A'); ?></td>
+                                        <td>
+                                            <span class="payment-pill <?php echo htmlspecialchars($payMethod); ?>">
+                                                <?php echo htmlspecialchars(str_replace('_', ' ', $payMethod ?: 'N/A')); ?>
+                                            </span>
+                                            <?php if ($payStatus): ?>
+                                                <span class="payment-status-pill <?php echo $payStatus === 'paid' ? 'paid' : ($payStatus === 'awaiting_payment' ? 'awaiting' : 'pending'); ?>">
+                                                    <?php echo htmlspecialchars(str_replace('_', ' ', $payStatus)); ?>
+                                                </span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php if ($hasReceipt): ?>
+                                                <span class="mpesa-code" onclick="copyToClipboard('<?php echo htmlspecialchars($receipt); ?>')" title="Click to copy">
+                                                    <i class="fas fa-copy"></i>
+                                                    <?php echo htmlspecialchars($receipt); ?>
+                                                </span>
+                                            <?php elseif ($isMpesaOrder && $payStatus === 'awaiting_payment'): ?>
+                                                <span class="text-muted" style="font-size: 12px;">
+                                                    <i class="fas fa-clock"></i> Awaiting payment
+                                                </span>
+                                            <?php elseif ($isMpesaOrder && $payStatus === 'failed'): ?>
+                                                <span class="text-danger" style="font-size: 12px;">
+                                                    <i class="fas fa-times-circle"></i> Failed
+                                                </span>
+                                            <?php else: ?>
+                                                <span class="text-muted">—</span>
+                                            <?php endif; ?>
+                                        </td>
                                         <td><?php echo date('M d, Y H:i', strtotime($order['created_at'])); ?></td>
                                         <td>
                                             <button class="btn-sm btn-edit" onclick="viewOrder(<?php echo $order['id']; ?>)">
@@ -442,6 +557,9 @@ $page_title = 'Orders';
             </div>
         </main>
     </div>
+
+    <!-- Copy Toast -->
+    <div id="copyToast" class="copy-toast">Copied to clipboard!</div>
 
     <!-- View Order Modal -->
     <div id="viewOrderModal" class="modal">
@@ -486,6 +604,46 @@ $page_title = 'Orders';
             }
         });
 
+        // ===== COPY TO CLIPBOARD =====
+        function copyToClipboard(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showCopyToast('M-Pesa code copied: ' + text);
+                }).catch(() => {
+                    // Fallback
+                    fallbackCopy(text);
+                });
+            } else {
+                fallbackCopy(text);
+            }
+        }
+        
+        function fallbackCopy(text) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+                document.execCommand('copy');
+                showCopyToast('M-Pesa code copied: ' + text);
+            } catch (e) {
+                showCopyToast('Copy failed. Code: ' + text);
+            }
+            document.body.removeChild(ta);
+        }
+        
+        function showCopyToast(message) {
+            const toast = document.getElementById('copyToast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            clearTimeout(toast._timer);
+            toast._timer = setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2000);
+        }
+
         // ===== VIEW ORDER =====
         function viewOrder(id) {
             openModal('viewOrderModal');
@@ -496,15 +654,50 @@ $page_title = 'Orders';
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
+                        const order = data.order;
+                        const items = data.items || [];
+                        const payMethod = order.payment_method || '';
+                        const payStatus = order.payment_status || '';
+                        const receipt   = order.payment_reference || '';
+                        const isMpesa   = ['mpesa', 'paybill'].includes(payMethod);
+                        const hasReceipt = isMpesa && payStatus === 'paid' && receipt;
+                        
                         let html = `
                             <div class="order-details">
-                                <p><strong>Order #:</strong> ${data.order.id}</p>
-                                <p><strong>Customer:</strong> ${data.order.customer_name || 'Guest'}</p>
-                                <p><strong>Total:</strong> ${formatPrice(data.order.total)}</p>
-                                <p><strong>Status:</strong> <span class="badge ${getStatusBadge(data.order.status)}">${data.order.status}</span></p>
-                                <p><strong>Date:</strong> ${data.order.created_at}</p>
-                                <p><strong>Payment Method:</strong> ${data.order.payment_method || 'N/A'}</p>
-                                <p><strong>Shipping Address:</strong> ${data.order.shipping_address || 'N/A'}</p>
+                                <p><strong>Order #:</strong> ${order.id}</p>
+                                <p><strong>Customer:</strong> ${order.customer_name || 'Guest'}</p>
+                                <p><strong>Total:</strong> ${formatPrice(order.total)}</p>
+                                <p><strong>Status:</strong> <span class="badge ${getStatusBadge(order.status)}">${order.status}</span></p>
+                                <p><strong>Date:</strong> ${order.created_at}</p>
+                                <p><strong>Payment Method:</strong> 
+                                    <span class="payment-pill ${payMethod}">${(payMethod || 'N/A').replace('_', ' ')}</span>
+                                    ${payStatus ? `<span class="payment-status-pill ${payStatus === 'paid' ? 'paid' : (payStatus === 'awaiting_payment' ? 'awaiting' : 'pending')}">${payStatus.replace('_', ' ')}</span>` : ''}
+                                </p>
+                        `;
+                        
+                        // M-Pesa receipt code block
+                        if (hasReceipt) {
+                            html += `
+                                <p><strong>M-Pesa Receipt:</strong> 
+                                    <span class="mpesa-code" onclick="copyToClipboard('${receipt.replace(/'/g, "\\'")}')" title="Click to copy">
+                                        <i class="fas fa-copy"></i>
+                                        ${receipt}
+                                    </span>
+                                </p>
+                            `;
+                        } else if (isMpesa && payStatus === 'awaiting_payment') {
+                            html += `<p><strong>M-Pesa Receipt:</strong> <span class="text-muted">Awaiting payment confirmation</span></p>`;
+                        } else if (isMpesa && payStatus === 'failed') {
+                            html += `<p><strong>M-Pesa Receipt:</strong> <span class="text-danger">Payment failed</span></p>`;
+                        }
+                        
+                        // M-Pesa phone
+                        if (order.mpesa_phone) {
+                            html += `<p><strong>M-Pesa Phone:</strong> ${order.mpesa_phone}</p>`;
+                        }
+                        
+                        html += `
+                                <p><strong>Shipping Address:</strong> ${order.shipping_address || 'N/A'}</p>
                                 <hr>
                                 <h3>Order Items</h3>
                                 <table class="admin-table">
@@ -518,8 +711,8 @@ $page_title = 'Orders';
                                     </thead>
                                     <tbody>
                         `;
-                        if (data.items && data.items.length > 0) {
-                            data.items.forEach(item => {
+                        if (items.length > 0) {
+                            items.forEach(item => {
                                 html += `
                                     <tr>
                                         <td>${item.product_name}</td>
@@ -542,7 +735,7 @@ $page_title = 'Orders';
                                     </tbody>
                                 </table>
                                 <div style="text-align: right; margin-top: 15px; font-size: 18px; font-weight: 700; color: #05573c;">
-                                    Grand Total: ${formatPrice(data.order.total)}
+                                    Grand Total: ${formatPrice(order.total)}
                                 </div>
                             </div>
                         `;
