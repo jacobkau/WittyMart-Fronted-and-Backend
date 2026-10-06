@@ -321,6 +321,57 @@ try {
     echo "</div>";
 
     // ============================================
+// 6. ORDERS TABLE – M-PESA COLUMNS
+// ============================================
+echo "<div class='box'>";
+echo "<h2>6. Orders Table – M-Pesa Columns <span class='badge badge-new'>REQUIRED</span></h2>";
+
+$order_columns = [
+    'mpesa_checkout_id' => "ALTER TABLE orders ADD COLUMN mpesa_checkout_id VARCHAR(64);",
+    'mpesa_receipt'     => "ALTER TABLE orders ADD COLUMN mpesa_receipt VARCHAR(64);",
+    'paid_at'           => "ALTER TABLE orders ADD COLUMN paid_at TIMESTAMP;",
+];
+
+foreach ($order_columns as $col => $sql) {
+    echo "<h3>• Column: <code>orders.$col</code></h3>";
+    if (columnExists($pdo, 'orders', $col)) {
+        echo "<p class='warn'>⚠ Already exists – skipped</p>";
+        $summary['skipped'][] = "orders.$col";
+    } else {
+        try {
+            $pdo->exec($sql);
+            echo "<p class='ok'>✓ Created</p>";
+            $summary['created'][] = "orders.$col";
+        } catch (PDOException $e) {
+            echo "<p class='err'>✗ " . htmlspecialchars($e->getMessage()) . "</p>";
+            $summary['errors'][] = "orders.$col: " . $e->getMessage();
+        }
+    }
+}
+
+// Index for callback lookups
+$order_indexes = [
+    'idx_orders_mpesa_checkout_id' => "CREATE INDEX idx_orders_mpesa_checkout_id ON orders(mpesa_checkout_id);",
+];
+foreach ($order_indexes as $name => $sql) {
+    echo "<h3>• Index: <code>$name</code></h3>";
+    if (indexExists($pdo, $name)) {
+        echo "<p class='warn'>⚠ Already exists – skipped</p>";
+        $summary['skipped'][] = $name;
+    } else {
+        try {
+            $pdo->exec($sql);
+            echo "<p class='ok'>✓ Created</p>";
+            $summary['created'][] = $name;
+        } catch (PDOException $e) {
+            echo "<p class='err'>✗ " . htmlspecialchars($e->getMessage()) . "</p>";
+            $summary['errors'][] = "$name: " . $e->getMessage();
+        }
+    }
+}
+echo "</div>";
+
+    // ============================================
     // SUMMARY
     // ============================================
     echo "<div class='summary'>";
