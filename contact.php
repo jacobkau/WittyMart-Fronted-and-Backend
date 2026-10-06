@@ -134,11 +134,11 @@ require_once 'includes/config.php';
         .then(({ ok, data }) => {
             if (ok && data.success) {
                 status.className = 'form-status success';
-                status.textContent = 'Success' + (data.message || 'Your message has been sent successfully.');
+                status.textContent = 'Success ' + (data.message || 'Your message has been sent successfully.');
                 form.reset();
             } else {
                 status.className = 'form-status error';
-                status.textContent = 'Failed' + (data.message || 'Something went wrong. Please try again.');
+                status.textContent = 'Failed ' + (data.message || 'Something went wrong. Please try again.');
             }
         })
         .catch((err) => {
