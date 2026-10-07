@@ -1,11 +1,4 @@
-<?php
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-require_once 'includes/config.php';
 
-$page_title = "Admin Dashboard - WittyMart";
-$featured_products = getFeaturedProducts(8);
-?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -89,62 +82,7 @@ $featured_products = getFeaturedProducts(8);
             box-shadow: 0 10px 20px rgba(255,200,87,0.4);
             color: #0b2b3f;
         }
-        .section-title {
-            font-weight: 700;
-            color: #05573c;
-            letter-spacing: -0.3px;
-        }
-        .section-title span {
-            color: #1a4b62;
-            border-bottom: 4px solid #ffc857;
-            padding-bottom: 4px;
-        }
-        .product-grid .card {
-            border: none;
-            border-radius: 24px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.03);
-            transition: 0.25s ease;
-            background: white;
-            height: 100%;
-        }
-        .product-grid .card:hover {
-            transform: translateY(-6px);
-            box-shadow: 0 14px 30px rgba(0,0,0,0.07);
-        }
-        .product-grid .card-img-top {
-            border-radius: 24px 24px 0 0;
-            object-fit: cover;
-            height: 180px;
-            background: #f1f5f9;
-        }
-        .product-grid .badge-stock {
-            font-weight: 500;
-            font-size: 0.7rem;
-            padding: 0.4rem 0.9rem;
-            border-radius: 40px;
-        }
-        .product-grid .price {
-            font-weight: 700;
-            color: #0b2b3f;
-            font-size: 1.2rem;
-        }
-        .product-grid .btn-view {
-            background: #eef2f6;
-            border: none;
-            border-radius: 40px;
-            padding: 0.3rem 1.2rem;
-            font-weight: 500;
-            color: #1a4b62;
-            transition: 0.15s;
-        }
-        .product-grid .btn-view:hover {
-            background: #1a4b62;
-            color: white;
-        }
-        .empty-state i {
-            font-size: 3.5rem;
-            color: #b9c7d4;
-        }
+       
         .footer-admin {
             background: white;
             border-top: 1px solid #e9edf2;
@@ -240,53 +178,6 @@ $featured_products = getFeaturedProducts(8);
     </div>
 </div>
 
-<section class="container-custom pb-5">
-    <div class="d-flex justify-content-between align-items-center flex-wrap mb-4">
-        <h2 class="section-title fs-2 m-0">Featured <span>Products</span></h2>
-        <a href="login.php" class="btn btn-outline-secondary rounded-pill px-4 py-2 border-2 fw-semibold">
-            Manage All <i class="fas fa-arrow-right ms-1"></i>
-        </a>
-    </div>
-
-    <?php if (!empty($featured_products)): ?>
-        <div class="row row-cols-2 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4 product-grid">
-            <?php foreach ($featured_products as $product): ?>
-                <div class="col">
-                    <div class="card h-100">
-                        <img 
-                            src="<?php echo htmlspecialchars($product['image'] ?? 'uploads/products/no-image.png'); ?>" 
-                            class="card-img-top" 
-                            alt="<?php echo htmlspecialchars($product['name']); ?>"
-                            onerror="this.src='uploads/products/aa.png'"
-                        >
-                        <div class="card-body d-flex flex-column">
-                            <div class="d-flex justify-content-between align-items-start mb-1">
-                                <span class="text-secondary small fw-semibold"><?php echo htmlspecialchars($product['category_name'] ?? 'Uncategorized'); ?></span>
-                                <span class="badge-stock bg-<?php echo ($product['stock'] ?? 0) > 0 ? 'success-subtle' : 'danger-subtle'; ?> text-<?php echo ($product['stock'] ?? 0) > 0 ? 'success' : 'danger'; ?> border border-<?php echo ($product['stock'] ?? 0) > 0 ? 'success' : 'danger'; ?> bg-opacity-10">
-                                    <?php echo ($product['stock'] ?? 0) > 0 ? 'In Stock' : 'Out of Stock'; ?>
-                                </span>
-                            </div>
-                            <h5 class="card-title fw-bold mt-1"><?php echo htmlspecialchars($product['name']); ?></h5>
-                            <p class="card-text small text-secondary mb-2"><?php echo htmlspecialchars(substr($product['description'] ?? '', 0, 50)); ?>…</p>
-                            <div class="mt-auto d-flex justify-content-between align-items-center pt-2 border-top">
-                                <span class="price">Ksh <?php echo number_format($product['price'] ?? 0, 2); ?></span>
-                                <a href="product.php?id=<?php echo $product['id']; ?>" class="btn btn-view">
-                                    <i class="fas fa-eye me-1"></i> View
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            <?php endforeach; ?>
-        </div>
-    <?php else: ?>
-        <div class="empty-state text-center py-5">
-            <i class="fas fa-box-open"></i>
-            <h4 class="mt-3 fw-bold">No featured products</h4>
-            <p class="text-secondary">Add products to the featured list in the admin panel.</p>
-        </div>
-    <?php endif; ?>
-</section>
 <footer class="footer-admin py-4 mt-5">
     <div class="container-custom d-flex flex-wrap justify-content-between align-items-center">
         <span class="small"><i class="fas fa-store-alt me-1"></i> WittyMart · Admin Dashboard</span>
