@@ -85,11 +85,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
                 $response = ['success'=>true, 'cart_count'=>getCartCount()];
                 break;
 
-             case 'remove_item':
+            case 'remove_item':
                 $cart_id = intval($_POST['cart_id'] ?? 0);
                 $stmt = $pdo->prepare("DELETE FROM cart WHERE id = ? AND user_id = ?");
                 $stmt->execute([$cart_id, $user_id]);
-                // [PATCH:remove_item_log] Log the removal
                 if (function_exists('logActivity')) {
                     logActivity('remove_from_cart', "Cart item {$cart_id}", $user_id, $_SESSION['user_name'] ?? null);
                 }
@@ -195,33 +194,117 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ajax_action'])) {
                 break;
 
             // ============================================
-            // COUPON
+            // COUPON — rewritten to match the real schema
             // ============================================
             case 'apply_coupon':
                 $code = strtoupper(sanitize($_POST['code'] ?? ''));
                 if (!$code) { $response = ['success'=>false,'message'=>'Enter a coupon code']; break; }
 
-                $stmt = $pdo->prepare("
-                    SELECT * FROM coupons 
-                    WHERE code = ? AND status = 'active' 
-                    AND (valid_until IS NULL OR valid_until > NOW())
-                    AND (max_uses IS NULL OR uses < max_uses)
-                ");
-                $stmt->execute([$code]);
-                $coupon = $stmt->fetch();
-
-                if (!$coupon) { $response = ['success'=>false,'message'=>'Invalid or expired coupon']; break; }
-                if ($total < $coupon['min_order']) {
-                    $response = ['success'=>false,'message'=>'Minimum order Ksh '.number_format($coupon['min_order'])];
+                // Compute cart subtotal first
+                $cartTotalForCoupon = 0;
+                try {
+                    $stmt = $pdo->prepare("
+                        SELECT COALESCE(SUM(p.price * c.quantity), 0) AS subtotal
+                        FROM cart c
+                        INNER JOIN products p ON c.product_id = p.id
+                        WHERE c.user_id = ?
+                    ");
+                    $stmt->execute([$user_id]);
+                    $cartTotalForCoupon = (float)$stmt->fetchColumn();
+                } catch (PDOException $e) {
+                    error_log('Coupon cart total error: ' . $e->getMessage());
+                    $response = ['success'=>false,'message'=>'Could not compute cart total'];
                     break;
                 }
 
-                $discount = $coupon['discount_type'] === 'percent'
-                    ? $total * ($coupon['discount_value'] / 100)
-                    : min($coupon['discount_value'], $total);
+                if ($cartTotalForCoupon <= 0) {
+                    $response = ['success'=>false,'message'=>'Your cart is empty'];
+                    break;
+                }
 
-                $_SESSION['coupon'] = ['code' => $code, 'discount' => $discount, 'id' => $coupon['id']];
-                $response = ['success'=>true, 'discount'=>$discount, 'code'=>$code];
+                // Fetch the coupon using actual schema column names
+                try {
+                    $stmt = $pdo->prepare("
+                        SELECT *
+                        FROM coupons
+                        WHERE code = ?
+                          AND (status IS NULL OR status = 'active')
+                          AND (expires_at IS NULL OR expires_at > NOW())
+                          AND (starts_at IS NULL OR starts_at <= NOW())
+                          AND (usage_limit IS NULL OR COALESCE(used_count, 0) < usage_limit)
+                        LIMIT 1
+                    ");
+                    $stmt->execute([$code]);
+                    $coupon = $stmt->fetch(PDO::FETCH_ASSOC);
+                } catch (PDOException $e) {
+                    error_log('Coupon fetch error: ' . $e->getMessage());
+                    $response = ['success'=>false,'message'=>'Coupon lookup failed'];
+                    break;
+                }
+
+                if (!$coupon) {
+                    $response = ['success'=>false,'message'=>'Invalid or expired coupon'];
+                    break;
+                }
+
+                // Minimum order check
+                $minOrder = (float)($coupon['min_order_amount'] ?? 0);
+                if ($minOrder > 0 && $cartTotalForCoupon < $minOrder) {
+                    $response = ['success'=>false,'message'=>'Minimum order Ksh ' . number_format($minOrder, 0) . ' required'];
+                    break;
+                }
+
+                // Per-user limit check
+                $perUserLimit = (int)($coupon['per_user_limit'] ?? 0);
+                if ($perUserLimit > 0) {
+                    try {
+                        $stmt = $pdo->prepare("
+                            SELECT COUNT(*) FROM coupon_usages
+                            WHERE coupon_id = ? AND user_id = ?
+                        ");
+                        $stmt->execute([$coupon['id'], $user_id]);
+                        $usedByUser = (int)$stmt->fetchColumn();
+                        if ($usedByUser >= $perUserLimit) {
+                            $response = ['success'=>false,'message'=>'You have already used this coupon'];
+                            break;
+                        }
+                    } catch (PDOException $e) {
+                        // coupon_usages might not exist — skip silently
+                        error_log('Coupon usage check skipped: ' . $e->getMessage());
+                    }
+                }
+
+                // Compute discount
+                $discountValue = (float)$coupon['discount_value'];
+                $discountType  = strtolower(trim($coupon['discount_type'] ?? ''));
+
+                if ($discountType === 'percentage' || $discountType === 'percent') {
+                    $discount = $cartTotalForCoupon * ($discountValue / 100);
+                } else {
+                    $discount = $discountValue;
+                }
+
+                // Apply max_discount cap if set
+                $maxDiscount = (float)($coupon['max_discount'] ?? 0);
+                if ($maxDiscount > 0 && $discount > $maxDiscount) {
+                    $discount = $maxDiscount;
+                }
+
+                // Never exceed the cart total
+                $discount = min($discount, $cartTotalForCoupon);
+
+                $_SESSION['coupon'] = [
+                    'code'     => $code,
+                    'id'       => $coupon['id'],
+                    'discount' => round($discount, 2),
+                ];
+
+                $response = [
+                    'success'  => true,
+                    'discount' => round($discount, 2),
+                    'code'     => $code,
+                    'message'  => 'Coupon applied — you save Ksh ' . number_format($discount, 0),
+                ];
                 break;
 
             case 'remove_coupon':
@@ -260,7 +343,7 @@ function getCartProductImage($product) {
 }
 
 function countyTransportFee($county) {
-    if ($county === '__PICKUP__') return 0; // Office pickup = free
+    if ($county === '__PICKUP__') return 0;
     $nearby = ['Nairobi','Kiambu','Machakos','Kajiado',"Murang'a",'Nyeri','Kirinyaga','Embu','Nakuru'];
     $mid    = ['Mombasa','Kisumu','Uasin Gishu','Kakamega','Meru','Laikipia','Bungoma','Kisii','Nyamira','Kericho','Bomet','Narok'];
     if (in_array($county, $nearby, true)) return 100;
@@ -535,7 +618,6 @@ $page_title = 'Cart';
                     </h2>
 
                     <div class="address-list" id="addressList">
-                        <!-- OFFICE PICKUP CARD (always first, transport = 0) -->
                         <div class="address-card pickup-card <?php echo $isPickup ? 'selected' : ''; ?>"
                              data-id="pickup"
                              data-county="__PICKUP__"
@@ -734,7 +816,7 @@ $page_title = 'Cart';
     <script>
         function computeTransportFee(county) {
             if (!county) return 0;
-            if (county === '__PICKUP__') return 0; // Office pickup = free
+            if (county === '__PICKUP__') return 0;
             const nearby = ['Nairobi','Kiambu','Machakos','Kajiado',"Murang'a",'Nyeri','Kirinyaga','Embu','Nakuru'];
             const mid    = ['Mombasa','Kisumu','Uasin Gishu','Kakamega','Meru','Laikipia','Bungoma','Kisii','Nyamira','Kericho','Bomet','Narok'];
             if (nearby.includes(county)) return 100;
@@ -755,9 +837,6 @@ $page_title = 'Cart';
             if (dEl) dEl.textContent = currentDiscount.toLocaleString();
         }
 
-        // ============================================
-        // CART OPERATIONS
-        // ============================================
         function refreshCartCount() {
             fetch('cart.php?action=get_cart_count').then(r => r.json()).then(data => {
                 if (!data.success) return;
@@ -827,9 +906,6 @@ $page_title = 'Cart';
             refreshTotals();
         }
 
-        // ============================================
-        // COUPON
-        // ============================================
         function applyCoupon() {
             const code = document.getElementById('couponInput').value.trim();
             if (!code) return;
@@ -848,9 +924,6 @@ $page_title = 'Cart';
             fetch('cart.php', { method: 'POST', body: fd }).then(() => location.reload());
         }
 
-        // ============================================
-        // ADDRESS
-        // ============================================
         function openAddressModal(id) {
             document.getElementById('addrError').style.display = 'none';
             document.getElementById('addrForm').reset();
@@ -945,9 +1018,6 @@ $page_title = 'Cart';
             fetch('cart.php', { method: 'POST', body: fd });
         }
 
-        // ============================================
-        // CHECKOUT
-        // ============================================
         function checkout() {
             if (!document.querySelector('.cart-item')) { alert('Your cart is empty!'); return; }
             if (!document.querySelector('.address-card.selected')) {
@@ -956,9 +1026,6 @@ $page_title = 'Cart';
             window.location.href = 'checkout.php';
         }
 
-        // ============================================
-        // QUICK VIEW
-        // ============================================
         let qvGallery = [], qvIndex = 0;
         function openQuickView(productId) {
             document.getElementById('qvOverlay').classList.add('active');
