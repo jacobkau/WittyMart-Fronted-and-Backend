@@ -20,8 +20,11 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
         $stmt = $pdo->query("
             SELECT
                 o.order_number,
+                o.payment_method,
                 o.mpesa_receipt,
                 o.mpesa_phone,
+                o.paybill_number,
+                o.paybill_account,
                 o.total,
                 o.shipping_fee,
                 o.payment_status,
@@ -40,10 +43,12 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
         header('Content-Type: text/csv');
         header('Content-Disposition: attachment; filename="mpesa_statements_' . date('Ymd_His') . '.csv"');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['Order #', 'M-Pesa Receipt', 'Phone', 'Total (Ksh)', 'Shipping', 'Payment Status', 'Order Status', 'Paid At', 'Created At', 'Customer', 'Email']);
+        fputcsv($out, ['Order #', 'Method', 'M-Pesa Receipt', 'Phone', 'Paybill #', 'Paybill Acct', 'Total (Ksh)', 'Shipping', 'Payment Status', 'Order Status', 'Paid At', 'Created At', 'Customer', 'Email']);
         foreach ($rows as $r) {
             fputcsv($out, [
-                $r['order_number'], $r['mpesa_receipt'], $r['mpesa_phone'],
+                $r['order_number'], $r['payment_method'],
+                $r['mpesa_receipt'], $r['mpesa_phone'],
+                $r['paybill_number'], $r['paybill_account'],
                 $r['total'], $r['shipping_fee'], $r['payment_status'], $r['status'],
                 $r['paid_at'], $r['created_at'], $r['customer_name'], $r['customer_email']
             ]);
@@ -56,7 +61,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
 }
 
 // ============================================
-// HANDLE MANUAL ACTIONS (reconcile / mark failed)
+// HANDLE MANUAL ACTIONS
 // ============================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -116,6 +121,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     if (!$order) {
                         $message = 'Order not found.';
+                        $messageType = 'error';
+                        break;
+                    }
+
+                    // Guard: only M-Pesa orders can be retried via STK
+                    if (($order['payment_method'] ?? '') !== 'mpesa') {
+                        $message = 'This order is not an M-Pesa (STK push) order. Retry is only available for M-Pesa payments.';
                         $messageType = 'error';
                         break;
                     }
@@ -242,7 +254,6 @@ $page_title = 'M-Pesa Statements';
     <link rel="shortcut icon" href="images/logo.png" type="image/x-icon">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* ===== STATUS BADGES ===== */
         .status-badge {
             padding: 3px 10px;
             border-radius: 12px;
@@ -258,7 +269,19 @@ $page_title = 'M-Pesa Statements';
         .status-failed     { background-color: #dc3545; }
         .status-processing { background-color: #0d6efd; }
 
-        /* ===== RECEIPT CODE ===== */
+        .method-badge {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: inline-block;
+            margin-top: 4px;
+        }
+        .method-mpesa   { background: #d1f2eb; color: #0e6251; }
+        .method-paybill { background: #fff3cd; color: #856404; }
+
         .receipt-code {
             font-family: 'SF Mono', 'Courier New', monospace;
             background: #f0f0f0;
@@ -276,7 +299,6 @@ $page_title = 'M-Pesa Statements';
             letter-spacing: normal;
         }
 
-        /* ===== TOOLBAR ===== */
         .table-toolbar {
             display: flex;
             justify-content: space-between;
@@ -351,7 +373,6 @@ $page_title = 'M-Pesa Statements';
             box-shadow: 0 0 0 3px rgba(5, 87, 60, 0.1);
         }
 
-        /* ===== STATUS CHIPS ===== */
         .category-chips {
             display: flex;
             flex-wrap: wrap;
@@ -391,7 +412,6 @@ $page_title = 'M-Pesa Statements';
             color: #fff;
         }
 
-        /* ===== STATS CARDS ===== */
         .stats-row {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -429,7 +449,6 @@ $page_title = 'M-Pesa Statements';
         .stat-card.info    { border-left-color: #17a2b8; }
         .stat-card.success { border-left-color: #28a745; }
 
-        /* ===== RESULTS INFO ===== */
         .results-info {
             padding: 10px 14px;
             background: #fafafa;
@@ -444,7 +463,6 @@ $page_title = 'M-Pesa Statements';
         }
         .results-info strong { color: #05573c; }
 
-        /* ===== TABLE ===== */
         .admin-table th { font-size: 12px; }
         .admin-table td { font-size: 13px; vertical-align: middle; }
         .amount-cell { font-weight: 700; color: #05573c; white-space: nowrap; }
@@ -456,9 +474,7 @@ $page_title = 'M-Pesa Statements';
             font-weight: 600;
             text-decoration: none;
         }
-        .order-link:hover {
-            text-decoration: underline;
-        }
+        .order-link:hover { text-decoration: underline; }
 
         .action-buttons {
             display: flex;
@@ -497,12 +513,8 @@ $page_title = 'M-Pesa Statements';
             margin-bottom: 15px;
             opacity: 0.3;
         }
-        .no-results-message h3 {
-            margin: 0 0 8px;
-            color: #555;
-        }
+        .no-results-message h3 { margin: 0 0 8px; color: #555; }
 
-        /* ===== EXPORT BUTTON ===== */
         .export-btn {
             display: inline-flex;
             align-items: center;
@@ -538,7 +550,7 @@ $page_title = 'M-Pesa Statements';
         <main class="admin-main">
             <header class="admin-header" style="margin-bottom:20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
                 <span class="badge badge-info" style="padding: 8px 16px; background: #e8f5f0; color: #05573c; border-radius: 20px; font-weight: 600;">
-                    <i class="fas fa-mobile-alt"></i> <?php echo $total_orders; ?> M-Pesa transactions
+                    <i class="fas fa-mobile-alt"></i> <?php echo $total_orders; ?> M-Pesa & Paybill transactions
                 </span>
                 <a href="?export=csv" class="export-btn">
                     <i class="fas fa-file-csv"></i> Export CSV
@@ -554,12 +566,12 @@ $page_title = 'M-Pesa Statements';
 
             <div class="admin-card" style="padding:0; overflow:hidden;">
 
-                <!-- ===== TOOLBAR ===== -->
+                <!-- TOOLBAR -->
                 <div class="table-toolbar">
                     <div class="search-box">
                         <i class="fas fa-search"></i>
                         <input type="text" id="searchOrders"
-                               placeholder="Search by order #, receipt, phone, customer, email..."
+                               placeholder="Search by order #, receipt, phone, paybill acct, customer..."
                                oninput="applyFilters()">
                         <button class="clear-search-btn" id="clearSearchBtn" onclick="clearSearch()" style="display:none;">
                             <i class="fas fa-times"></i>
@@ -568,6 +580,11 @@ $page_title = 'M-Pesa Statements';
                     <div class="filter-controls">
                         <input type="date" id="dateFrom" onchange="applyFilters()" title="From date">
                         <input type="date" id="dateTo" onchange="applyFilters()" title="To date">
+                        <select id="methodFilter" onchange="applyFilters()">
+                            <option value="">All Methods</option>
+                            <option value="mpesa">M-Pesa (STK)</option>
+                            <option value="paybill">Paybill</option>
+                        </select>
                         <select id="paymentStatusFilter" onchange="applyFilters()">
                             <option value="">All Payment Statuses</option>
                             <option value="paid">Paid</option>
@@ -578,7 +595,7 @@ $page_title = 'M-Pesa Statements';
                     </div>
                 </div>
 
-                <!-- ===== STATUS CHIPS ===== -->
+                <!-- STATUS CHIPS -->
                 <div class="category-chips">
                     <div class="category-chip active" data-status="" onclick="setStatusFilter(this, '')">
                         <i class="fas fa-th"></i> All
@@ -598,7 +615,7 @@ $page_title = 'M-Pesa Statements';
                     </div>
                 </div>
 
-                <!-- ===== STATS CARDS ===== -->
+                <!-- STATS -->
                 <div class="stats-row">
                     <div class="stat-card success">
                         <div class="stat-label">Total Collected</div>
@@ -622,7 +639,7 @@ $page_title = 'M-Pesa Statements';
                     </div>
                 </div>
 
-                <!-- ===== RESULTS INFO ===== -->
+                <!-- RESULTS INFO -->
                 <div class="results-info">
                     <span id="resultsCount">
                         Showing <strong><?php echo $total_orders; ?></strong> of <strong><?php echo $total_orders; ?></strong> transactions
@@ -630,7 +647,7 @@ $page_title = 'M-Pesa Statements';
                     <span id="activeFilterLabel" style="color:#05573c; font-weight:600;"></span>
                 </div>
 
-                <!-- ===== TABLE ===== -->
+                <!-- TABLE -->
                 <div class="card-body" style="padding:0;">
                     <?php if (count($orders) > 0): ?>
                         <div style="overflow-x:auto;">
@@ -639,7 +656,7 @@ $page_title = 'M-Pesa Statements';
                                     <tr>
                                         <th>Order #</th>
                                         <th>Customer</th>
-                                        <th>Phone</th>
+                                        <th>Phone / Acct</th>
                                         <th>Receipt / Ref</th>
                                         <th>Amount</th>
                                         <th>Payment</th>
@@ -651,6 +668,7 @@ $page_title = 'M-Pesa Statements';
                                 <tbody>
                                     <?php foreach ($orders as $o): ?>
                                         <?php
+                                            $pm        = $o['payment_method'] ?? '';
                                             $ps        = $o['payment_status'] ?? 'pending';
                                             $statusCls = 'status-' . str_replace('_', '-', strtolower($ps));
                                             if ($ps === 'awaiting_payment') $statusCls = 'status-awaiting';
@@ -662,22 +680,29 @@ $page_title = 'M-Pesa Statements';
                                             $searchText = strtolower(
                                                 ($o['order_number'] ?? '') . ' ' .
                                                 ($o['mpesa_phone'] ?? '') . ' ' .
+                                                ($o['paybill_number'] ?? '') . ' ' .
+                                                ($o['paybill_account'] ?? '') . ' ' .
                                                 ($receipt) . ' ' .
                                                 ($o['customer_name'] ?? '') . ' ' .
                                                 ($o['customer_email'] ?? '')
                                             );
                                         ?>
                                         <tr data-status="<?php echo htmlspecialchars($ps); ?>"
+                                            data-method="<?php echo htmlspecialchars($pm); ?>"
                                             data-date="<?php echo htmlspecialchars(substr($dateForFilter, 0, 10)); ?>"
                                             data-search="<?php echo htmlspecialchars($searchText); ?>">
                                             <td>
-                                                <!-- ===== ORDER NUMBER → ADMIN ORDER DETAILS ===== -->
                                                 <a href="orders.php?view=<?php echo (int)$o['id']; ?>"
                                                    target="_blank"
                                                    rel="noopener"
                                                    class="order-link">
                                                     <?php echo htmlspecialchars($o['order_number']); ?>
                                                 </a>
+                                                <?php if ($pm === 'paybill'): ?>
+                                                    <br><span class="method-badge method-paybill">Paybill</span>
+                                                <?php else: ?>
+                                                    <br><span class="method-badge method-mpesa">M-Pesa</span>
+                                                <?php endif; ?>
                                             </td>
                                             <td>
                                                 <?php echo htmlspecialchars($o['customer_name'] ?? 'Guest'); ?>
@@ -686,7 +711,15 @@ $page_title = 'M-Pesa Statements';
                                                 <?php endif; ?>
                                             </td>
                                             <td class="phone-cell">
-                                                <?php echo htmlspecialchars($o['mpesa_phone'] ?? '—'); ?>
+                                                <?php if ($pm === 'paybill'): ?>
+                                                    <?php if (!empty($o['paybill_account'])): ?>
+                                                        Acct: <?php echo htmlspecialchars($o['paybill_account']); ?>
+                                                    <?php else: ?>
+                                                        <span style="color:#aaa;">—</span>
+                                                    <?php endif; ?>
+                                                <?php else: ?>
+                                                    <?php echo htmlspecialchars($o['mpesa_phone'] ?? '—'); ?>
+                                                <?php endif; ?>
                                             </td>
                                             <td>
                                                 <?php if ($hasRec): ?>
@@ -717,13 +750,13 @@ $page_title = 'M-Pesa Statements';
                                             <td>
                                                 <div class="action-buttons">
                                                     <?php if ($ps === 'paid'): ?>
-                                                        <!-- ===== VIEW → ADMIN ORDER DETAILS ===== -->
                                                         <button class="btn-sm info"
                                                                 title="View order in admin"
                                                                 onclick="window.open('orders.php?view=<?php echo (int)$o['id']; ?>','_blank')">
                                                             <i class="fas fa-eye"></i>
                                                         </button>
-                                                    <?php elseif ($ps === 'failed'): ?>
+                                                    <?php elseif ($ps === 'failed' && $pm === 'mpesa'): ?>
+                                                        <!-- Retry STK only for M-Pesa -->
                                                         <form method="POST" onsubmit="return confirm('Re-send M-Pesa STK push to this customer?')">
                                                             <input type="hidden" name="action" value="retry_stk">
                                                             <input type="hidden" name="id" value="<?php echo (int)$o['id']; ?>">
@@ -736,7 +769,15 @@ $page_title = 'M-Pesa Statements';
                                                                 title="Mark as paid">
                                                             <i class="fas fa-check"></i>
                                                         </button>
+                                                    <?php elseif ($ps === 'failed' && $pm === 'paybill'): ?>
+                                                        <!-- Paybill failed — only manual mark paid -->
+                                                        <button class="btn-sm success"
+                                                                onclick="promptMarkPaid(<?php echo (int)$o['id']; ?>, '<?php echo htmlspecialchars(addslashes($o['order_number'])); ?>')"
+                                                                title="Mark as paid">
+                                                            <i class="fas fa-check"></i> Paid
+                                                        </button>
                                                     <?php else: ?>
+                                                        <!-- Awaiting payment: mark paid or mark failed -->
                                                         <button class="btn-sm success"
                                                                 onclick="promptMarkPaid(<?php echo (int)$o['id']; ?>, '<?php echo htmlspecialchars(addslashes($o['order_number'])); ?>')"
                                                                 title="Mark as paid">
@@ -766,7 +807,7 @@ $page_title = 'M-Pesa Statements';
                     <?php else: ?>
                         <p class="text-muted text-center" style="padding: 60px 20px;">
                             <i class="fas fa-mobile-alt" style="font-size: 48px; display: block; margin-bottom: 10px; opacity: 0.3;"></i>
-                            No M-Pesa transactions yet.
+                            No M-Pesa / Paybill transactions yet.
                         </p>
                     <?php endif; ?>
                 </div>
@@ -774,7 +815,7 @@ $page_title = 'M-Pesa Statements';
         </main>
     </div>
 
-    <!-- Manual "Mark as Paid" prompt modal -->
+    <!-- MARK AS PAID MODAL -->
     <div id="markPaidModal" class="modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
         <div class="modal-content" style="max-width:440px; background:#fff; border-radius:12px; padding:26px; position:relative;">
             <span onclick="closeMarkPaidModal()" style="position:absolute; top:14px; right:16px; font-size:22px; cursor:pointer; color:#888;">&times;</span>
@@ -807,9 +848,6 @@ $page_title = 'M-Pesa Statements';
     </div>
 
     <script>
-        // ============================================
-        // FILTER STATE
-        // ============================================
         var activeStatus = '';
 
         function setStatusFilter(el, status) {
@@ -828,6 +866,7 @@ $page_title = 'M-Pesa Statements';
             var rows         = table.querySelectorAll('tbody tr');
             var searchVal    = (document.getElementById('searchOrders').value || '').toLowerCase().trim();
             var statusVal    = document.getElementById('paymentStatusFilter').value;
+            var methodVal    = document.getElementById('methodFilter').value;
             var dateFrom     = document.getElementById('dateFrom').value;
             var dateTo       = document.getElementById('dateTo').value;
 
@@ -835,25 +874,18 @@ $page_title = 'M-Pesa Statements';
 
             rows.forEach(function (row) {
                 var rowStatus = (row.dataset.status || '').toLowerCase();
+                var rowMethod = (row.dataset.method || '').toLowerCase();
                 var rowDate   = row.dataset.date || '';
                 var rowSearch = row.dataset.search || '';
 
                 var show = true;
 
-                if (activeStatus && rowStatus !== activeStatus.toLowerCase()) {
-                    show = false;
-                }
-
-                if (show && statusVal && rowStatus !== statusVal.toLowerCase()) {
-                    show = false;
-                }
-
+                if (activeStatus && rowStatus !== activeStatus.toLowerCase()) show = false;
+                if (show && statusVal && rowStatus !== statusVal.toLowerCase()) show = false;
+                if (show && methodVal && rowMethod !== methodVal.toLowerCase()) show = false;
                 if (show && dateFrom && rowDate && rowDate < dateFrom) show = false;
                 if (show && dateTo   && rowDate && rowDate > dateTo)   show = false;
-
-                if (show && searchVal && rowSearch.indexOf(searchVal) === -1) {
-                    show = false;
-                }
+                if (show && searchVal && rowSearch.indexOf(searchVal) === -1) show = false;
 
                 row.style.display = show ? '' : 'none';
                 if (show) visibleCount++;
@@ -864,7 +896,8 @@ $page_title = 'M-Pesa Statements';
 
             var labels = [];
             if (activeStatus) labels.push('Status: ' + activeStatus);
-            if (statusVal)    labels.push('Dropdown: ' + statusVal);
+            if (statusVal)    labels.push('Payment: ' + statusVal);
+            if (methodVal)    labels.push('Method: ' + methodVal);
             if (dateFrom)     labels.push('From: ' + dateFrom);
             if (dateTo)       labels.push('To: ' + dateTo);
             if (searchVal)    labels.push('Search: "' + searchVal + '"');
@@ -884,9 +917,6 @@ $page_title = 'M-Pesa Statements';
             document.getElementById('searchOrders').focus();
         }
 
-        // ============================================
-        // MARK AS PAID MODAL
-        // ============================================
         function promptMarkPaid(orderId, orderNumber) {
             document.getElementById('markPaidOrderId').value = orderId;
             document.getElementById('markPaidReceipt').value = '';
@@ -908,7 +938,6 @@ $page_title = 'M-Pesa Statements';
             if (e.key === 'Escape') closeMarkPaidModal();
         });
 
-        // Auto-hide alerts
         setTimeout(function () {
             document.querySelectorAll('.alert-persistent').forEach(function (alert) {
                 alert.style.transition = 'opacity 0.5s ease';
