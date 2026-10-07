@@ -45,7 +45,10 @@ function isActive($page) {
         <i class="fas fa-envelope-open-text"></i>
         <span>Subscribers</span>
     </a>
-
+ <a href="coupons.php" class="<?php echo isActive('coupons.php'); ?>">
+        <i class="fas fa-tag"></i>
+        <span>Coupons</span>
+    </a>
 
     <a href="mpesa_statements.php" class="<?php echo isActive('mpesa_statements.php'); ?>">
         <i class="fas fa-mobile-alt"></i>
