@@ -21,6 +21,12 @@ $error     = '';
 $order_error = '';
 
 // ============================================
+// PAYBILL CONFIG
+// ============================================
+// Set these to your real values, or store them in the settings table
+$PAYBILL_NUMBER = '247247';   // <-- replace with your actual paybill number
+
+// ============================================
 // LOAD CART
 // ============================================
 try {
@@ -98,7 +104,7 @@ $totalAfterDiscount = max(0, $total - $discount);
 // TRANSPORT FEE
 // ============================================
 function countyTransportFee($county) {
-    if ($county === '__PICKUP__') return 0; // Office pickup = free
+    if ($county === '__PICKUP__') return 0;
     $nearby = ['Nairobi','Kiambu','Machakos','Kajiado',"Murang'a",'Nyeri','Kirinyaga','Embu','Nakuru'];
     $mid    = ['Mombasa','Kisumu','Uasin Gishu','Kakamega','Meru','Laikipia','Bungoma','Kisii','Nyamira','Kericho','Bomet','Narok'];
     if (in_array($county, $nearby, true)) return 100;
@@ -132,12 +138,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
             $order_error = 'Please select a valid delivery address.';
         } elseif (empty($payment_method)) {
             $order_error = 'Please select a payment method.';
-        } elseif (in_array($payment_method, ['mpesa', 'paybill']) && empty($mpesa_phone)) {
+        } elseif ($payment_method === 'mpesa' && empty($mpesa_phone)) {
             $order_error = 'Please enter the M-Pesa phone number.';
         } else {
-            $payment_status = in_array($payment_method, ['mpesa', 'paybill'])
-                ? 'awaiting_payment'
-                : 'pending';
+            // Payment status depends on method
+            if ($payment_method === 'mpesa') {
+                $payment_status = 'awaiting_payment'; // STK push fires automatically
+            } elseif ($payment_method === 'paybill') {
+                $payment_status = 'awaiting_payment'; // Customer pays manually
+            } else {
+                $payment_status = 'pending'; // Pay on delivery
+            }
 
             $pdo->beginTransaction();
 
@@ -157,7 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
             if ($stock_error) {
                 $pdo->rollBack();
             } else {
-                // Determine shipping details
+                // Shipping details
                 if ($isPickupPost) {
                     $shipping_fee        = 0;
                     $shipping_address    = 'WittyMart Headquarters, Nairobi CBD (Office Pickup)';
@@ -195,14 +206,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
                 }
                 if (!$order_number) throw new Exception('Order number generation failed.');
 
-                // Insert order
+                // Paybill details (only for paybill method)
+                $paybill_number  = null;
+                $paybill_account = null;
+                if ($payment_method === 'paybill') {
+                    $paybill_number  = $PAYBILL_NUMBER;
+                    $paybill_account = $order_number;
+                }
+
+                // Insert order — note: coupon_code, coupon_discount, paybill_* now included
                 $stmt = $pdo->prepare("
                     INSERT INTO orders
                     (user_id, order_number, total, shipping_fee, status,
                      payment_method, payment_status, shipping_address, shipping_city,
                      delivery_instructions, delivery_county, delivery_phone,
-                     delivery_recipient, address_id, mpesa_phone, created_at)
-                    VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                     delivery_recipient, address_id, mpesa_phone,
+                     coupon_code, coupon_discount,
+                     paybill_number, paybill_account,
+                     created_at)
+                    VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
                 ");
                 $stmt->execute([
                     $user_id, $order_number, $order_total, $shipping_fee,
@@ -211,7 +233,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
                     $delivery_instructions,
                     $delivery_county, $delivery_phone,
                     $delivery_recipient, $address_id,
-                    $mpesa_phone
+                    $mpesa_phone ?: null,
+                    $couponCode ?: null,
+                    $discount > 0 ? $discount : null,
+                    $paybill_number,
+                    $paybill_account
                 ]);
                 $order_id = $pdo->lastInsertId();
 
@@ -235,18 +261,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
                     }
                 }
 
-                // Coupon use
+                // Coupon use — increment counter and log usage
                 if (!empty($_SESSION['coupon']['id'])) {
+                    $couponId    = (int)$_SESSION['coupon']['id'];
+                    $discountAmt = (float)($_SESSION['coupon']['discount'] ?? 0);
+
                     try {
-                        $pdo->prepare("UPDATE coupons SET uses = uses + 1 WHERE id = ?")
-                            ->execute([$_SESSION['coupon']['id']]);
+                        $pdo->prepare("
+                            UPDATE coupons
+                            SET used_count = COALESCE(used_count, 0) + 1
+                            WHERE id = ?
+                        ")->execute([$couponId]);
                     } catch (PDOException $e) {
-                        try {
-                            $pdo->prepare("UPDATE coupons SET used_count = used_count + 1 WHERE id = ?")
-                                ->execute([$_SESSION['coupon']['id']]);
-                        } catch (PDOException $e2) {
-                            error_log('Coupon increment failed: ' . $e2->getMessage());
-                        }
+                        error_log('Coupon increment failed: ' . $e->getMessage());
+                    }
+
+                    try {
+                        $pdo->prepare("
+                            INSERT INTO coupon_usages (coupon_id, user_id, order_id, discount_amount, used_at)
+                            VALUES (?, ?, ?, ?, NOW())
+                        ")->execute([$couponId, $user_id, $order_id, $discountAmt]);
+                    } catch (PDOException $e) {
+                        error_log('Coupon usage log failed: ' . $e->getMessage());
                     }
                 }
 
@@ -257,7 +293,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['place_order'])) {
 
                 logActivity('order_placed', 'Order #' . $order_number, $user_id, $user_name);
 
-                $stk_needed = in_array($payment_method, ['mpesa', 'paybill']) && !empty($mpesa_phone);
+                // Only M-Pesa triggers an STK push. Paybill is manual.
+                $stk_needed = ($payment_method === 'mpesa') && !empty($mpesa_phone);
 
                 $_SESSION['order_success']  = true;
                 $_SESSION['order_number']   = $order_number;
@@ -392,6 +429,21 @@ $page_title = 'Checkout';
             font-size: 13px; margin-top: 8px;
             display: flex; gap: 8px; align-items: flex-start;
         }
+        .mpesa-info.paybill {
+            background: #fff3cd;
+            color: #856404;
+            border-left: 4px solid #ffc107;
+        }
+        .paybill-details {
+            margin-top: 10px;
+            padding: 12px 14px;
+            background: #fff;
+            border-radius: 8px;
+            font-family: 'SF Mono', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.8;
+        }
+        .paybill-details strong { color: #333; }
 
         @media (max-width: 992px) {
             .checkout-container { grid-template-columns: 1fr; }
@@ -480,6 +532,7 @@ $page_title = 'Checkout';
                             </div>
                         </div>
 
+                        <!-- M-PESA PHONE (only for STK push) -->
                         <div class="form-group" id="mpesaFields" style="display:none;">
                             <label>M-Pesa Phone Number <span style="color:#dc3545;">*</span></label>
                             <input type="tel" name="mpesa_phone" id="mpesaPhone" placeholder="07XX XXX XXX or +254 7XX XXX XXX">
@@ -488,6 +541,22 @@ $page_title = 'Checkout';
                                 <div>
                                     A payment prompt will be sent to this number. Enter your M-Pesa PIN to complete payment of
                                     <strong>Ksh <?php echo number_format($grandTotal, 0); ?></strong>.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- PAYBILL INSTRUCTIONS (no STK push) -->
+                        <div class="form-group" id="paybillFields" style="display:none;">
+                            <label>Paybill Payment Instructions</label>
+                            <div class="mpesa-info paybill">
+                                <i class="fas fa-info-circle"></i>
+                                <div>
+                                    <strong>Manual payment required.</strong> After placing your order, use your M-Pesa app to pay via Paybill. Your order will be marked as paid once we confirm the payment.
+                                    <div class="paybill-details">
+                                        <div><strong>Business Number:</strong> <?php echo htmlspecialchars($PAYBILL_NUMBER); ?></div>
+                                        <div><strong>Account Number:</strong> Your order number (shown after placing the order)</div>
+                                        <div><strong>Amount:</strong> Ksh <?php echo number_format($grandTotal, 0); ?></div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -566,14 +635,21 @@ $page_title = 'Checkout';
         function toggleMpesa() {
             const checked = document.querySelector('input[name="payment_method"]:checked');
             const m = checked ? checked.value : 'pay_on_delivery';
-            const fields = document.getElementById('mpesaFields');
+            const mpesaFields = document.getElementById('mpesaFields');
+            const paybillFields = document.getElementById('paybillFields');
             const phone = document.getElementById('mpesaPhone');
-            if (m === 'mpesa' || m === 'paybill') {
-                fields.style.display = 'block';
-                if (phone && !phone.hasAttribute('required')) phone.setAttribute('required', 'required');
-            } else {
-                fields.style.display = 'none';
-                if (phone) phone.removeAttribute('required');
+
+            // Reset
+            mpesaFields.style.display = 'none';
+            paybillFields.style.display = 'none';
+            if (phone) phone.removeAttribute('required');
+
+            if (m === 'mpesa') {
+                mpesaFields.style.display = 'block';
+                if (phone) phone.setAttribute('required', 'required');
+            } else if (m === 'paybill') {
+                paybillFields.style.display = 'block';
+                // No phone needed for paybill — customer pays manually
             }
         }
 
@@ -581,13 +657,17 @@ $page_title = 'Checkout';
             const btn = document.getElementById('placeOrderBtn');
             const checked = document.querySelector('input[name="payment_method"]:checked');
             const method = checked ? checked.value : 'pay_on_delivery';
-            const isMpesa = (method === 'mpesa' || method === 'paybill');
+
+            let loadingText = 'Placing order…';
+            if (method === 'mpesa') {
+                loadingText = 'Sending M-Pesa prompt…';
+            } else if (method === 'paybill') {
+                loadingText = 'Placing order…';
+            }
 
             setTimeout(function() {
                 btn.disabled = true;
-                btn.innerHTML = isMpesa
-                    ? '<i class="fas fa-spinner fa-spin"></i> Sending M-Pesa prompt…'
-                    : '<i class="fas fa-spinner fa-spin"></i> Placing order…';
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + loadingText;
             }, 0);
         });
 
