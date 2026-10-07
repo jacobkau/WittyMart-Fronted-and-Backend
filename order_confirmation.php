@@ -104,9 +104,12 @@ try {
             $stk_phone     = $order['mpesa_phone'] ?? '';
             $stk_amount    = (float)$order['total'];
             $stk_reference = 'ORD' . $order['id'];
-            $stk_needed    = !empty($order['mpesa_phone'])
-                             && in_array($order['payment_method'], ['mpesa','paybill'], true)
-                             && $order['payment_status'] === 'awaiting_payment';
+
+            // Only M-Pesa triggers an automatic STK push.
+            // Paybill is a manual payment (customer uses M-Pesa menu).
+            $stk_needed = ($order['payment_method'] === 'mpesa')
+                          && !empty($order['mpesa_phone'])
+                          && $order['payment_status'] === 'awaiting_payment';
         }
     }
 } catch (PDOException $e) {
@@ -192,6 +195,9 @@ if ($order) {
         } elseif ($ps === 'failed') {
             $paymentTitle   = 'Payment Not Completed';
             $paymentMessage = 'Your M-Pesa payment was cancelled or failed. Retry from My Orders.';
+        } elseif ($pm === 'paybill') {
+            $paymentTitle   = 'Awaiting Paybill Payment';
+            $paymentMessage = "Pay Ksh {$totalFmt} via M-Pesa Paybill. Use the details below, then we'll confirm.";
         } else {
             $paymentTitle   = 'Awaiting Payment';
             $paymentMessage = "Check your phone and enter your M-Pesa PIN to complete payment of Ksh {$totalFmt}.";
@@ -292,7 +298,7 @@ $emailBodyFull = '<div style="font-family: system-ui, -apple-system, \'Segoe UI\
 // ============================================
 // SERVER-SIDE EMAIL SEND (idempotent per order)
 // ============================================
-$emailSendStatus = 'skipped'; // 'sent' | 'failed' | 'skipped' | 'already'
+$emailSendStatus = 'skipped';
 
 if ($order && !empty($user['email'])) {
     $emailSessionKey = 'email_sent_' . (int)$order['id'];
@@ -414,6 +420,19 @@ $page_title = 'Order Confirmed';
         .oc-status-card.mpesa-warn { background: #fff3cd; color: #856404; border-left: 4px solid #ffc107; }
         .oc-status-card.cod { background: #d4edda; color: #155724; border-left: 4px solid #28a745; }
         .oc-status-card.failed { background: #f8d7da; color: #721c24; border-left: 4px solid #dc3545; }
+        .oc-status-card.paybill { background: #fff3cd; color: #856404; border-left: 4px solid #ffc107; }
+
+        .paybill-details {
+            margin-top: 10px;
+            padding: 12px 14px;
+            background: #fff;
+            border-radius: 8px;
+            font-family: 'SF Mono', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.8;
+            border: 1px dashed #d4a017;
+        }
+        .paybill-details strong { color: #333; }
 
         .receipt-btn-row {
             display: flex;
@@ -587,7 +606,7 @@ $page_title = 'Order Confirmed';
                             </a>
                         </div>
                         <div class="receipt-hint">
-                            Opens in a new tab &mdash; use “Save as PDF” in the print dialog.
+                            Opens in a new tab &mdash; use "Save as PDF" in the print dialog.
                         </div>
 
                     <?php elseif ($order['payment_status'] === 'failed'): ?>
@@ -612,6 +631,31 @@ $page_title = 'Order Confirmed';
                                 <a href="orders.php" class="btn-orders">My Orders</a>
                             </div>
                         </div>
+
+                    <?php elseif ($order['payment_method'] === 'paybill'): ?>
+                        <!-- ===== PAYBILL — MANUAL PAYMENT ===== -->
+                        <div class="oc-status-card paybill" id="paybillCard">
+                            <i class="fas fa-receipt"></i>
+                            <div>
+                                <strong>Complete Your Paybill Payment</strong>
+                                Go to <b>M-Pesa &rarr; Lipa na M-Pesa &rarr; Pay Bill</b>, then enter:
+                                <div class="paybill-details">
+                                    <div><strong>Business Number:</strong> <?php echo htmlspecialchars($order['paybill_number'] ?: '—'); ?></div>
+                                    <div><strong>Account Number:</strong> <?php echo htmlspecialchars($order['paybill_account'] ?: $order_number); ?></div>
+                                    <div><strong>Amount:</strong> Ksh <?php echo number_format($order['total'], 0); ?></div>
+                                </div>
+                                <small>Once we confirm your payment, this order will be marked as paid and we'll start processing it.</small>
+                            </div>
+                        </div>
+
+                        <div class="pay-status" id="payStatus">
+                            <i class="fas fa-clock"></i>
+                            <span>Awaiting manual payment verification…</span>
+                            <div class="pay-actions">
+                                <a href="orders.php" class="btn-orders">My Orders</a>
+                            </div>
+                        </div>
+
                     <?php else: ?>
                         <div class="oc-status-card mpesa" id="mpesaCard">
                             <i class="fas fa-mobile-alt"></i>
@@ -680,15 +724,12 @@ $page_title = 'Order Confirmed';
     <?php include "footer.php"; ?>
 
     <!-- ============================================
-         PAYMENT STATUS POLLING (client-side only)
-         EmailJS is now sent server-side — no SDK needed.
+         PAYMENT STATUS POLLING (M-Pesa ONLY — not Paybill)
          ============================================ -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // ============================================
-            // POLL PAYMENT STATUS (for M-Pesa orders still pending)
-            // ============================================
-            <?php if ($order && in_array($order['payment_method'], ['mpesa','paybill']) && $order['payment_status'] === 'awaiting_payment'): ?>
+            // Only poll for M-Pesa orders (STK push). Paybill is manual.
+            <?php if ($order && $order['payment_method'] === 'mpesa' && $order['payment_status'] === 'awaiting_payment'): ?>
             const payStatusEl   = document.getElementById('payStatus');
             const payCountdown  = document.getElementById('payCountdown');
             const orderId       = <?php echo (int)$order['id']; ?>;
@@ -830,6 +871,7 @@ $page_title = 'Order Confirmed';
 // ============================================
 // DEFERRED STK PUSH TRIGGER
 // Runs AFTER the page has been sent to the user.
+// Only fires for M-Pesa (not Paybill — that's manual).
 // ============================================
 if (function_exists('fastcgi_finish_request')) {
     fastcgi_finish_request();
