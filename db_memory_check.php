@@ -28,6 +28,8 @@ $showParams = [
     'max_parallel_workers_per_gather',
     'server_version',
     'max_connections',
+    'statement_timeout',
+    'idle_in_transaction_session_timeout',
 ];
 
 $settings = [];
@@ -57,6 +59,39 @@ $connByUser = q($pdo, "
     ORDER BY count DESC
 ");
 
+// --- NEW: Resolve the "unknown" states ---
+// backend_type tells us if these are client backends (app connections),
+// autovacuum workers, background writers, walsenders, etc.
+$connByBackendType = q($pdo, "
+    SELECT COALESCE(backend_type, 'unknown') AS backend_type,
+           COUNT(*) AS count,
+           COUNT(*) FILTER (WHERE state IS NULL) AS null_state
+    FROM pg_stat_activity
+    GROUP BY backend_type
+    ORDER BY count DESC
+");
+
+// Full detail on anything with state IS NULL (the "unknown" ones)
+$unknownDetail = q($pdo, "
+    SELECT pid, usename, backend_type, application_name,
+           client_addr,
+           EXTRACT(EPOCH FROM (now() - backend_start))::int AS uptime_seconds,
+           COALESCE(state, '(NULL)') AS state
+    FROM pg_stat_activity
+    WHERE state IS NULL
+    ORDER BY backend_start ASC
+");
+
+// Per-database connection count (catches other apps on same instance)
+$connByDatabase = q($pdo, "
+    SELECT COALESCE(datname, 'unknown') AS datname,
+           COUNT(a.pid) AS count
+    FROM pg_stat_activity a
+    LEFT JOIN pg_database d ON d.oid = a.datid
+    GROUP BY datname
+    ORDER BY count DESC
+");
+
 // Long-running / non-idle sessions (potential memory hogs)
 $activeSessions = q($pdo, "
     SELECT pid, usename, state,
@@ -81,6 +116,17 @@ $idleInTx = q($pdo, "
     LIMIT 20
 ");
 
+// --- NEW: Idle sessions with a live client_addr (app pool leak signal) ---
+$idleConnections = q($pdo, "
+    SELECT pid, usename, application_name, client_addr,
+           EXTRACT(EPOCH FROM (now() - state_change))::int AS idle_seconds
+    FROM pg_stat_activity
+    WHERE state = 'idle'
+      AND pid <> pg_backend_pid()
+    ORDER BY state_change ASC
+    LIMIT 30
+");
+
 // Total connections vs max
 $totalConns = q($pdo, "SELECT COUNT(*) AS count FROM pg_stat_activity");
 $totalConns = $totalConns['ok'] ? (int)$totalConns['rows'][0]['count'] : -1;
@@ -102,6 +148,7 @@ $usagePct = $maxConn > 0 ? round($totalConns / $maxConn * 100, 1) : null;
   body { font-family: system-ui, sans-serif; margin: 2rem; color: #1f2937; }
   h1 { font-size: 1.4rem; }
   h2 { font-size: 1.1rem; margin-top: 2rem; border-bottom: 1px solid #e5e7eb; padding-bottom: .25rem; }
+  h3 { font-size: 1rem; margin-top: 1.2rem; }
   table { border-collapse: collapse; width: 100%; margin-top: .5rem; font-size: .9rem; }
   th, td { border: 1px solid #e5e7eb; padding: .4rem .6rem; text-align: left; vertical-align: top; }
   th { background: #f9fafb; }
@@ -109,6 +156,7 @@ $usagePct = $maxConn > 0 ? round($totalConns / $maxConn * 100, 1) : null;
   .bad  { background: #fee2e2; }
   code { background: #f3f4f6; padding: 0 .2rem; border-radius: 3px; }
   .meta { color: #6b7280; font-size: .85rem; }
+  .note { background: #eff6ff; border-left: 3px solid #3b82f6; padding: .5rem .75rem; margin: .75rem 0; font-size: .85rem; }
 </style>
 </head>
 <body>
@@ -137,10 +185,60 @@ $usagePct = $maxConn > 0 ? round($totalConns / $maxConn * 100, 1) : null;
 <table>
   <tr><th>State</th><th>Count</th></tr>
   <?php foreach ($connByState['rows'] as $r): ?>
-    <tr><td><?= htmlspecialchars((string)$r['state']) ?></td><td><?= (int)$r['count'] ?></td></tr>
+    <tr class="<?= strtolower((string)$r['state']) === 'unknown' ? 'warn' : '' ?>">
+      <td><?= htmlspecialchars((string)$r['state']) ?></td><td><?= (int)$r['count'] ?></td>
+    </tr>
   <?php endforeach; ?>
 </table>
 <?php else: ?><p>Error: <?= htmlspecialchars($connByState['error']) ?></p><?php endif; ?>
+
+<h3>By backend_type <span class="meta">(explains the "unknown" rows)</span></h3>
+<div class="note">
+  <strong>background worker</strong>, <strong>autovacuum worker</strong>, <strong>walsender</strong>, and
+  <strong>checkpointer</strong> are normal system processes — they have <code>state = NULL</code> in
+  <code>pg_stat_activity</code>. If <strong>client backend</strong> shows up here with a NULL state,
+  that means your DB user lacks <code>pg_read_all_stats</code> privilege and cannot see other users'
+  sessions. That's not a leak — just a permissions limitation.
+</div>
+<?php if ($connByBackendType['ok']): ?>
+<table>
+  <tr><th>backend_type</th><th>Total</th><th>NULL state</th></tr>
+  <?php foreach ($connByBackendType['rows'] as $r): ?>
+    <tr>
+      <td><?= htmlspecialchars((string)$r['backend_type']) ?></td>
+      <td><?= (int)$r['count'] ?></td>
+      <td class="<?= ((int)$r['null_state'] > 0 && $r['backend_type'] === 'client backend') ? 'bad' : '' ?>"><?= (int)$r['null_state'] ?></td>
+    </tr>
+  <?php endforeach; ?>
+</table>
+<?php else: ?><p>Error: <?= htmlspecialchars($connByBackendType['error']) ?></p><?php endif; ?>
+
+<h3>Detail of NULL-state sessions</h3>
+<?php if ($unknownDetail['ok'] && $unknownDetail['rows']): ?>
+<table>
+  <tr><th>PID</th><th>User</th><th>backend_type</th><th>app</th><th>client_addr</th><th>Uptime (s)</th></tr>
+  <?php foreach ($unknownDetail['rows'] as $r): ?>
+    <tr class="<?= $r['backend_type'] === 'client backend' ? 'bad' : '' ?>">
+      <td><?= (int)$r['pid'] ?></td>
+      <td><?= htmlspecialchars((string)$r['usename']) ?></td>
+      <td><?= htmlspecialchars((string)$r['backend_type']) ?></td>
+      <td><?= htmlspecialchars((string)($r['application_name'] ?? '')) ?></td>
+      <td><?= htmlspecialchars((string)($r['client_addr'] ?? '')) ?></td>
+      <td><?= (int)$r['uptime_seconds'] ?></td>
+    </tr>
+  <?php endforeach; ?>
+</table>
+<?php else: ?><p>None. All sessions have a visible state.</p><?php endif; ?>
+
+<h3>By database</h3>
+<?php if ($connByDatabase['ok']): ?>
+<table>
+  <tr><th>Database</th><th>Count</th></tr>
+  <?php foreach ($connByDatabase['rows'] as $r): ?>
+    <tr><td><?= htmlspecialchars((string)$r['datname']) ?></td><td><?= (int)$r['count'] ?></td></tr>
+  <?php endforeach; ?>
+</table>
+<?php else: ?><p>Error: <?= htmlspecialchars($connByDatabase['error']) ?></p><?php endif; ?>
 
 <h3>By user</h3>
 <?php if ($connByUser['ok']): ?>
@@ -187,6 +285,27 @@ $usagePct = $maxConn > 0 ? round($totalConns / $maxConn * 100, 1) : null;
   <?php endforeach; ?>
 </table>
 <?php else: ?><p>None. Good.</p><?php endif; ?>
+
+<h2>Idle sessions (app-pool / leak check)</h2>
+<div class="note">
+  Idle connections aren't harmful by themselves, but on a 1 GB instance every one costs
+  memory. A high count with long <code>idle_seconds</code> suggests an app connection-pool
+  issue (PHP opening fresh PDO connections per request, or a pool size set too high).
+</div>
+<?php if ($idleConnections['ok'] && $idleConnections['rows']): ?>
+<table>
+  <tr><th>PID</th><th>User</th><th>app</th><th>client_addr</th><th>Idle (s)</th></tr>
+  <?php foreach ($idleConnections['rows'] as $r): ?>
+    <tr class="<?= (int)$r['idle_seconds'] > 600 ? 'warn' : '' ?>">
+      <td><?= (int)$r['pid'] ?></td>
+      <td><?= htmlspecialchars((string)$r['usename']) ?></td>
+      <td><?= htmlspecialchars((string)($r['application_name'] ?? '')) ?></td>
+      <td><?= htmlspecialchars((string)($r['client_addr'] ?? '')) ?></td>
+      <td><?= (int)$r['idle_seconds'] ?></td>
+    </tr>
+  <?php endforeach; ?>
+</table>
+<?php else: ?><p>No idle sessions.</p><?php endif; ?>
 
 </body>
 </html>
