@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/includes/conn.php';
+require_once 'includes/config.php';
 
 header('Content-Type: text/html; charset=utf-8');
 
