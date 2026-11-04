@@ -9,9 +9,9 @@ ini_set('display_startup_errors', 1);
 // ============================================
 // Load Composer autoloader for Cloudinary and other dependencies
 $autoload_paths = [
-    __DIR__ . '/vendor/autoload.php',           // From root folder
-    __DIR__ . '/../vendor/autoload.php',        // From subfolder
-    $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php', // From document root
+    __DIR__ . '/vendor/autoload.php',          
+    __DIR__ . '/../vendor/autoload.php',       
+    $_SERVER['DOCUMENT_ROOT'] . '/vendor/autoload.php', 
 ];
 
 $autoload_loaded = false;
@@ -75,7 +75,6 @@ if (!$database_url) {
 
 try {
     // Parse the database URL
-    // Aiven URLs look like: postgres://user:password@host:port/dbname?sslmode=require
     $url = parse_url($database_url);
     
     // If parse_url failed due to special chars in password, use regex fallback
@@ -120,7 +119,12 @@ try {
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
         PDO::ATTR_TIMEOUT => 10,
+        PDO::ATTR_PERSISTENT => true, 
     ]);
+    
+    // <-- ADDED: Ensure no query locks up the 1GB instance
+    $pdo->exec("SET statement_timeout = '30s'");
+    $pdo->exec("SET idle_in_transaction_session_timeout = '5min'");
     
     error_log('Database connected successfully to ' . $host);
     
@@ -333,7 +337,6 @@ function logActivity($action, $details, $userId = null, $userName = null) {
     global $pdo;
     
     try {
-        // Check if activity_log table exists, if not create it
         $stmt = $pdo->prepare("
             CREATE TABLE IF NOT EXISTS activity_log (
                 id SERIAL PRIMARY KEY,
